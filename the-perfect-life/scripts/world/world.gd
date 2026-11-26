@@ -88,10 +88,10 @@ func _environment() -> void:
 	# exposition automatique (comme un appareil photo) : intérieurs lisibles, extérieurs non brûlés
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = true
-	ca.auto_exposure_scale = 0.4
+	ca.auto_exposure_scale = 0.2
 	ca.auto_exposure_speed = 4.0
 	ca.auto_exposure_min_sensitivity = 50.0
-	ca.auto_exposure_max_sensitivity = 400.0
+	ca.auto_exposure_max_sensitivity = 220.0
 	we.camera_attributes = ca
 	add_child(we)
 	sun = DirectionalLight3D.new()
@@ -178,7 +178,7 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 		Geo.prop(root, shrubs[k % shrubs.size()], Vector3(8.8 + k * 1.3, 0.03, 12.8), k * 47.0, 0.0, 0.9 + (k % 3) * 0.15)
 	Geo.prop(root, "planter_box_01", Vector3(5.3, 0.18, 13.1), 0)
 	# arbre de façade
-	Geo.prop(root, "island_tree_01", Vector3(15.2, 0.0, 18.2), randf() * 360.0, 0.0, 9.5)
+	Geo.prop(root, "island_tree_01", Vector3(18.6, 0.0, 17.0), randf() * 360.0, 0.0, 8.5)
 	# boîte aux lettres
 	var mb := Node3D.new(); root.add_child(mb); mb.position = Vector3(5.2, 0, 19.9)
 	Geo.box(mb, Vector3(0.09, 1.1, 0.09), Vector3(0, 0.55, 0), MatLib.flat(Color(0.95, 0.95, 0.93), 0.5), 0.01)

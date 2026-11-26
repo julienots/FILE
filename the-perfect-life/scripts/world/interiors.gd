@@ -35,12 +35,13 @@ func living() -> void:
 	Geo.prop(h, "sofa_02", Vector3(10.15, 0.04, 6.9), 90)
 	Geo.prop(h, "throw_pillows_01", Vector3(10.2, 0.47, 6.2), 90)
 	Geo.prop(h, "modern_coffee_table_01", Vector3(12.2, 0.05, 6.9), 90)
-	Geo.prop(h, "modern_arm_chair_01", Vector3(12.4, 0.04, 9.0), 180)
+	Geo.prop(h, "sofa_03", Vector3(12.3, 0.04, 9.15), 180)
+	Geo.prop(h, "modern_arm_chair_01", Vector3(12.2, 0.04, 4.9), 0)
 	Geo.prop(h, "mid_century_lounge_chair", Vector3(14.7, 0.04, 10.9), -140)
 	Geo.prop(h, "side_table_01", Vector3(10.1, 0.04, 8.35), 0)
 	Geo.prop(h, "ceramic_vase_01", Vector3(10.1, 0.6, 8.35), 0)
 	Geo.prop(h, "potted_plant_02", Vector3(15.35, 0.04, 11.35), 0)
-	Geo.prop(h, "potted_plant_02", Vector3(8.6, 0.04, 11.35), 60)
+	Geo.prop(h, "potted_plant_02", Vector3(15.35, 0.04, 5.45), 60)
 	Geo.prop(h, "book_encyclopedia_set_01", Vector3(12.3, 0.45, 6.75), 90)
 	# meuble TV + téléviseur sur mur droit
 	Geo.prop(h, "modern_wooden_cabinet", Vector3(15.55, 0.04, 6.9), -90, 1.9)
@@ -48,6 +49,7 @@ func living() -> void:
 	Geo.prop(h, "gaming_console", Vector3(15.5, 0.62, 6.1), -90)
 	# cadres entre les fenêtres de façade
 	Geo.prop(h, "hanging_picture_frame_02", Vector3(12.3, 1.2, 11.82), 180)
+	Geo.prop(h, "hanging_picture_frame_01", Vector3(8.09, 1.25, 10.9), 90, 0.0, 0.9)
 	for wx in [10.6, 14.0]:
 		curtains(Vector3(wx, 2.6, 11.83), 2.3, 2.55, 0.0)
 	curtains(Vector3(15.83, 2.6, 9.0), 2.0, 2.55, 90.0)
