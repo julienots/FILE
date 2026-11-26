@@ -39,7 +39,9 @@ function buildRiggedHero(gltf, rig, bin) {
 
   // ---- os : liaison (pose du modèle) puis pose canonique (membres droits) pour l'animation
   const ENDS = { hips: 'spine', spine: 'chest', chest: 'neck', neck: 'head', head: 'headTop', upperL: 'foreL', foreL: 'handL', handL: 'handTipL', upperR: 'foreR', foreR: 'handR', handR: 'handTipR', thighL: 'shinL', shinL: 'footL', footL: 'toeL', thighR: 'shinR', shinR: 'footR', footR: 'toeR' };
-  const canonical = (name) => (/^(hips|spine|chest|neck|head)$/.test(name) ? UPV : /^foot/.test(name) ? FWD : DOWN);
+  // pose de repos « en A » : bras écartés d'environ 35° (moins de torsion à l'épaule qu'en partant de bras droits)
+  const AL = new THREE.Vector3(-Math.sin(0.45), -Math.cos(0.45), 0.08).normalize(), AR = new THREE.Vector3(Math.sin(0.45), -Math.cos(0.45), 0.08).normalize();
+  const canonical = (name) => (/^(hips|spine|chest|neck|head)$/.test(name) ? UPV : /^foot/.test(name) ? FWD : /^(upper|fore|hand)L$/.test(name) ? AL : /^(upper|fore|hand)R$/.test(name) ? AR : DOWN);
   const bones = [], byName = {}, worldQ = {};
   for (const b of rig.bones) {
     const bone = new THREE.Bone(); bone.name = b.name;
@@ -137,12 +139,13 @@ function buildRiggedHero(gltf, rig, bin) {
     byName.head.add(bh);
   }
   const updateAll = (spread, flap, time) => { updateWings(spread, flap, time); if (bh) bh.userData.tick(time); };
-  return { root, bones: B, wings: {}, feathers: null, updateWings: updateAll, mats: { glow: mat }, imported: true, hipsY };
+  const theme = rig.blackhole ? { main: 0x9a5cff, alt: 0xff7a2a, core: 0x1a0830 } : { main: 0xffd27a, alt: 0xff9a40, core: 0xfff4d0 };
+  return { root, bones: B, wings: {}, feathers: null, updateWings: updateAll, mats: { glow: mat }, imported: true, hipsY, theme };
 }
 
 // Trou noir : horizon noir, anneau de photons, disque d'accrétion tourbillonnant (shader),
 // halo violet, et grains de lumière qui spiralent vers le centre.
-function makeBlackHole(R) {
+export function makeBlackHole(R, withLight = true) {
   const g = new THREE.Group();
   const disk = new THREE.Mesh(new THREE.PlaneGeometry(R * 4.4, R * 4.4), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -164,16 +167,17 @@ function makeBlackHole(R) {
         gl_FragColor = vec4(col, 1.0);
       }`,
   }));
-  const horizon = new THREE.Mesh(new THREE.CircleGeometry(R * 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-  horizon.position.z = R * 0.02;
-  disk.position.z = R * 0.04;
-  g.add(horizon, disk);
-  const light = new THREE.PointLight(0x8a5cff, 0, R * 40, 2);
-  g.add(light);
+  const horizon = new THREE.Mesh(new THREE.SphereGeometry(R * 1.0, 24, 16), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  const face = new THREE.Group(); face.add(disk); // le disque fait toujours face à la caméra
+  g.add(horizon, face);
+  // pas de lumière ajoutée en cours de jeu : cela forcerait la recompilation de tous les shaders
+  const light = withLight ? new THREE.PointLight(0x8a5cff, 0, R * 40, 2) : { intensity: 0 };
+  if (withLight) g.add(light);
   g.userData.tick = (t) => {
     disk.material.uniforms.uTime.value = t;
     light.intensity = 25 + Math.sin(t * 3.1) * 8;
-    disk.rotation.z = Math.sin(t * 0.4) * 0.15;
+    if (G.camera) { const wp = new THREE.Vector3(); g.getWorldPosition(wp); face.quaternion.copy(g.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(G.camera.quaternion)); }
+    disk.rotation.z = t * 0.3;
     // matière aspirée
     if (G.fx && Math.random() < 0.35) {
       const p = new THREE.Vector3(); g.getWorldPosition(p);

@@ -26,7 +26,7 @@ for (const [i, pose] of poses.entries()) {
   if (pose === 'fly') { m.root.rotation.x = 1.0; B.thighL.rotation.x = 0.3; B.thighR.rotation.x = 0.1; B.shinL.rotation.x = 0.6; B.shinR.rotation.x = 0.7; B.upperL.rotation.set(0.6, 0, 0.4); B.upperR.rotation.set(0.6, 0, -0.4); }
   m.updateWings(1, 0, 1);
   const cam = new THREE.PerspectiveCamera(30, W / innerHeight, 0.1, 100);
-  cam.position.set(P.get('side') ? 14 : 3, 3, P.get('side') ? 0 : 13); cam.lookAt(0, 2.8, 0);
+  cam.position.set(P.get('side') ? 14 : 3, 3, P.get('side') ? 0 : 13); cam.lookAt(0, 2.8, 0); cam.updateMatrixWorld(); G.camera = cam; m.updateWings(1, 0, 1);
   r.setViewport(i * W, 0, W, innerHeight); r.setScissor(i * W, 0, W, innerHeight); r.render(s, cam);
 }
 window.__ready = true;

@@ -21,6 +21,7 @@ import { God } from './god.js';
 import { loadHero, HEROES } from './heromodel.js';
 import { CameraRig } from './camera.js';
 import { Powers } from './powers.js';
+import { Ultimates } from './ultimates.js';
 import { Monster } from './monster.js';
 import { Audio } from './audio.js';
 import { UI } from './ui.js';
@@ -96,6 +97,7 @@ async function boot() {
   const god = new God(scene, heroModel); G.god = god;
   G.cam = new CameraRig(camera);
   G.powers = new Powers(scene);
+  G.ultimates = new Ultimates(scene);
   G.monster = new Monster(scene);
   G.audio = new Audio();
   step('Les habitants s\'éveillent…', 1); await frame();
@@ -172,15 +174,18 @@ function loop(now) {
       const input = G.ui.input;
       G.god.update(dt, input);
       G.powers.update(dt, input);
-      G.monster.update(dt);
-      G.people.update(dt);
-      G.fauna.update(dt);
-      G.villages.update(dt);
-      G.physics.update(dt);
+      G.ultimates.update(dt);
+      if (!G.timeStop) { // arrêt du temps : le monde se fige, seul le dieu agit
+        G.monster.update(dt);
+        G.people.update(dt);
+        G.fauna.update(dt);
+        G.villages.update(dt);
+        G.physics.update(dt);
+      }
       G.fx.update(dt);
       if (Math.random() < dt * 3) G.fx.motes(G.god.pos, 6, 1);
     }
-    G.veg.update(dt);
+    if (!G.timeStop) G.veg.update(dt);
     G.terrain.update(dt);
     G.env.update(G.photoMode ? 0 : dt);
     G.cam.update(dt);

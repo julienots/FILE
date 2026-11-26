@@ -46,14 +46,13 @@ export class UI {
       <div id="interactLabel" class="hidden"></div>
       <div id="wheel" class="hidden"></div>
       <div id="fps" class="hidden"></div>`;
-    // roue des pouvoirs
+    // grille des pouvoirs
     const wheel = $('#wheel');
+    const grid = el('div', 'wheel-grid'); wheel.appendChild(grid);
     POWERS.forEach((p, i) => {
-      const a = -Math.PI / 2 + i / POWERS.length * Math.PI * 2;
       const b = el('button', 'wheel-item', `<span class="wi-icon">${p.icon}</span><span class="wi-name">${p.name}</span>`);
-      b.style.left = `calc(50% + ${Math.cos(a) * 130}px)`; b.style.top = `calc(50% + ${Math.sin(a) * 130}px)`;
       b.addEventListener('pointerup', (e) => { e.stopPropagation(); this.selectPower(i); this.toggleWheel(false); });
-      wheel.appendChild(b);
+      grid.appendChild(b);
     });
     wheel.addEventListener('pointerup', () => this.toggleWheel(false));
     this.selectPower(settings.power || 0);
@@ -400,7 +399,7 @@ export class UI {
     const cd = (id, sel) => { const k = G.powers.cdFrac(id); const c = $(sel); c.style.strokeDashoffset = `${276 * (1 - k)}`; c.parentNode.parentNode.classList.toggle('cooling', k > 0); };
     cd('punch', '#btnAttack .cd circle'); cd(POWERS[this.power].id, '#btnPower .cd circle');
     $('#btnAttack .charge').style.transform = `scale(${this.charging ? clamp((G.time - this.chargeStart) / 1.2, 0, 1) : 0})`;
-    $('#crosshair').classList.toggle('on', G.powers.laserOn || ['meteor', 'lightning'].includes(POWERS[this.power].id));
+    $('#crosshair').classList.toggle('on', G.powers.laserOn || ['meteor', 'lightning', 'singularity', 'leap', 'meteorshower', 'swords', 'tornado', 'gravity'].includes(POWERS[this.power].id));
     this.bubbles();
   }
 

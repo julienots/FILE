@@ -78,6 +78,18 @@ export class God {
     const T = G.terrain, cam = G.cam;
     const a = this.anim;
     if (this.state === 'teleport') return this.updateTeleport(dt);
+    if (this.dash) { // charge de comète : trajectoire imposée
+      const d = this.dash; d.t += dt;
+      this.pos.addScaledVector(d.dir, d.speed * dt);
+      const gnd = this.groundAt(this.pos.x, this.pos.z);
+      if (this.pos.y < gnd + 0.5) this.pos.y = gnd + 0.5;
+      this.vel.copy(d.dir).multiplyScalar(d.speed);
+      this.heading = Math.atan2(d.dir.x, d.dir.z);
+      const lim = WORLD.half - 25; this.pos.x = clamp(this.pos.x, -lim, lim); this.pos.z = clamp(this.pos.z, -lim, lim);
+      if (d.t >= d.dur) { this.dash = null; this.vel.multiplyScalar(0.1); if (this.state !== 'fly') this.state = this.pos.y - gnd > 2 ? 'air' : 'ground'; G.fx && G.fx.ring(this.pos, 50, 0.7); }
+      this.animate(dt, 1);
+      return;
+    }
     // direction voulue relative à la caméra
     const mx = input.moveX, my = input.moveY, mag = Math.min(1, Math.hypot(mx, my));
     const yaw = cam.yaw;
@@ -271,6 +283,11 @@ export class God {
       else if (ac.kind === 'raise') { uR.set(-2.9 * env, 0, -0.3); uL.set(-2.9 * env, 0, 0.3); fR = fL = -0.2; B.head.rotation.x -= 0.5 * env; }
       else if (ac.kind === 'slam') { const up = k < 0.45 ? k / 0.45 : 1 - (k - 0.45) / 0.55 * 2; uR.set(-2.8 * Math.max(0, up) + 0.6 * Math.max(0, -up), 0, -0.2); uL.set(-2.8 * Math.max(0, up) + 0.6 * Math.max(0, -up), 0, 0.2); a.crouch = Math.max(a.crouch, k > 0.45 ? 0.8 : 0); }
       else if (ac.kind === 'pose') { uR.set(-0.4, 0, -1.2 * env); uL.set(-0.4, 0, 1.2 * env); }
+      else if (ac.kind === 'push') { uR.set(-1.5 * env, 0, 0.15); uL.set(-1.5 * env, 0, -0.15); fR = fL = -0.05; B.spine.rotation.x -= 0.15 * env; }
+      else if (ac.kind === 'summon') { uR.set(-2.6 * env, 0, -0.5 * env); uL.set(-2.6 * env, 0, 0.5 * env); fR = fL = -0.15; B.head.rotation.x -= 0.6 * env; B.chest.rotation.x -= 0.2 * env; }
+      else if (ac.kind === 'charge') { const pw = Math.min(1, k * 3); uR.set(-0.3, 0, -1.3 * pw); uL.set(-0.3, 0, 1.3 * pw); fR = fL = -0.6 * pw; B.head.rotation.x -= 0.4 * pw; B.chest.rotation.x -= 0.25 * pw; a.crouch = Math.max(a.crouch, 0.15); }
+      else if (ac.kind === 'dash') { uR.set(-3.0, 0, -0.1); uL.set(0.5, 0, 0.35); fR = 0; a.pitch = Math.max(a.pitch, 1.25); }
+      else if (ac.kind === 'dive') { uR.set(-3.0, 0, -0.15); uL.set(-3.0, 0, 0.15); fR = fL = 0; a.pitch = 1.6; }
       if (ac.t >= ac.dur) this.action = null;
     }
     B.upperL.rotation.copy(uL); B.upperR.rotation.copy(uR);

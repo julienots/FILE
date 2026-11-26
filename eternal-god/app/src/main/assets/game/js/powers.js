@@ -3,6 +3,7 @@
 // la mémoire des villages (crainte ou vénération).
 import * as THREE from 'three';
 import { G, clamp, lerp, rand, emit, canvasTexture } from './core.js';
+import { ULTIMATES } from './ultimates.js';
 
 export const POWERS = [
   { id: 'explosion', name: 'Explosion céleste', icon: '✺', cd: 6, desc: 'Une sphère de lumière jaillit du dieu et souffle tout alentour.' },
@@ -10,6 +11,7 @@ export const POWERS = [
   { id: 'meteor', name: 'Météore', icon: '☄', cd: 7, desc: 'Fait tomber un astre de feu sur le point visé.' },
   { id: 'shockwave', name: 'Onde de choc', icon: '◎', cd: 5, desc: 'Frappe le sol : une vague de destruction roule dans toutes les directions.' },
   { id: 'lightning', name: 'Éclair divin', icon: 'ϟ', cd: 2.2, desc: 'La foudre s\'abat sur la cible.' },
+  ...ULTIMATES,
 ];
 
 const BEAM_V = 'varying float vF; void main(){ vec3 n = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vF = abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }';
@@ -128,13 +130,7 @@ export class Powers {
       return true; // le temps de recharge part à la fin du rayon
     } else if (id === 'meteor') {
       god.playAction('raise', 0.9);
-      const target = aim.point.clone();
-      const start = target.clone().add(new THREE.Vector3(rand(-160, 160), 420, rand(-160, 160)));
-      const m = this.metRock.clone(); m.scale.setScalar(5); m.position.copy(start); this.scene.add(m);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffa040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-      glow.scale.setScalar(45); m.add(glow); glow.scale.setScalar(9);
-      this.meteors.push({ m, start, target, t: 0, dur: 2.4 });
-      if (G.audio) G.audio.meteorWhistle();
+      this.spawnMeteor(aim.point.clone(), 1);
       emit('journal', { icon: '☄', text: 'Un astre de feu fend le ciel.' });
     } else if (id === 'shockwave') {
       god.playAction('slam', 0.9);
@@ -148,9 +144,20 @@ export class Powers {
     } else if (id === 'lightning') {
       god.playAction('cast', 0.6);
       this.strike(aim.point, true);
+    } else if (G.ultimates && G.ultimates.cast(id, aim)) {
+      // pouvoir ultime (voir ultimates.js)
     }
     this.cool[id] = P.cd;
     return true;
+  }
+
+  spawnMeteor(target, s = 1) {
+    const start = target.clone().add(new THREE.Vector3(rand(-160, 160) * s, 380 + rand(0, 120), rand(-160, 160) * s));
+    const m = this.metRock.clone(); m.scale.setScalar(5 * s); m.position.copy(start); this.scene.add(m);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffa040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    glow.scale.setScalar(9); m.add(glow);
+    this.meteors.push({ m, start, target, t: 0, dur: 2.2 + rand(0, 0.6), s });
+    if (G.audio && s > 0.7) G.audio.meteorWhistle();
   }
 
   strike(p, divine) {
@@ -200,20 +207,21 @@ export class Powers {
       const k = Math.min(1, M.t / M.dur);
       M.m.position.lerpVectors(M.start, M.target, k * k);
       M.m.rotation.x += dt * 3; M.m.rotation.y += dt * 2;
-      for (let n = 0; n < 4; n++) { G.fx.fire(M.m.position.clone().add(new THREE.Vector3(rand(-3, 3), rand(-3, 3), rand(-3, 3))), 9); }
+      for (let n = 0; n < 4; n++) { G.fx.fire(M.m.position.clone().add(new THREE.Vector3(rand(-3, 3), rand(-3, 3), rand(-3, 3))), 9 * (M.s || 1)); }
       G.fx.smoke(M.m.position, 1, 14, 0.5);
       if (k >= 1) {
         const p = M.target;
         this.scene.remove(M.m);
         this.meteors.splice(i, 1);
-        G.terrain.crater(p.x, p.z, 28, 12, { rim: 0.4, burn: 1, heat: 1 });
-        G.fx.sphere(p.clone().add(new THREE.Vector3(0, 6, 0)), 55, 1.3, 0xffb060); G.fx.ring(p, 220, 2.0, 0xffb070); G.fx.flash(p.clone().add(new THREE.Vector3(0, 15, 0)), 12000, 1.4, 0xff9a40);
-        G.fx.rocks(p, 60, 35); G.fx.dust(p, 30, 60, [0.35, 0.3, 0.26]); G.fx.shake(1, p); G.fx.decal(p, 70);
-        for (let n = 0; n < 30; n++) G.fx.fire(p.clone().add(new THREE.Vector3(rand(-20, 20), rand(0, 6), rand(-20, 20))), 8);
-        if (G.env) G.env.flash = 0.6;
-        this.areaDamage(p, 60, 1600, 'blast', 'meteor');
-        if (G.veg) G.veg.damageArea(p.x, p.z, 70, 2, 'burn');
-        if (G.audio) G.audio.explosion(p, 1.3);
+        const s = M.s || 1;
+        G.terrain.crater(p.x, p.z, 28 * s, 12 * s, { rim: 0.4, burn: 1, heat: 1 });
+        G.fx.sphere(p.clone().add(new THREE.Vector3(0, 6, 0)), 55 * s, 1.3, 0xffb060); G.fx.ring(p, 220 * s, 2.0, 0xffb070); G.fx.flash(p.clone().add(new THREE.Vector3(0, 15, 0)), 12000 * s, 1.4, 0xff9a40);
+        G.fx.rocks(p, Math.round(60 * s), 35 * s); G.fx.dust(p, 30 * s, Math.round(60 * s), [0.35, 0.3, 0.26]); G.fx.shake(s, p); G.fx.decal(p, 70 * s);
+        for (let n = 0; n < 30 * s; n++) G.fx.fire(p.clone().add(new THREE.Vector3(rand(-20, 20) * s, rand(0, 6), rand(-20, 20) * s)), 8 * s);
+        if (G.env) G.env.flash = 0.6 * s;
+        this.areaDamage(p, 60 * s, 1600 * s, 'blast', 'meteor');
+        if (G.veg) G.veg.damageArea(p.x, p.z, 70 * s, 2, 'burn');
+        if (G.audio) G.audio.explosion(p, 1.3 * s);
       }
     }
     // ondes de choc qui roulent sur le sol
