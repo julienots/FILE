@@ -8,7 +8,9 @@ const base = '../../app/src/main/assets/game/js/';
 const { G, settings, mulberry32 } = await import(base + 'core.js');
 const { Terrain } = await import(base + 'terrain.js');
 const { Environment } = await import(base + 'env.js');
-const { Vegetation } = await import(base + 'vegetation.js');
+const { Vegetation, loadVegetationAssets } = await import(base + 'vegetation.js');
+const { loadTextureSet, TERRAIN_LAYERS, BUILDING_LAYERS } = await import(base + 'textures.js');
+const { PhotoSky } = await import(base + 'sky.js');
 const { buildGodModel } = await import(base + 'godmodel.js');
 const { makeBuilding, buildingMaterial, windmillSails } = await import(base + 'buildings.js');
 
@@ -17,7 +19,7 @@ settings.quality = 'high';
 const W = innerWidth, H = innerHeight;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(W, H); renderer.setPixelRatio(1);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.AgXToneMapping;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
@@ -25,11 +27,19 @@ const camera = new THREE.PerspectiveCamera(+(P.get('fov') || 50), W / H, 0.3, 60
 G.scene = scene; G.camera = camera; G.renderer = renderer;
 G.uniforms = { time: { value: 12 }, gust: { value: new THREE.Vector4(0, 0, 0, 0) }, press: { value: new THREE.Vector4(0, 0, 0, 0) } };
 
-const T = new Terrain(scene); G.terrain = T;
+const TEXB = '../../app/src/main/assets/game/img/tex';
+const terrTex = await loadTextureSet(TERRAIN_LAYERS, TEXB, 1024);
+const bTex = await loadTextureSet(BUILDING_LAYERS, TEXB, 1024);
+// les modules chargent leurs ressources relativement à la page du jeu
+const _fetch = window.fetch; window.fetch = (u, ...a) => _fetch(typeof u === 'string' && !/^(https?:|blob:|data:|\.\.\/)/.test(u) ? '../../app/src/main/assets/game/' + u : u, ...a);
+THREE.DefaultLoadingManager.setURLModifier((u) => (u.startsWith('img/') || u.startsWith('models/')) ? '../../app/src/main/assets/game/' + u : u);
+G.photoSky = new PhotoSky(); await G.photoSky.load(renderer);
+const vegAssets = await loadVegetationAssets();
+const T = new Terrain(scene); G.terrain = T; T.textures = terrTex;
 T.generate();
 // village
 const rnd = mulberry32(5);
-const bm = buildingMaterial();
+const bm = buildingMaterial(bTex);
 const placed = [];
 function place(type, x, z, ry) {
   const b = makeBuilding(type, rnd);
@@ -59,7 +69,7 @@ for (let i = 0; i <= 30; i++) { const p = A.clone().lerp(Bv, i / 30); T.scorch(p
 T.crater(Bv.x, Bv.z, 16, 9, { rim: 0.3, burn: 0.8, heat: 1 });
 T.build(scene);
 
-const veg = new Vegetation(scene); G.veg = veg;
+const veg = new Vegetation(scene, vegAssets); G.veg = veg;
 const env = new Environment(scene, renderer); G.env = env;
 const god = buildGodModel();
 const num = (k, d) => (P.has(k) ? +P.get(k) : d);

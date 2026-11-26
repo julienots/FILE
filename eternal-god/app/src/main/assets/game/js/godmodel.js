@@ -37,13 +37,48 @@ function lathe(points, segs = 24) {
   return new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segs);
 }
 
+// Filigrane gravé : carte de hauteur (arabesques) convertie en normal map
+function filigreeNormal() {
+  const S = 512, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.fillStyle = '#808080'; x.fillRect(0, 0, S, S);
+  x.lineCap = 'round';
+  const rnd = (() => { let a = 7; return () => ((a = (a * 16807) % 2147483647) / 2147483647); })();
+  // volutes répétées (motif raccordable)
+  for (let k = 0; k < 26; k++) {
+    const cx = rnd() * S, cy = rnd() * S, r0 = 18 + rnd() * 40, turns = 1.4 + rnd();
+    for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
+      x.beginPath();
+      for (let t = 0; t <= 1; t += 0.01) {
+        const a = t * turns * Math.PI * 2, r = r0 * (1 - t * 0.85);
+        const px = cx + ox + Math.cos(a) * r, py = cy + oy + Math.sin(a) * r;
+        if (t === 0) x.moveTo(px, py); else x.lineTo(px, py);
+      }
+      x.strokeStyle = '#d8d8d8'; x.lineWidth = 3.2; x.stroke();
+    }
+  }
+  for (let i = 0; i < 6; i++) { x.strokeStyle = '#c4c4c4'; x.lineWidth = 2; x.beginPath(); x.moveTo(0, i * S / 6 + 4); x.lineTo(S, i * S / 6 + 4); x.stroke(); }
+  const img = x.getImageData(0, 0, S, S), d = img.data, out = x.createImageData(S, S), o = out.data;
+  const H = (i, j) => d[(((j + S) % S) * S + ((i + S) % S)) * 4] / 255;
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const dx = (H(i + 1, j) - H(i - 1, j)) * 3.0, dy = (H(i, j + 1) - H(i, j - 1)) * 3.0;
+    const l = Math.hypot(dx, dy, 1), k = (j * S + i) * 4;
+    o[k] = (-dx / l * 0.5 + 0.5) * 255; o[k + 1] = (dy / l * 0.5 + 0.5) * 255; o[k + 2] = (1 / l * 0.5 + 0.5) * 255; o[k + 3] = 255;
+  }
+  x.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4;
+  return t;
+}
+
 export function createGodMaterials() {
+  const fil = filigreeNormal();
   return {
-    gold: new THREE.MeshStandardMaterial({ color: 0xd9a540, metalness: 1, roughness: 0.22 }),
-    goldDark: new THREE.MeshStandardMaterial({ color: 0x9c6a22, metalness: 1, roughness: 0.34 }),
-    ivory: new THREE.MeshStandardMaterial({ color: 0xcfc2a6, metalness: 0.45, roughness: 0.32 }),
+    gold: new THREE.MeshPhysicalMaterial({ color: 0xe0a83c, metalness: 1, roughness: 0.2, normalMap: fil, normalScale: new THREE.Vector2(0.55, 0.55), clearcoat: 0.4, clearcoatRoughness: 0.15 }),
+    goldDark: new THREE.MeshStandardMaterial({ color: 0xa8701f, metalness: 1, roughness: 0.3, normalMap: fil, normalScale: new THREE.Vector2(0.8, 0.8) }),
+    ivory: new THREE.MeshPhysicalMaterial({ color: 0xb9a582, metalness: 0.2, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.3 }),
     under: new THREE.MeshStandardMaterial({ color: 0x3b3346, metalness: 0.5, roughness: 0.55 }),
-    cloth: new THREE.MeshStandardMaterial({ color: 0xd8ccb2, roughness: 0.8, side: THREE.DoubleSide }),
+    cloth: new THREE.MeshStandardMaterial({ color: 0xa8987a, roughness: 0.85, side: THREE.DoubleSide }),
     glow: new THREE.MeshStandardMaterial({ color: 0xffe6a8, emissive: 0xffc96a, emissiveIntensity: 5, roughness: 0.3 }),
     feather: new THREE.MeshStandardMaterial({ map: featherTexture(), color: 0xe6dcc8, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.0 }),
   };
@@ -66,14 +101,19 @@ export function buildGodModel(mats = createGodMaterials()) {
   add(hips, new THREE.SphereGeometry(0.42, 20, 12), M.under, 0, -0.05, 0, 0, 0, 0, 1.15, 0.7, 0.85);
   add(hips, new THREE.TorusGeometry(0.47, 0.07, 10, 32), M.gold, 0, 0.1, 0, Math.PI / 2, 0, 0, 1.05, 0.82, 1);
   add(hips, new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6), M.glow, 0, 0.1, 0.4, Math.PI / 2);
-  // tassettes (plaques) autour des hanches
-  for (let i = -2; i <= 2; i++) {
-    const a = i * 0.42;
-    const plate = add(hips, new THREE.BoxGeometry(0.34, 0.5, 0.05), i === 0 ? M.gold : M.ivory, Math.sin(a) * 0.5, -0.2, Math.cos(a) * 0.44, 0.15, a, 0);
-    add(plate, new THREE.BoxGeometry(0.36, 0.05, 0.07), M.gold, 0, -0.25, 0);
+  // tassettes : plaques incurvées superposées autour des hanches
+  for (let row = 0; row < 3; row++) {
+    for (let i = 0; i < 7; i++) {
+      const a0 = -Math.PI * 0.95 + i * (Math.PI * 1.9 / 7);
+      if (Math.abs(a0 + Math.PI * 1.9 / 14) < 0.3) continue; // ouverture devant (pagne)
+      const r = 0.5 + row * 0.03;
+      const g = new THREE.CylinderGeometry(r, r + 0.07, 0.24, 6, 1, true, a0, Math.PI * 1.9 / 7 - 0.03);
+      add(hips, g, row === 2 ? M.goldDark : M.gold, 0, -0.08 - row * 0.19, 0, 0, Math.PI, 0, 1.0, 1, 0.86);
+    }
   }
+  add(hips, new THREE.TorusGeometry(0.58, 0.025, 6, 40), M.goldDark, 0, -0.48, 0, Math.PI / 2, 0, 0, 1, 0.86, 1);
   // pagne de tissu sacré (avant et arrière)
-  const clothGeo = new THREE.PlaneGeometry(0.4, 1.05, 1, 8);
+  const clothGeo = new THREE.PlaneGeometry(0.34, 1.05, 1, 8);
   clothGeo.translate(0, -0.52, 0);
   const cp = clothGeo.attributes.position;
   for (let i = 0; i < cp.count; i++) { const y = cp.getY(i); cp.setZ(i, Math.sin(-y * 1.6) * 0.12); cp.setX(i, cp.getX(i) * (1 + -y * 0.25)); }
@@ -89,12 +129,12 @@ export function buildGodModel(mats = createGodMaterials()) {
   const chest = joint(spine, 'chest', 0, 0.55, 0);
   // cuirasse : profil tourné, aplati en profondeur
   const plate = lathe([[0.0, -0.25], [0.48, -0.22], [0.6, 0.05], [0.62, 0.35], [0.55, 0.6], [0.3, 0.72], [0.0, 0.74]], 28);
-  add(chest, plate, M.ivory, 0, 0, 0.0, 0, 0, 0, 1.05, 1, 0.72);
+  add(chest, plate, M.gold, 0, 0, 0.0, 0, 0, 0, 1.05, 1, 0.72);
   // bordure dorée et pectoraux ornés
   add(chest, new THREE.TorusGeometry(0.6, 0.045, 8, 40), M.gold, 0, 0.32, 0, Math.PI / 2, 0, 0, 1.06, 0.74, 1);
   add(chest, new THREE.TorusGeometry(0.36, 0.035, 8, 32, Math.PI), M.gold, 0, 0.48, 0.3, 0.25, 0, Math.PI);
   for (const s of [-1, 1]) {
-    add(chest, new THREE.SphereGeometry(0.26, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.gold, s * 0.24, 0.33, 0.28, Math.PI / 2 - 0.25, 0, s * -0.2, 1, 0.45, 0.85);
+    add(chest, new THREE.SphereGeometry(0.26, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), M.ivory, s * 0.24, 0.33, 0.28, Math.PI / 2 - 0.25, 0, s * -0.2, 1, 0.45, 0.85);
   }
   // cœur lumineux et rayons gravés
   B.core = add(chest, new THREE.OctahedronGeometry(0.13, 0), M.glow, 0, 0.24, 0.47, 0, 0, 0, 1, 1.4, 0.6);
@@ -113,9 +153,9 @@ export function buildGodModel(mats = createGodMaterials()) {
   const neck = joint(chest, 'neck', 0, 0.82, 0);
   add(neck, new THREE.CylinderGeometry(0.15, 0.18, 0.25, 12), M.under, 0, 0.08, 0);
   const head = joint(neck, 'head', 0, 0.22, 0);
-  add(head, new THREE.SphereGeometry(0.3, 24, 18), M.ivory, 0, 0.22, -0.02, 0, 0, 0, 0.95, 1.12, 1.08);
+  add(head, new THREE.SphereGeometry(0.3, 32, 24), M.gold, 0, 0.22, -0.02, 0, 0, 0, 0.95, 1.12, 1.08);
   // masque facial doré
-  add(head, new THREE.SphereGeometry(0.3, 24, 16, -Math.PI * 0.42, Math.PI * 0.84, Math.PI * 0.25, Math.PI * 0.55), M.gold, 0, 0.18, 0.025, 0, 0, 0, 0.98, 1.1, 1.12);
+  add(head, new THREE.SphereGeometry(0.3, 24, 16, -Math.PI * 0.42, Math.PI * 0.84, Math.PI * 0.25, Math.PI * 0.55), M.ivory, 0, 0.18, 0.025, 0, 0, 0, 0.98, 1.1, 1.12);
   // fente du visage en T, lumineuse
   add(head, new THREE.BoxGeometry(0.34, 0.035, 0.05), M.glow, 0, 0.25, 0.32);
   add(head, new THREE.BoxGeometry(0.04, 0.2, 0.05), M.glow, 0, 0.14, 0.33);
@@ -185,13 +225,18 @@ export function buildGodModel(mats = createGodMaterials()) {
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'L' : 'R';
     const thigh = joint(hips, 'thigh' + k, s * 0.25, -0.12, 0);
-    add(thigh, new THREE.CylinderGeometry(0.22, 0.17, 1.1, 14), M.under, 0, -0.55, 0);
-    add(thigh, new THREE.CylinderGeometry(0.25, 0.2, 0.8, 14), M.ivory, 0, -0.42, 0.02, 0, 0, 0, 1, 1, 1.05);
-    add(thigh, new THREE.BoxGeometry(0.05, 0.6, 0.04), M.gold, 0, -0.42, 0.25);
+    add(thigh, new THREE.CylinderGeometry(0.27, 0.2, 1.1, 18), M.under, 0, -0.55, 0);
+    // cuissarde : lames dorées superposées, bord ivoire
+    for (let i = 0; i < 4; i++) {
+      const y = -0.12 - i * 0.2, r = 0.3 - i * 0.022;
+      add(thigh, new THREE.CylinderGeometry(r, r - 0.025, 0.22, 20, 1, true, -Math.PI * 0.62, Math.PI * 1.24), i === 3 ? M.goldDark : M.gold, 0, y, 0.015, 0, 0, 0, 1, 1, 1.05);
+      add(thigh, new THREE.TorusGeometry(r - 0.012, 0.014, 4, 20, Math.PI * 1.24), M.ivory, 0, y - 0.11, 0.015, Math.PI / 2, 0, -Math.PI * 0.12, 1, 1.05, 1);
+    }
+    add(thigh, new THREE.BoxGeometry(0.04, 0.7, 0.04), M.goldDark, 0, -0.42, 0.31);
     const shin = joint(thigh, 'shin' + k, 0, -1.12, 0);
     add(shin, new THREE.SphereGeometry(0.19, 14, 10), M.gold, 0, 0, 0.05);
     add(shin, new THREE.ConeGeometry(0.08, 0.38, 4), M.gold, 0, 0.18, 0.18, 0.4, 0, 0).scale.x = 0.4;
-    add(shin, new THREE.CylinderGeometry(0.2, 0.14, 1.0, 14), M.gold, 0, -0.52, 0.02);
+    add(shin, new THREE.CylinderGeometry(0.24, 0.16, 1.0, 18), M.gold, 0, -0.52, 0.02);
     add(shin, new THREE.CylinderGeometry(0.21, 0.21, 0.07, 14), M.goldDark, 0, -0.15, 0.02);
     const foot = joint(shin, 'foot' + k, 0, -1.06, 0);
     add(foot, new THREE.BoxGeometry(0.26, 0.16, 0.42), M.gold, 0, -0.04, 0.08);
@@ -251,6 +296,12 @@ export function buildGodModel(mats = createGodMaterials()) {
   fGeo.computeVertexNormals();
   const fMesh = new THREE.InstancedMesh(fGeo, M.feather, feathers.length);
   fMesh.castShadow = true;
+  { const c = new THREE.Color();
+    feathers.forEach((f, i) => {
+      const v = 0.82 + Math.random() * 0.18 - (f.layer ? 0 : 0.06);
+      c.setRGB(v, v * (f.layer ? 0.97 : 0.99), v * (f.layer ? 0.9 : 0.97));
+      fMesh.setColorAt(i, c);
+    }); }
   fMesh.frustumCulled = false;
   root.add(fMesh);
 

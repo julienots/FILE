@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}</style>
+<script type="importmap">{"imports":{"three":"../../app/src/main/assets/game/lib/three.module.min.js","three/addons/":"../../app/src/main/assets/game/lib/addons/"}}</script>
+</head><body><script type="module">
+// Photographie un modèle 3D sous 8 azimuts x 4 élévations (atlas d'imposteur) : couleur (avec occlusion) et normales monde.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const P = new URLSearchParams(location.search);
+const name = P.get('m'), tile = +(P.get('tile') || 256), AZ = +(P.get('az') || 8), EL = (P.get('el') || '0,25,50,80').split(',').map(Number);
+const W = tile * AZ, H = tile * EL.length;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const gltf = await new GLTFLoader().loadAsync(`../.cache/polyhaven/models/${name}/${name}.gltf`);
+const root = gltf.scene;
+if (P.get('patch')) { // touffe dense : on regroupe les brins du scan au lieu de les aligner
+  let k = 0; const keep = [];
+  root.traverse((o) => { if (o.isMesh && /tall|mid|large/.test(o.name)) keep.push(o); });
+  const drop = []; root.traverse((o) => { if (o.isMesh && !keep.includes(o)) drop.push(o); }); drop.forEach((o) => o.parent.remove(o));
+  for (const o of keep) { const a = k * 2.4, r = 0.05 + (k % 3) * 0.07; o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.rotation.y = k * 1.7; k++; }
+  root.updateMatrixWorld(true);
+}
+const box = new THREE.Box3().setFromObject(root);
+const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+// on pose le modèle : base à y=0, centré en x/z
+root.position.set(-center.x, -box.min.y, -center.z);
+const scene = new THREE.Scene(); scene.add(root);
+root.updateMatrixWorld(true);
+const box2 = new THREE.Box3().setFromObject(root);
+const sphere = box2.getBoundingSphere(new THREE.Sphere());
+const albedo = [], normal = [];
+root.traverse((o) => {
+  if (!o.isMesh) return;
+  const src = o.material;
+  const aoMap = src.aoMap || src.roughnessMap || null; // texture ARM : rouge = occlusion
+  const a = new THREE.ShaderMaterial({ side: THREE.DoubleSide,
+    uniforms: { map: { value: src.map }, arm: { value: aoMap }, hasArm: { value: aoMap ? 1 : 0 }, col: { value: src.color } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: `uniform sampler2D map, arm; uniform float hasArm; uniform vec3 col; varying vec2 vUv;
+      void main(){ vec4 c = texture2D(map, vUv); if (c.a < 0.45) discard; float ao = hasArm > 0.5 ? texture2D(arm, vUv).r : 1.0;
+        gl_FragColor = vec4(c.rgb * col * mix(0.55, 1.0, ao), 1.0);
+        #include <colorspace_fragment>
+      }` });
+  const nmap = src.normalMap || null;
+  const n = new THREE.ShaderMaterial({ side: THREE.DoubleSide,
+    uniforms: { map: { value: src.map } },
+    vertexShader: 'varying vec2 vUv; varying vec3 vN; void main(){ vUv = uv; vN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: `uniform sampler2D map; varying vec2 vUv; varying vec3 vN;
+      void main(){ vec4 c = texture2D(map, vUv); if (c.a < 0.45) discard; vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0); gl_FragColor = vec4(n*0.5+0.5, 1.0); }` });
+  albedo.push([o, a]); normal.push([o, n]);
+});
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
+const R = 0.5 * Math.max(box2.max.y - box2.min.y, size.x, size.z) * 1.04;
+sphere.center.copy(box2.getCenter(new THREE.Vector3()));
+function pass(list) {
+  for (const [o, m] of list) o.material = m;
+  renderer.setScissorTest(true);
+  renderer.clear();
+  for (let e = 0; e < EL.length; e++) for (let a = 0; a < AZ; a++) {
+    const az = a / AZ * Math.PI * 2, el = EL[e] * Math.PI / 180;
+    const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+    cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.updateProjectionMatrix();
+    cam.position.copy(sphere.center).addScaledVector(dir, R * 3); cam.lookAt(sphere.center);
+    // ligne 0 de l'atlas = élévation 0, en bas de l'image (convention UV)
+    renderer.setViewport(a * tile, e * tile, tile, tile); renderer.setScissor(a * tile, e * tile, tile, tile);
+    renderer.render(scene, cam);
+  }
+  return renderer.domElement.toDataURL('image/png');
+}
+window.__out = { albedo: pass(albedo), normal: pass(normal), meta: { name, tile, az: AZ, el: EL, radius: R, center: sphere.center.toArray(), height: box2.max.y, width: Math.max(size.x, size.z) } };
+window.__ready = true;
+</script></body></html>

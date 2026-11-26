@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
   p.on('console', m => console.log('[console]', m.type(), m.text()));
   p.on('pageerror', e => console.log('[pageerror]', e.message));
   await p.goto(url);
-  await p.waitForFunction('window.__ready === true', null, { timeout: 240000 });
+  await p.waitForFunction('window.__ready === true', null, { timeout: 1500000 });
   await p.waitForTimeout(+wait);
   await p.screenshot({ path: out, type: out.endsWith('.jpg') ? 'jpeg' : 'png', quality: out.endsWith('.jpg') ? 92 : undefined });
   await b.close();

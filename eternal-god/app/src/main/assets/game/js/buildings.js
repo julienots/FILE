@@ -7,21 +7,41 @@ const col = (hex) => new THREE.Color(hex);
 export const PALETTE = {
   plaster: [0xe9dfc8, 0xf1e8d2, 0xdcd0b4, 0xe8d9bd, 0xd8cdb8],
   timber: [0x5a3b22, 0x4b2f1b, 0x664429],
-  roof: [0x9c3b26, 0x7d3220, 0x5a4a44, 0x8a5a2b, 0x46525e, 0xa5482c],
+  roof: [0x9c3b26, 0x7d3220, 0x5a4a44, 0xb8955a, 0x46525e, 0xa5482c, 0xb8955a],
   stone: [0x8d8a82, 0x9a948a, 0x7b776f],
   wood: 0x8a6440,
   gold: 0xe3b347,
   canvas: [0xc23b30, 0x2f6fb0, 0xe0b23a, 0x4f8f3a, 0x8b3fa0],
 };
 
-class Builder {
+// couche de texture photo selon la couleur de conception (-1 = couleur unie)
+const LAYER = new Map();
+for (const c of PALETTE.plaster) LAYER.set(c, 0);
+for (const c of [...PALETTE.timber, PALETTE.wood, 0x3d2817, 0x4b2f1b, 0x664429]) LAYER.set(c, 1);
+for (const c of [0x9c3b26, 0x7d3220, 0xa5482c, 0x8a5a2b, 0x7a2e1e, 0x8b6f4e]) LAYER.set(c, 2);
+for (const c of [0x5a4a44, 0x46525e, 0x4a4440]) LAYER.set(c, 3);
+LAYER.set(0xb8955a, 4); LAYER.set(0xc9a35a, 4);
+for (const c of [...PALETTE.stone, 0x6d6a64, 0x5a5650, 0x7b776f, 0xbdb6a8, 0x9a948a]) LAYER.set(c, 5);
+for (const c of [0xefe9dc, 0xf4efe4, 0xe9e2d2, 0xe6dcc6]) LAYER.set(c, 6);
+const LAYER_BASE = [0xe2dccf, 0x6b5440, 0xa0503a, 0x55555a, 0xb09060, 0x8a857c, 0xe8e4dc];
+
+export class Builder {
   constructor() { this.geos = []; this.pieces = []; }
   _push(g, color, piece) {
     g = g.index ? g.toNonIndexed() : g;
     g.deleteAttribute('uv');
-    const c = col(color), n = g.attributes.position.count, arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const v = 0.94 + Math.random() * 0.06; arr[i * 3] = c.r * v; arr[i * 3 + 1] = c.g * v; arr[i * 3 + 2] = c.b * v; }
+    const layer = LAYER.has(color) ? LAYER.get(color) : -1;
+    let c = col(color);
+    if (layer >= 0) { // teinte relative à la texture photo, adoucie
+      const b = col(LAYER_BASE[layer]);
+      c = new THREE.Color(Math.min(1.25, c.r / b.r), Math.min(1.25, c.g / b.g), Math.min(1.25, c.b / b.b)).lerp(new THREE.Color(1, 1, 1), 0.45);
+    }
+    const n = g.attributes.position.count, arr = new Float32Array(n * 3), lay = new Float32Array(n);
+    const v0 = 0.92 + Math.random() * 0.08;
+    for (let i = 0; i < n; i++) { arr[i * 3] = c.r * v0; arr[i * 3 + 1] = c.g * v0; arr[i * 3 + 2] = c.b * v0; lay[i] = layer; }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    g.setAttribute('layer', new THREE.BufferAttribute(lay, 1));
+    if (piece) piece.layer = layer;
     this.geos.push(g);
     if (piece) this.pieces.push(piece);
   }
@@ -73,22 +93,39 @@ function house(b, rnd, big = false) {
   for (let f = 0; f < floors; f++) {
     panel(w, 0, d / 2, true, f); panel(w, 0, -d / 2, true, f);
     panel(d, 0, w / 2, false, f); panel(d, 0, -w / 2, false, f);
-    // colombages
+    // colombages en saillie sur les quatre façades (étages enduits)
     const y0 = 0.8 + fh * f;
-    b.box(w + 0.1, 0.22, d + 0.1, 0, y0 + fh - 0.1, 0, timber, 0, 0, 0, false);
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(0.3, fh, 0.3, sx * w / 2, y0 + fh / 2, sz * d / 2, timber, 0, 0, 0, false);
-    if (f > 0 || floors === 1) {
-      b.box(0.18, fh * 1.05, 0.12, -w / 4, y0 + fh / 2, d / 2 + 0.2, timber, 0, 0, 0.55, false);
-      b.box(0.18, fh * 1.05, 0.12, w / 4, y0 + fh / 2, d / 2 + 0.2, timber, 0, 0, -0.55, false);
+    const timbered = !(f === 0 && floors === 2);
+    const faces = [[0, d / 2, w, 0, 1], [0, -d / 2, w, 0, -1], [w / 2, 0, d, Math.PI / 2, 1], [-w / 2, 0, d, Math.PI / 2, -1]];
+    for (const [fx, fz, L, ry, sgn] of faces) {
+      const alongX = ry === 0;
+      const out = 0.24 * sgn;
+      const P = (o, y) => alongX ? [fx + o, y, fz + out] : [fx + out, y, fz + o];
+      // sablière basse et haute
+      b.box(L + 0.5, 0.24, 0.16, ...P(0, y0 + 0.12), timber, ry, 0, 0, false);
+      b.box(L + 0.5, 0.24, 0.16, ...P(0, y0 + fh - 0.12), timber, ry, 0, 0, false);
+      if (!timbered) continue;
+      const nPosts = Math.max(2, Math.round(L / 1.7));
+      const step = L / nPosts;
+      for (let i = 0; i <= nPosts; i++) b.box(0.2, fh - 0.24, 0.14, ...P(-L / 2 + i * step, y0 + fh / 2), timber, ry, 0, 0, false);
+      b.box(L, 0.16, 0.12, ...P(0, y0 + fh * 0.45), timber, ry, 0, 0, false);
+      for (let i = 0; i < nPosts; i++) {
+        if ((i + f) % 2) continue;
+        const cx = -L / 2 + (i + 0.5) * step, ang = Math.atan2(fh * 0.42, step) * (i % 4 < 2 ? 1 : -1);
+        b.box(Math.hypot(step, fh * 0.42), 0.14, 0.12, ...P(cx, y0 + fh * 0.24), timber, ry, 0, ang * (alongX ? 1 : 1), false);
+      }
+      // fenêtres
+      for (let i = 0; i < nPosts; i++) {
+        if ((i + (alongX ? 1 : 0)) % 2 === 0 || (f === 0 && alongX && sgn > 0 && i === Math.floor(nPosts / 2))) continue;
+        const cx = -L / 2 + (i + 0.5) * step;
+        b.box(Math.min(1.0, step * 0.6), 0.95, 0.1, ...P(cx, y0 + fh * 0.68), 0x1d1a18, ry, 0, 0, false);
+        b.box(Math.min(1.2, step * 0.7), 0.1, 0.22, ...P(cx, y0 + fh * 0.68 - 0.52), timber, ry, 0, 0, false);
+      }
     }
   }
-  // porte et fenêtres
-  b.box(1.2, 2.1, 0.2, w * 0.15, 1.85, d / 2 + 0.12, 0x3d2817, 0, 0, 0, false);
-  for (let f = 0; f < floors; f++) for (const sx of [-1, 1]) {
-    if (f === 0 && sx > 0) continue;
-    b.box(0.9, 1.0, 0.16, sx * w * 0.3, 0.8 + fh * f + 1.7, d / 2 + 0.12, 0x2a2420, 0, 0, 0, false);
-    b.box(1.1, 0.12, 0.3, sx * w * 0.3, 0.8 + fh * f + 1.15, d / 2 + 0.2, timber, 0, 0, 0, false);
-  }
+  // porte
+  b.box(1.2, 2.1, 0.2, w * 0.15, 1.85, d / 2 + 0.22, 0x3d2817, 0, 0, 0, false);
+  b.box(1.5, 0.22, 0.3, w * 0.15, 2.95, d / 2 + 0.25, timber, 0, 0, 0, false);
   // toit et cheminée
   const rh = 2.4 + rnd() * 1.4;
   b.roof(w + 1.2, rh, d + 1.0, 0, 0.8 + H, 0, roof, rnd() < 0.5 ? 0 : 0);
@@ -227,4 +264,34 @@ export function windmillSails() {
   return b.geometry();
 }
 
-export const buildingMaterial = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.02 });
+// Matériau des bâtiments : textures photo en projection triplanaire (espace objet, en mètres)
+export function buildingMaterial(tex) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0 });
+  if (!tex) return m;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.tBDiff = { value: tex.diff }; sh.uniforms.tBNor = { value: tex.nor };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float layer; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLayer = layer; vOP = position; vON = normal; vNM0 = normalMatrix[0]; vNM1 = normalMatrix[1]; vNM2 = normalMatrix[2];');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        precision highp sampler2DArray;
+        uniform sampler2DArray tBDiff, tBNor; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;`)
+      .replace('#include <map_fragment>', `
+        vec3 bN = normalize(vON); vec3 bPert = vec3(0.0); float bRough = 0.85;
+        if (vLayer > -0.5) {
+          float L = floor(vLayer + 0.5);
+          float sc = L == 2.0 || L == 3.0 || L == 4.0 ? 0.42 : (L == 1.0 ? 0.55 : 0.33);
+          vec3 bw = pow(abs(bN), vec3(5.0)); bw /= (bw.x + bw.y + bw.z);
+          vec3 p = vOP * sc;
+          vec3 cx = texture(tBDiff, vec3(p.zy, L)).rgb, cy = texture(tBDiff, vec3(p.xz, L)).rgb, cz = texture(tBDiff, vec3(p.xy, L)).rgb;
+          diffuseColor.rgb *= cx * bw.x + cy * bw.y + cz * bw.z;
+          vec3 nx = texture(tBNor, vec3(p.zy, L)).xyz * 2.0 - 1.0, ny = texture(tBNor, vec3(p.xz, L)).xyz * 2.0 - 1.0, nz = texture(tBNor, vec3(p.xy, L)).xyz * 2.0 - 1.0;
+          bPert = vec3(0.0, nx.y, nx.x) * sign(bN.x) * bw.x + vec3(ny.x, 0.0, -ny.y) * bw.y + vec3(nz.x, nz.y, 0.0) * sign(bN.z) * bw.z;
+          bRough = L == 6.0 ? 0.45 : (L == 3.0 ? 0.7 : 0.88);
+        }`)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = bRough;')
+      .replace('#include <normal_fragment_maps>', 'normal = normalize(mat3(vNM0, vNM1, vNM2) * normalize(bN + bPert * 0.9)); if (!gl_FrontFacing) normal = -normal;');
+  };
+  return m;
+}

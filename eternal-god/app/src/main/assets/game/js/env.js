@@ -1,6 +1,5 @@
 // Ciel dynamique, cycle jour/nuit, météo, eau, rivière, nuages, étoiles, îles célestes, volcan.
 import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
 import { G, WORLD, Q, settings, noise, clamp, lerp, smooth, mulberry32, canvasTexture, softDotTexture, rand, emit } from './core.js';
 import { RIVER, riverBed, REGIONS } from './terrain.js';
 
@@ -26,59 +25,9 @@ export class Environment {
 
   build() {
     const scene = this.scene;
-    // ----- Ciel -----
-    this.sky = new Sky();
-    this.sky.scale.setScalar(4200);
-    this.sky.material.depthWrite = false;
-    this.sky.frustumCulled = false;
-    this.sky.renderOrder = -10;
-    scene.add(this.sky);
-    const u = this.sky.material.uniforms;
-    u.turbidity.value = 3.2; u.rayleigh.value = 1.4; u.mieCoefficient.value = 0.004; u.mieDirectionalG.value = 0.82;
-
-    // halo nocturne bleuté (ajouté par-dessus le ciel)
-    this.nightDome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending, fog: false,
-      uniforms: { uNight: { value: 0 }, uStorm: { value: 0 } },
-      vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-      fragmentShader: `uniform float uNight; uniform float uStorm; varying vec3 vDir;
-        void main(){ float h = clamp(vDir.y,0.0,1.0);
-          vec3 night = mix(vec3(0.05,0.08,0.18), vec3(0.008,0.012,0.04), pow(h,0.5)) * uNight;
-          vec3 storm = vec3(0.16,0.17,0.2) * uStorm * (1.0 - uNight*0.7);
-          gl_FragColor = vec4(night + storm, 1.0); }`,
-    }));
-    this.nightDome.renderOrder = -9; this.nightDome.frustumCulled = false;
-    scene.add(this.nightDome);
-
-    // ----- Étoiles -----
-    const rnd = mulberry32(99);
-    const sp = [], sc = [];
-    for (let i = 0; i < 2200; i++) {
-      const th = rnd() * Math.PI * 2, ph = Math.acos(rnd() * 0.95);
-      const r = 3600;
-      sp.push(Math.sin(ph) * Math.cos(th) * r, Math.cos(ph) * r, Math.sin(ph) * Math.sin(th) * r);
-      const t = rnd(); const b = 0.5 + rnd() * 0.5;
-      sc.push(b * (0.85 + t * 0.15), b * 0.9, b * (1.0 - t * 0.15 + 0.1));
-    }
-    const sg = new THREE.BufferGeometry();
-    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
-    sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
-    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, map: softDotTexture(16) }));
-    this.stars.renderOrder = -8; this.stars.frustumCulled = false;
-    scene.add(this.stars);
-
-    // ----- Lune -----
-    const moonTex = canvasTexture(256, 256, (ctx, w) => {
-      const g = ctx.createRadialGradient(w / 2, w / 2, w * 0.18, w / 2, w / 2, w / 2);
-      g.addColorStop(0, 'rgba(255,255,245,1)'); g.addColorStop(0.42, 'rgba(240,240,255,0.95)'); g.addColorStop(0.5, 'rgba(180,200,255,0.25)'); g.addColorStop(1, 'rgba(120,150,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
-      ctx.globalAlpha = 0.12; ctx.fillStyle = '#8890a8';
-      const r2 = mulberry32(3);
-      for (let i = 0; i < 14; i++) { ctx.beginPath(); ctx.arc(w * 0.3 + r2() * w * 0.4, w * 0.3 + r2() * w * 0.4, 4 + r2() * 16, 0, 7); ctx.fill(); }
-    });
-    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
-    this.moon.scale.setScalar(380); this.moon.renderOrder = -7;
-    scene.add(this.moon);
+    // ----- Ciel photographique -----
+    scene.add(G.photoSky.mesh);
+    this.sky = G.photoSky;
 
     // ----- Lumières -----
     this.hemi = new THREE.HemisphereLight(0xbcd6ff, 0x4a4030, 0.9);
@@ -95,15 +44,6 @@ export class Environment {
     scene.add(this.sun); scene.add(this.sun.target);
 
     scene.fog = new THREE.Fog(0x9fb4c8, 260, Q().far * 0.92);
-
-    // ----- Environnement réfléchi (métal doré du dieu) -----
-    this.pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.envScene = new THREE.Scene();
-    this.envSky = new Sky(); this.envSky.material = this.sky.material; this.envSky.scale.setScalar(1000);
-    this.envScene.add(this.envSky);
-    this.envGround = new THREE.Mesh(new THREE.CircleGeometry(900, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x3a4a2a }));
-    this.envGround.position.y = -40;
-    this.envScene.add(this.envGround);
 
     this.buildWater();
     this.buildRiver();
@@ -251,7 +191,7 @@ export class Environment {
     }
     this.cloudMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false,
-      uniforms: { uMap: { value: tex }, uLit: { value: new THREE.Color(1, 1, 1) }, uShadow: { value: new THREE.Color(0.6, 0.65, 0.75) }, uFogCol: { value: new THREE.Color() }, uFar: { value: 2200 }, uCover: { value: 0.7 } },
+      uniforms: { uMap: { value: tex }, uLit: { value: new THREE.Color(1, 1, 1) }, uShadow: { value: new THREE.Color(0.6, 0.65, 0.75) }, uFogCol: { value: new THREE.Color() }, uFar: { value: 2200 }, uCover: { value: 0.0 } },
       vertexShader: `attribute vec4 aOffset; attribute vec2 aShade; varying vec2 vUv; varying float vShade; varying float vAlpha; varying float vDist;
         void main(){ vUv = uv; vShade = aShade.x; vAlpha = aShade.y;
           vec4 mv = viewMatrix * vec4(aOffset.xyz, 1.0); mv.xy += position.xy * aOffset.w; vDist = -mv.z;
@@ -465,55 +405,37 @@ export class Environment {
     }
     const target = this.weather === 'storm' ? 1 : 0;
     this.weatherT = lerp(this.weatherT, target, 1 - Math.exp(-0.15 * dt));
-    const cover = this.weather === 'clear' ? 0.55 : this.weather === 'cloudy' ? 0.95 : 1.15;
+    const cover = this.weather === 'clear' ? 0.0 : this.weather === 'cloudy' ? 0.7 : 1.05;
     this.cloudMat.uniforms.uCover.value = lerp(this.cloudMat.uniforms.uCover.value, cover, 1 - Math.exp(-0.2 * dt));
 
-    // soleil
-    const ang = (this.dayTime - 0.25) * Math.PI * 2;
-    const elev = Math.sin(ang);
-    this.sunDir.set(Math.cos(ang) * 0.85, elev, 0.42 + Math.cos(ang) * 0.1).normalize();
-    const u = this.sky.material.uniforms;
-    u.sunPosition.value.copy(this.sunDir);
-    u.turbidity.value = lerp(3.0, 12, this.weatherT);
-    u.rayleigh.value = lerp(1.4, 0.6, this.weatherT) + (1 - smooth(-0.05, 0.25, elev)) * 1.2;
-    const day = smooth(-0.12, 0.18, elev);
-    const night = 1 - smooth(-0.25, 0.02, elev);
-    const dusk = clamp(1 - Math.abs(elev - 0.05) / 0.22, 0, 1);
-    this.dayF = day; this.nightF = night;
-
-    // lumières
-    const sunCol = new THREE.Color(1, 0.97, 0.9).lerp(C(1, 0.55, 0.28), dusk * 0.85);
-    const moonDir = this.sunDir.clone().multiplyScalar(-1);
-    const lightDir = elev > -0.06 ? this.sunDir : moonDir;
+    // soleil (mesuré sur les ciels photographiques)
     const focus = G.god ? G.god.pos : new THREE.Vector3();
+    this.sky.update(this.dayTime, this.weatherT, this.flash, G.camera, this.scene);
+    this.sunDir.copy(this.sky.sunDir);
+    const elev = this.sunDir.y;
+    const day = this.sky.day, night = this.sky.night, dusk = this.sky.dusk;
+    this.dayF = day; this.nightF = night;
+    const lightDir = elev > -0.04 ? this.sunDir : this.sky.moonDir;
     this.sun.position.copy(focus).addScaledVector(lightDir, 400);
     this.sun.target.position.copy(focus);
-    const storm = 1 - this.weatherT * 0.65;
-    if (elev > -0.06) { this.sun.color.copy(sunCol); this.sun.intensity = (0.15 + day * 2.5) * storm; }
-    else { this.sun.color.setRGB(0.55, 0.65, 1.0); this.sun.intensity = 0.38 * night; }
-    this.hemi.intensity = (0.32 + day * 0.75) * (1 - this.weatherT * 0.35);
-    this.hemi.color.copy(C(0.73, 0.83, 1).lerp(C(0.25, 0.32, 0.6), night));
-    this.hemi.groundColor.copy(C(0.36, 0.31, 0.22).lerp(C(0.06, 0.07, 0.1), night));
-    this.moon.position.copy(G.camera.position).addScaledVector(moonDir, 3000);
-    this.moon.material.opacity = night;
-    this.stars.material.opacity = night * (1 - this.weatherT * 0.9);
-    this.stars.position.copy(G.camera.position);
-    this.stars.rotation.y = this.dayTime * Math.PI * 2 * 0.2;
-    this.sky.position.copy(G.camera.position);
-    this.nightDome.position.copy(G.camera.position);
-    this.nightDome.material.uniforms.uNight.value = night;
-    this.nightDome.material.uniforms.uStorm.value = this.weatherT;
+    const storm = 1 - this.weatherT * 0.7;
+    if (elev > -0.04) {
+      this.sun.color.copy(this.sky.sunColor).lerp(C(1, 0.62, 0.36), dusk * 0.5);
+      this.sun.intensity = (smooth(-0.04, 0.12, elev) * 3.4) * storm;
+    } else { this.sun.color.setRGB(0.55, 0.66, 1.0); this.sun.intensity = 0.35 * night * storm; }
+    this.hemi.intensity = 0.12 + day * 0.18;
+    this.hemi.color.copy(this.sky.fog);
+    this.hemi.groundColor.copy(C(0.3, 0.27, 0.2).lerp(C(0.04, 0.05, 0.07), night));
 
     // brouillard
-    const fogDay = C(0.66, 0.76, 0.86), fogDusk = C(0.86, 0.6, 0.45), fogNight = C(0.035, 0.05, 0.1), fogStorm = C(0.32, 0.35, 0.4);
-    this.fogColor.copy(fogDay).lerp(fogDusk, dusk * 0.8).lerp(fogNight, night).lerp(fogStorm, this.weatherT * (1 - night * 0.7));
+    this.fogColor.copy(this.sky.fog).lerp(C(0.3, 0.32, 0.36), this.weatherT * (1 - night * 0.7));
     if (this.flash > 0) this.fogColor.lerp(C(0.9, 0.92, 1), this.flash * 0.6);
     this.scene.fog.color.copy(this.fogColor);
     const far = Q().far;
     const alt = G.camera.position.y;
-    this.scene.fog.near = lerp(260, 90, this.weatherT) + alt * 0.5;
-    this.scene.fog.far = lerp(far * 0.92, far * 0.5, this.weatherT) + alt * 1.2;
-    this.renderer.toneMappingExposure = lerp(0.42, 0.62, day) + this.flash * 1.5;
+    this.scene.fog.near = lerp(160, 40, this.weatherT) + alt * 0.4;
+    this.scene.fog.far = lerp(far * 1.25, far * 0.45, this.weatherT) + alt * 1.5;
+    this.renderer.toneMappingExposure = 1.0 + this.flash * 1.5;
 
     // nuages
     const cm = this.cloudMat.uniforms;
@@ -558,15 +480,6 @@ export class Environment {
       G.fx.smoke(new THREE.Vector3(V.x + rand(-25, 25), this.lava.position.y + 4, V.z + rand(-25, 25)), 1, 20, 0.25);
     }
 
-    // carte d'environnement pour les reflets métalliques
-    this.envTimer -= dt;
-    if (force || this.envTimer <= 0) {
-      this.envTimer = Q().bloom ? 12 : 25;
-      this.envGround.material.color.copy(C(0.23, 0.28, 0.16).lerp(C(0.02, 0.03, 0.05), night));
-      if (this.envRT) this.envRT.dispose();
-      this.envRT = this.pmrem.fromScene(this.envScene, 0.02, 1, 2000);
-      this.scene.environment = this.envRT.texture;
-      this.scene.environmentIntensity = lerp(0.1, 0.65, day);
-    }
+    this.scene.environmentIntensity = lerp(0.35, 1.0, day);
   }
 }

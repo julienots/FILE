@@ -1,7 +1,8 @@
 // Terrain déformable : grille d'altitude persistante, tronçons de maillage reconstruits
 // à la demande, coloration par régions, brûlures et chaleur (lave) persistantes.
 import * as THREE from 'three';
-import { WORLD, G, noise, clamp, lerp, smooth } from './core.js';
+import { WORLD, G, Q, noise, clamp, lerp, smooth } from './core.js';
+import { makeTerrainMaterial } from './terrainmat.js';
 
 export const REGIONS = {
   village: { x: 0, z: 0, r: 150, name: 'Vallon d\'Aube' },
@@ -39,17 +40,24 @@ export function riverBed(t) { return 1.5 + 78 * Math.pow(1 - t, 2.6); }
 
 export function generatorHeight(x, z) {
   const n = noise;
-  let h = 17 + n.fbm(x * 0.0021 + 3.1, z * 0.0021 - 7.7, 4) * 15 + n.fbm(x * 0.009, z * 0.009, 3) * 2.5;
-  const r = n.ridged(x * 0.0027 + 11, z * 0.0027 + 5, 5);
+  // distorsion de domaine : formes organiques, vallées sinueuses
+  const wx = x + n.fbm(x * 0.0016 + 4.1, z * 0.0016 - 2.3, 3) * 140;
+  const wz = z + n.fbm(x * 0.0016 - 7.9, z * 0.0016 + 5.4, 3) * 140;
+  let h = 17 + n.fbm(wx * 0.0019 + 3.1, wz * 0.0019 - 7.7, 5) * 16 + n.fbm(x * 0.011, z * 0.011, 3) * 1.6;
+  // massif : crêtes adoucies (crêtes au carré puis lissées) + grandes masses
+  const r = n.ridged(wx * 0.0016 + 11, wz * 0.0016 + 5, 6);
+  const mass = 0.5 + 0.5 * n.fbm(wx * 0.0011 - 3, wz * 0.0011 + 8, 3);
+  const peaks = Math.pow(r, 1.8) * 0.6 + mass * 0.55;
   // Pics de Givre au nord
-  const mN = smooth(-200, -470, z);
-  h += mN * (35 + r * 250);
+  const mN = smooth(-180, -480, z);
+  h += mN * mN * (25 + peaks * 230);
   // collines de la forêt à l'ouest
   const mW = smooth(-110, -420, x);
-  h += mW * (n.fbm(x * 0.004 + 9, z * 0.004, 3) * 16 + 8);
+  h += mW * (n.fbm(wx * 0.004 + 9, wz * 0.004, 4) * 18 + 10);
   // remparts montagneux en bordure du monde
   const e = Math.max(Math.abs(x), Math.abs(z)) / HALF;
-  h += smooth(0.8, 0.985, e) * (130 + r * 170);
+  const eb = smooth(0.78, 0.99, e);
+  h += eb * eb * (110 + peaks * 230);
   // volcan
   const V = REGIONS.volcano;
   const dv = Math.hypot(x - V.x, z - V.z);
@@ -164,28 +172,7 @@ export class Terrain {
       idx.push(a, c, b, b, c, d);
     }
     this.index = new THREE.BufferAttribute(new Uint16Array(idx), 1);
-    this.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, metalness: 0.0 });
-    this.material.onBeforeCompile = (sh) => {
-      sh.uniforms.uTime = G.uniforms.time;
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float heat;\nvarying float vHeat;\nvarying vec3 vWPos;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHeat = heat;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', `#include <common>
-uniform float uTime;
-varying float vHeat;
-varying vec3 vWPos;
-float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
-  return mix(mix(hash2(i), hash2(i+vec2(1,0)), f.x), mix(hash2(i+vec2(0,1)), hash2(i+vec2(1,1)), f.x), f.y); }`)
-        .replace('#include <color_fragment>', `#include <color_fragment>
-float dn = vnoise(vWPos.xz*0.45)*0.45 + vnoise(vWPos.xz*2.1)*0.25 + vnoise(vWPos.xz*0.07)*0.5;
-diffuseColor.rgb *= 0.74 + dn*0.42;`)
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-float pulse = 0.75 + 0.25*sin(uTime*2.3 + vWPos.x*0.2 + vWPos.z*0.17);
-float lavaN = vnoise(vWPos.xz*0.6 + uTime*0.15);
-totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * vHeat * vHeat * (1.6 + lavaN) * pulse;`);
-    };
+    this.material = makeTerrainMaterial(this.textures);
     this.meshes = [];
     const C = WORLD.chunks;
     for (let cz = 0; cz < C; cz++) for (let cx = 0; cx < C; cx++) {
@@ -193,7 +180,8 @@ totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * vHeat * vHeat * (1.6 + lavaN) *
       g.setIndex(this.index);
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vps * vps * 3), 3));
       g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(vps * vps * 3), 3));
-      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vps * vps * 3), 3));
+      g.setAttribute('splat', new THREE.BufferAttribute(new Float32Array(vps * vps * 4), 4));
+      g.setAttribute('fx', new THREE.BufferAttribute(new Float32Array(vps * vps * 4), 4));
       g.setAttribute('heat', new THREE.BufferAttribute(new Float32Array(vps * vps), 1));
       const m = new THREE.Mesh(g, this.material);
       m.receiveShadow = true;
@@ -210,7 +198,7 @@ totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * vHeat * vHeat * (1.6 + lavaN) *
     const seg = WORLD.chunkSeg, vps = seg + 1, C = WORLD.chunks;
     const m = this.meshes[cz * C + cx];
     const g = m.geometry;
-    const pos = g.attributes.position.array, nor = g.attributes.normal.array, col = g.attributes.color.array, heat = g.attributes.heat.array;
+    const pos = g.attributes.position.array, nor = g.attributes.normal.array, spl = g.attributes.splat.array, fx = g.attributes.fx.array, heat = g.attributes.heat.array;
     const h = this.h;
     const i0 = cx * seg, j0 = cz * seg;
     let minY = 1e9, maxY = -1e9, hot = false;
@@ -226,14 +214,15 @@ totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * vHeat * vHeat * (1.6 + lavaN) *
         let nx = hl - hr, ny = 2 * RES, nz = hd - hu;
         const inv = 1 / Math.hypot(nx, ny, nz); nx *= inv; ny *= inv; nz *= inv;
         nor[v * 3] = nx; nor[v * 3 + 1] = ny; nor[v * 3 + 2] = nz;
-        this.colorAt(k, gi, gj, y, ny, col, v * 3);
+        this.splatAt(k, gi, gj, y, spl, fx, v * 4);
         heat[v] = this.heat[k];
         if (this.heat[k] > 0.01) hot = true;
       }
     }
     g.attributes.position.needsUpdate = true;
     g.attributes.normal.needsUpdate = true;
-    g.attributes.color.needsUpdate = true;
+    g.attributes.splat.needsUpdate = true;
+    g.attributes.fx.needsUpdate = true;
     g.attributes.heat.needsUpdate = true;
     const cxw = -HALF + (i0 + seg / 2) * RES, czw = -HALF + (j0 + seg / 2) * RES;
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cxw, (minY + maxY) / 2, czw), Math.hypot(WORLD.chunkSize * 0.71, (maxY - minY) / 2 + 2));
@@ -241,46 +230,27 @@ totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * vHeat * vHeat * (1.6 + lavaN) *
     if (hot) this.hotChunks.add(cz * C + cx); else this.hotChunks.delete(cz * C + cx);
   }
 
-  colorAt(k, gi, gj, y, ny, out, o) {
+  // poids des couches de texture : forêt, chemin, champ, pavés | brûlure, terre remuée, volcan
+  splatAt(k, gi, gj, y, spl, fx, o) {
     const x = -HALF + gi * RES, z = -HALF + gj * RES;
-    const n1 = noise.noise(x * 0.013, z * 0.013), n2 = noise.noise(x * 0.05 + 40, z * 0.05);
-    // herbe
-    let r = 0.33 + n1 * 0.05, g = 0.47 + n1 * 0.06 + n2 * 0.02, b = 0.17;
-    // sous-bois de la forêt
-    const forest = smooth(-130, -260, x) * (1 - smooth(-280, -480, z));
-    r = lerp(r, 0.22, forest * 0.7); g = lerp(g, 0.31, forest * 0.7); b = lerp(b, 0.12, forest * 0.7);
-    // plages et berges
-    const sand = 1 - smooth(WORLD.water + 0.4, WORLD.water + 2.6, y);
-    r = lerp(r, 0.72, sand); g = lerp(g, 0.66, sand); b = lerp(b, 0.48, sand);
-    // fonds immergés
-    if (y < WORLD.water - 1) { const u = smooth(WORLD.water - 1, WORLD.water - 8, y); r = lerp(r, 0.40, u); g = lerp(g, 0.38, u); b = lerp(b, 0.30, u); }
-    // roche selon la pente et l'altitude
-    const rock = clamp(smooth(0.86, 0.68, ny) + smooth(90, 160, y) * 0.8, 0, 1);
-    r = lerp(r, 0.43 + n2 * 0.04, rock); g = lerp(g, 0.41 + n2 * 0.04, rock); b = lerp(b, 0.39 + n2 * 0.03, rock);
-    // neige
-    const snow = smooth(140 + n1 * 25, 175 + n1 * 25, y) * smooth(0.55, 0.75, ny);
-    r = lerp(r, 0.93, snow); g = lerp(g, 0.95, snow); b = lerp(b, 0.99, snow);
-    // roche volcanique
-    const V = REGIONS.volcano, dv = Math.hypot(x - V.x, z - V.z);
-    const volc = 1 - smooth(150, 300, dv);
-    r = lerp(r, 0.17 + (dv < 70 ? 0.12 : 0), volc); g = lerp(g, 0.14, volc); b = lerp(b, 0.13, volc);
-    // peinture (chemins, champs, pavés)
-    const p = this.paint[k];
-    if (p === 1) { r = lerp(r, 0.50, 0.85); g = lerp(g, 0.40, 0.85); b = lerp(b, 0.27, 0.85); }
-    else if (p === 2) { const row = (Math.floor(x * 0.7) & 1) ? 0.9 : 1.05; r = 0.42 * row; g = 0.31 * row; b = 0.19 * row; }
-    else if (p === 3) { r = 0.55; g = 0.53; b = 0.50; }
-    // terre mise à nu par la destruction
-    const dug = this.base[k] - y;
-    if (dug > 0.3) {
-      const u = smooth(0.3, 2.5, dug), deep = smooth(4, 14, dug);
-      r = lerp(r, lerp(0.40, 0.31, deep), u); g = lerp(g, lerp(0.29, 0.27, deep), u); b = lerp(b, lerp(0.19, 0.25, deep), u);
-    } else if (dug < -0.4) { // terre projetée sur les bords
-      const u = smooth(0.4, 2, -dug); r = lerp(r, 0.42, u * 0.8); g = lerp(g, 0.33, u * 0.8); b = lerp(b, 0.22, u * 0.8);
+    const forest = smooth(-120, -250, x) * (1 - smooth(-300, -470, z)) * (0.75 + 0.25 * noise.noise(x * 0.02, z * 0.02));
+    // poids lissés sur les voisins : bords doux pour chemins, champs et pavés
+    let w1 = 0, w2 = 0, w3 = 0, cnt = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const ii = clamp(gi + di, 0, N - 1), jj = clamp(gj + dj, 0, N - 1), p = this.paint[jj * N + ii], wt = di || dj ? 1 : 2;
+      if (p === 1) w1 += wt; else if (p === 2) w2 += wt; else if (p === 3) w3 += wt;
+      cnt += wt;
     }
-    const burn = this.burn[k] / 255;
-    if (burn > 0) { const u = burn * 0.92; r = lerp(r, 0.05, u); g = lerp(g, 0.045, u); b = lerp(b, 0.04, u); }
-    // couleurs saisies en sRGB, converties en linéaire
-    out[o] = r * r; out[o + 1] = g * g; out[o + 2] = b * b;
+    spl[o] = clamp(forest, 0, 1);
+    spl[o + 1] = (w1 / cnt) * 0.85;
+    spl[o + 2] = w2 / cnt;
+    spl[o + 3] = w3 / cnt;
+    const V = REGIONS.volcano;
+    const dug = this.base[k] - y;
+    fx[o] = this.burn[k] / 255;
+    fx[o + 1] = dug > 0 ? dug : -dug * 0.6;
+    fx[o + 2] = 1 - smooth(140, 290, Math.hypot(x - V.x, z - V.z));
+    fx[o + 3] = 0;
   }
 
   markDirtyArea(x, z, rad) {
