@@ -14,9 +14,13 @@ export class CameraRig {
     this.shakeOff = new THREE.Vector3();
   }
   rotate(dx, dy) {
-    const s = 0.0055 * settings.sensitivity;
+    // sensibilité rapportée à la taille de l'écran (même ressenti sur tous les téléphones),
+    // avec une légère accélération pour les gestes rapides
+    const base = 5.6 / Math.max(320, Math.min(innerWidth, innerHeight * 2));
+    const accel = 1 + Math.min(1.2, Math.hypot(dx, dy) / 35);
+    const s = base * accel * settings.sensitivity;
     this.yaw -= dx * s;
-    this.pitch = clamp(this.pitch + dy * s * (settings.invertY ? -1 : 1), -1.2, 1.35);
+    this.pitch = clamp(this.pitch + dy * s * 0.8 * (settings.invertY ? -1 : 1), -1.2, 1.35);
     this.lastInput = G.time;
   }
   zoom(f) { this.zoomMul = clamp((this.zoomMul || 1) * f, 0.45, 2.4); }
@@ -34,7 +38,7 @@ export class CameraRig {
     const flying = god.state === 'fly';
     const sp = god.vel.length();
     // suit doucement l'arrière du dieu quand il se déplace et que le joueur ne touche pas la caméra
-    if (G.time - this.lastInput > 2.5 && sp > 6) this.yaw = dampAngle(this.yaw, god.heading + Math.PI, flying ? 0.9 : 0.6, dt);
+    if (G.time - this.lastInput > 5 && sp > 8) this.yaw = dampAngle(this.yaw, god.heading + Math.PI, flying ? 0.5 : 0.3, dt);
     const want = (flying ? 26 + Math.min(sp, 80) * 0.22 : 19 + god.anim.run * 4) * (this.zoomMul || 1);
     this.dist = damp(this.dist, want, 2.5, dt);
     this.target.lerp(god.pos.clone().add(new THREE.Vector3(0, flying ? 3.2 : 4.2, 0)), 1 - Math.exp(-(flying ? 8 : 12) * dt));

@@ -9,7 +9,9 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 #lookzone { position: fixed; inset: 0; z-index: 1; }
 #hud { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
 #hud > * { pointer-events: auto; }
-#hud #toasts, #hud #bubbles, #hud #crosshair, #hud #status, #hud #bossbar, #hud #interactLabel, #hud #fps { pointer-events: none; }
+#hud #toasts, #hud #bubbles, #hud #crosshair, #hud #status, #hud #bossbar, #hud #interactLabel, #hud #fps, #hud #actions, #hud #topright { pointer-events: none; }
+/* seuls les boutons et la mini-carte captent le doigt : entre eux, le glisser tourne la caméra */
+#actions .round, #topright .round, #minimap { pointer-events: auto; }
 
 /* ---------- chargement ---------- */
 #boot { position: fixed; inset: 0; z-index: 50; background: #000; display: flex; align-items: center; justify-content: center; transition: opacity 1s; }

@@ -129,21 +129,35 @@ export class UI {
     zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end);
     // caméra : glisser n'importe où ailleurs (y compris en mode photo)
     const look = $('#lookzone');
+    // suivi robuste des doigts : un toucher dont Android a perdu la fin ne doit jamais
+    // transformer la rotation en zoom (doigt « fantôme »)
     const ptr = new Map();
-    look.addEventListener('pointerdown', (e) => { ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); look.setPointerCapture(e.pointerId); G.audio && G.audio.unlock(); });
+    const now = () => performance.now();
+    look.addEventListener('pointerdown', (e) => {
+      if (e.isPrimary) ptr.clear();
+      for (const [id, q] of ptr) if (now() - q.t > 1500) ptr.delete(id);
+      ptr.set(e.pointerId, { x: e.clientX, y: e.clientY, t: now() });
+      try { look.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      G.audio && G.audio.unlock();
+    });
     look.addEventListener('pointermove', (e) => {
       const p = ptr.get(e.pointerId); if (!p) return;
-      if (ptr.size === 2) { // pincer pour zoomer
-        const [a, b] = [...ptr.values()]; const d0 = Math.hypot(a.x - b.x, a.y - b.y);
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.t = now();
+      if (ptr.size >= 2) { // pincer pour zoomer (deux doigts réellement posés)
+        const others = [...ptr.entries()].filter(([id]) => id !== e.pointerId);
+        const o = others[0][1];
+        const d0 = Math.hypot(p.x - o.x, p.y - o.y);
         p.x = e.clientX; p.y = e.clientY;
-        const [c, d] = [...ptr.values()]; const d1 = Math.hypot(c.x - d.x, c.y - d.y);
-        if (d0 > 0) G.cam.zoom(d0 / d1);
+        const d1 = Math.hypot(p.x - o.x, p.y - o.y);
+        if (d0 > 20 && d1 > 20) G.cam.zoom(d0 / d1);
         return;
       }
-      G.cam.rotate(e.clientX - p.x, e.clientY - p.y); p.x = e.clientX; p.y = e.clientY;
+      p.x = e.clientX; p.y = e.clientY;
+      G.cam.rotate(dx, dy);
     });
     const lend = (e) => ptr.delete(e.pointerId);
-    look.addEventListener('pointerup', lend); look.addEventListener('pointercancel', lend);
+    look.addEventListener('pointerup', lend); look.addEventListener('pointercancel', lend); look.addEventListener('lostpointercapture', lend);
     look.addEventListener('wheel', (e) => G.cam.zoom(e.deltaY > 0 ? 1.1 : 0.9), { passive: true });
     // boutons
     const hold = (id, down, up) => {
