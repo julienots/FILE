@@ -1,0 +1,9 @@
+.godot/
+assets/polyhaven/
+assets/drive/
+assets/thirdparty/
+captures/*.png
+!captures/preview/
+build/
+*.tmp
+__pycache__/
