@@ -883,6 +883,7 @@ uniform sampler2D uNoiseTex;
 uniform vec4 uSkyTop;      // zenith colour
 uniform vec4 uSkyHorizon;  // horizon colour, a = cloud cover
 uniform vec4 uSkyFx;       // 2.0.0 x aurora, y dust haze (desert, ash), z rainbow
+uniform vec4 uRift;        // 3.9.5 x breach opening (0..1), y extra glow while it tears
 out vec4 fragColor;
 
 float hash13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
@@ -999,30 +1000,31 @@ float riftZig(float x, float n, float s) { float i = floor(x * n), f = fract(x *
 vec3 riftSky(vec3 d, vec3 col, float t, float night) {
     const vec3 R = vec3(0.596, 0.298, -0.745);   // low over the horizon, so the gameplay camera sees it
     float c = dot(d, R);
-    if (c < 0.42) return col;
+    float open = uRift.x;
+    if (c < 0.42 || open < 0.002) return col;
     vec3 e1 = normalize(cross(vec3(0.0, 1.0, 0.0), R)), e2 = cross(R, e1);
     vec2 p = vec2(dot(d, e1), dot(d, e2)) / c;
     const float ca = 0.9394, sa = 0.3429;   // the crack runs at a slant
     p = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
-    const float L = 0.6;
+    float L = 0.6 * clamp(open * 1.6, 0.04, 1.0);   // 3.9.5 the crack runs out from its centre as it opens
     float x = p.x, ax = abs(x) / L;
     float env = pow(max(1.0 - ax * ax, 0.0), 0.65);
     float cy = 0.1 * riftZig(x, 3.0, 1.0) + 0.05 * riftZig(x, 8.0, 2.0) + 0.016 * riftZig(x, 23.0, 3.0) + 0.005 * riftZig(x, 61.0, 5.0);
-    float w = (0.1 * (0.6 + 0.7 * (riftZig(x, 6.0, 4.0) + 0.5)) + 0.004) * env * (0.93 + 0.07 * sin(t * 0.9 + x * 4.0));
-    float pulse = 0.86 + 0.1 * sin(t * 1.3) + 0.04 * sin(t * 7.1 + x * 9.0);
+    float w = smoothstep(0.0, 1.0, open) * (0.1 * (0.6 + 0.7 * (riftZig(x, 6.0, 4.0) + 0.5)) + 0.004) * env * (0.93 + 0.07 * sin(t * 0.9 + x * 4.0));
+    float pulse = 0.86 + 0.1 * sin(t * 1.3) + 0.04 * sin(t * 7.1 + x * 9.0) + uRift.y * 1.5;
     float dy = p.y - cy;
     float e = abs(dy) - w;          // < 0 inside the breach
     float eo = max(e, 0.0);
     float endFade = smoothstep(1.08, 0.75, ax);
     // halo: the sky around the wound darkens and turns violet
-    float halo = exp(-eo * 7.0) * endFade;
+    float halo = exp(-eo * 7.0) * endFade * min(open * 1.5, 1.0);
     vec3 haloC = mix(vec3(0.55, 0.12, 1.0), vec3(0.1, 0.65, 1.0), 0.5 + 0.5 * sin(x * 5.0 + t * 0.5));
     col = mix(col, col * 0.45 + haloC * 0.1, halo * (0.5 + 0.3 * (1.0 - night)));
     col += haloC * halo * (0.16 + 0.12 * night) * pulse;
     // veins: ridged noise lines cracking the sky near the breach
     vec2 vp = p * 2.1 + vec2(0.13, 0.41);
     float v1 = abs(texture(uNoiseTex, vp).g - 0.5), v2 = abs(texture(uNoiseTex, vp * 2.7 + 0.3).r - 0.5);
-    float near = exp(-eo * 28.0) * smoothstep(1.0, 0.55, ax);
+    float near = exp(-eo * 28.0) * smoothstep(1.0, 0.55, ax) * min(open * 1.5, 1.0);
     float veins = (smoothstep(0.01, 0.0, v1) + 0.5 * smoothstep(0.006, 0.0, v2)) * near;
     col += mix(vec3(0.95, 0.4, 1.0), vec3(0.45, 0.95, 1.0), smoothstep(0.0, 0.016, v1)) * veins * 1.1 * pulse;
     // inside: the other universe

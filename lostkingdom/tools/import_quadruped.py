@@ -50,10 +50,11 @@ def main():
     ap.add_argument("--anat", help="2.9.0 JSON file: {anat:{bone:[fwd,up]}, tips:{...}, saddle:[fwd,up], leg_w, belly_y} for another animal")
     a = ap.parse_args()
     global ANAT, TIPS, SADDLE_X, SADDLE_Y, LEG_W, BELLY_Y
-    head_above = None
+    head_above = None; snout_fwd = None
     if a.anat:
         cfg = json.load(open(a.anat))
-        head_above = cfg.get("head_above")   # 2.9.0 antlers / horns: everything above this height, ahead of the chest, rides the head
+        head_above = cfg.get("head_above")
+        snout_fwd = cfg.get("snout_fwd")     # 3.9.5 trunk / long snout: everything ahead of this follows only the head and jaw   # 2.9.0 antlers / horns: everything above this height, ahead of the chest, rides the head
         ANAT = {k: tuple(v) for k, v in cfg["anat"].items()}; TIPS = {k: tuple(v) for k, v in cfg["tips"].items()}
         SADDLE_X, SADDLE_Y = cfg["saddle"]; LEG_W = cfg["leg_w"]; BELLY_Y = cfg["belly_y"]
     P, N, UV, I, tex = load_glb(a.glb)
@@ -114,6 +115,13 @@ def main():
     for key, bones in legs.items():
         if key[0] == "b":
             for n in bones: D[tailZone & (np.abs(X) < 0.05 * k), B[n]] = big
+    if snout_fwd is not None:
+        sm = Z > (snout_fwd - SADDLE_X) * k
+        for bi in range(21):
+            if bi not in (B["head"], B["jaw"]): D[sm, bi] = big
+        D[sm, B["head"]] = seg_dist(Pg[sm], J[B["head"]], J[B["jaw"]])
+        D[sm, B["jaw"]] = seg_dist(Pg[sm], J[B["jaw"]], tips[B["jaw"]])
+        print(f"  snout_fwd: {int(sm.sum())} vertices ride the head / jaw (trunk)")
     dead = (D >= big / 2).all(1)
     if dead.any():
         print(f"  {int(dead.sum())} vertices matched no rule, nearest bone")

@@ -523,11 +523,12 @@ void Game::updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt) {
     ab.timer -= dt;
     Character& p = pc();
     float pd = distXZ(p.pos, c.pos);
-    float flee = ab.kind == 5 ? 8.f : 13.f;
+    float flee = ab.kind == 5 ? 8.f : ab.kind == 9 ? 5.f : 13.f;   // 3.9.5 mammoths hardly care
     if (ab.tame) flee = 0;   // 1.9.2 livestock of the domain: calm, they stay in their pen
     if (pd < flee && length(vec2(p.vel.x, p.vel.z)) > 1.f) ab.fleeing = true;
     vec2 mv{0, 0}; float spd = 0;
-    if (ab.fleeing) {
+    if (ab.forceSpeed > 0) { ab.fleeing = false; if (distXZ(c.pos, ab.dest) > 1.f) { mv = steer(c, ab.dest, dt); spd = ab.forceSpeed; } }
+    else if (ab.fleeing) {
         vec3 away = c.pos + normalize(c.pos - p.pos + vec3(0.01f, 0, 0)) * 8.f;
         mv = steer(c, away, dt); spd = an.gait.runSpeed;
         if (pd > flee * 2.5f) ab.fleeing = false;
@@ -538,7 +539,7 @@ void Game::updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt) {
             vec2 o = r.inDisk() * (ab.tame ? 3.5f : 12.f);
             ab.dest = r.chance(0.4f) ? c.pos : ab.home + vec3(o.x, 0, o.y);
         }
-        if (distXZ(c.pos, ab.dest) > 0.7f) { mv = steer(c, ab.dest, dt); spd = ab.kind == 5 ? 2.5f : 1.2f; }
+        if (distXZ(c.pos, ab.dest) > 0.7f) { mv = steer(c, ab.dest, dt); spd = ab.kind == 5 ? 2.5f : ab.kind == 9 ? 1.5f : 1.2f; }
     }
     vec3 w = vec3(mv.x, 0, mv.y) * spd;
     c.vel.x = damp(c.vel.x, w.x, 5, dt); c.vel.z = damp(c.vel.z, w.z, 5, dt);

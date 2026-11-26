@@ -56,6 +56,18 @@ static std::vector<CineShot> prologueShots(Game& g) {
     c.from = at(B.x + 60, B.y + 50, 22); c.to = at(B.x + 25, B.y + 35, 14); c.lookFrom = at(B.x, B.y, 3); c.lookTo = at(B.x - 10, B.y, 2);
     c.text = "Les champs étaient lourds de blé. Les routes, sûres. On disait que la couronne chantait, la nuit.";
     s.push_back(c);
+    // 3b. 3.9.5 the mammoths of Frostheim on their migration
+    {
+        // on the frozen lake: open ice, nothing hides the herd (the camera and the herd stand on the ice, not the lake bed)
+        const Poi* fl = w.poiById("frozen_lake");
+        vec2 F = fl ? fl->pos : vec2(1180, 360);
+        auto at = [&](float x, float z, float up) { bool lava = false, frozen = false; float wl = w.waterLevel(x, z, &lava, &frozen); float y = w.height(x, z); if (frozen && wl > y) y = wl; return vec3(x, y + up, z); };
+        c = CineShot(); c.dur = 8.f; c.tod = 8.6f; c.weather = Game::W_CLEAR; c.fogMul = 0.25f;
+        c.herd = 4; c.herdAt = at(F.x, F.y, 0); c.herdDir = vec3(1, 0, 0.25f); c.herdSpeed = 1.6f;
+        c.from = at(F.x - 10, F.y + 24, 6.5f); c.to = at(F.x + 6, F.y + 18, 4.f); c.lookFrom = at(F.x - 4, F.y, 2.5f); c.lookTo = at(F.x + 8, F.y, 2.8f);
+        c.text = "Au nord, les mammouths de Frostheim marchaient vers le sud, comme chaque printemps depuis l'aube du monde.";
+        s.push_back(c);
+    }
     // 4. Morneval at night: the betrayal
     c = CineShot(); c.dur = 8.f; c.tod = 21.3f; c.weather = Game::W_CLOUDY; c.fogTint = vec3(0.55f, 0.35f, 0.8f); c.fogMul = 0.45f; c.music = "shadows";
     c.from = at(M.x + 110, M.y - 120, 30); c.to = at(M.x + 70, M.y - 80, 22); c.lookFrom = at(M.x, M.y, 10); c.lookTo = at(M.x, M.y, 16);
@@ -73,7 +85,31 @@ static std::vector<CineShot> prologueShots(Game& g) {
     c.text = "Pour sceller l'Abîme, Aldric brisa la Couronne en six fragments, confiés à six Gardiens. Puis il lia sa propre âme au sceau.";
     c.magic = vec3(1.f, 0.85f, 0.4f);
     s.push_back(c);
-    // 7. three centuries later: the sea storm
+    // 7a. 3.9.5 three centuries later: the sky tears open (the multiverse breach), mammoths flee, fragments fall
+    for (CineShot& o : s) o.riftFrom = o.riftTo = 0.f;   // before this night, the sky was whole
+    {
+        vec2 P = B + vec2(70, 90);
+        const vec3 R{0.596f, 0.298f, -0.745f};   // the breach's direction (sky shader)
+        vec2 Rh = normalize(vec2(R.x, R.z)), side = perp(Rh);
+        vec3 eye = at(P.x, P.y, 5);
+        c = CineShot(); c.dur = 10.f; c.tod = 22.2f; c.weather = Game::W_STORM; c.fogTint = vec3(0.55f, 0.3f, 0.85f); c.fogMul = 0.35f;
+        c.shake = 0.3f; c.sfx = "thunder"; c.music = "shadows"; c.fov = 50.f * DEG;
+        c.riftFrom = 0.f; c.riftTo = 1.f; c.meteors = true;
+        c.herd = 3; c.herdSpeed = 6.5f; c.herdAt = at(P.x + Rh.x * 34 - side.x * 30, P.y + Rh.y * 34 - side.y * 30, 0); c.herdDir = vec3(side.x, 0, side.y);
+        c.from = eye; c.to = eye + vec3(-Rh.x, 0, -Rh.y) * 6.f + vec3(0, 1.5f, 0);
+        c.lookFrom = eye + vec3(Rh.x, 0, Rh.y) * 50.f + vec3(0, 3, 0); c.lookTo = eye + vec3(Rh.x, 0, Rh.y) * 50.f + vec3(0, 9, 0);
+        c.text = "Trois cents ans ont passé. Le sceau s'est fissuré… et cette nuit-là, le ciel lui-même se déchira.";
+        s.push_back(c);
+        // 7b. the other worlds look through
+        c = CineShot(); c.dur = 9.f; c.tod = 22.4f; c.weather = Game::W_STORM; c.fogTint = vec3(0.55f, 0.3f, 0.85f); c.fogMul = 0.3f;
+        c.shake = 0.12f; c.meteors = true; c.fov = 30.f * DEG; c.magic = vec3(0.6f, 0.4f, 1.f);
+        vec3 e2 = at(P.x - Rh.x * 20, P.y - Rh.y * 20, 3);
+        c.from = e2; c.to = e2 + vec3(side.x, 0, side.y) * 8.f + vec3(0, 3, 0);
+        c.lookFrom = e2 + vec3(Rh.x, 0, Rh.y) * 45.f + vec3(0, 11, 0); c.lookTo = e2 + vec3(Rh.x, 0, Rh.y) * 45.f + vec3(0, 14.5f, 0);
+        c.text = "Par la brèche, d'autres mondes regardaient le nôtre. Des éclats d'univers inconnus tombaient comme des étoiles.";
+        s.push_back(c);
+    }
+    // 7. the sea storm
     c = CineShot(); c.dur = 8.f; c.tod = 22.f; c.weather = Game::W_STORM; c.shake = 0.15f; c.sfx = "thunder"; c.music = "night";
     vec2 sea, shore;
     if (nearestSea(w, beach, sea, shore)) {
@@ -85,7 +121,7 @@ static std::vector<CineShot> prologueShots(Game& g) {
     } else {
         c.from = at(beach.x + 40, beach.y + 120, 14); c.to = at(beach.x + 20, beach.y + 70, 8); c.lookFrom = at(beach.x, beach.y + 200, 0); c.lookTo = at(beach.x, beach.y + 20, 0);
     }
-    c.text = "Trois cents ans ont passé. Le sceau se fissure. Les Gardiens murmurent dans leur sommeil. Et cette nuit-là, la mer rejeta un naufragé.";
+    c.text = "Le multivers s'était ouvert. Les Gardiens murmuraient dans leur sommeil. Et sur la grève, la mer rejeta un naufragé.";
     s.push_back(c);
     // 8. dawn on the shore: the voice
     c = CineShot(); c.dur = 6.5f; c.tod = 6.1f; c.weather = Game::W_CLOUDY; c.fogTint = vec3(0.75f, 0.7f, 0.85f); c.fogMul = 0.6f; c.music = "";
@@ -124,8 +160,44 @@ void Game::startShots(std::vector<CineShot> shots, const std::string& id) {
     AGR_LOG("cinematic '%s': %zu shots", id.c_str(), cine.shots.size());
 }
 
+// 3.9.5 fragments of other worlds falling from the breach during the prologue
+struct CineMeteor { vec3 a, b; float t = 0, dur = 1.f; vec3 col; };
+static std::vector<CineMeteor> gMeteors;
+
+static void clearHerd(Game& g) {
+    for (Entity e : g.cineHerd) if (g.reg.valid(e)) g.reg.destroyLater(e);
+    g.cineHerd.clear();
+}
+
+float Game::cinematicRift(float* flash) const {
+    if (flash) *flash = 0;
+    if (!cine.active || cine.index >= (int)cine.shots.size()) return 1.f;
+    const CineShot& c = cine.shots[cine.index];
+    if (c.riftFrom < 0) return 1.f;
+    if (c.riftFrom == c.riftTo) return c.riftFrom;
+    // it tears in jolts: three surges with a pause between them
+    float u = saturate((cine.t - 1.2f) / std::max(1.f, c.dur - 3.f));
+    float j = u + 0.08f * std::sin(u * 3.f * TAU) * (1.f - u);
+    float v = c.riftFrom + (c.riftTo - c.riftFrom) * easeInOut(saturate(j));
+    if (flash) *flash = std::max(0.f, std::sin(u * 3.f * TAU)) * (1.f - u * 0.6f) * (u > 0.f ? 1.f : 0.f);
+    return v;
+}
+
 void Game::beginShot() {
     const CineShot& c = cine.shots[cine.index];
+    clearHerd(*this);
+    gMeteors.clear();
+    for (int i = 0; i < c.herd; i++) {
+        vec3 d = normalize(c.herdDir);
+        vec3 side{-d.z, 0, d.x};
+        float fwdOff = -i * 9.f + particles.rng.range(-2.f, 2.f), sideOff = (i % 2 ? 1.f : -1.f) * (2.f + i * 1.5f);
+        vec3 p = c.herdAt + d * fwdOff + side * sideOff;
+        p.y = groundAt(p.x, p.z);
+        Entity e = spawnAnimal(9, p);
+        if (Character* ch = reg.get<Character>(e)) { ch->yaw = std::atan2(d.x, d.z); if (i == c.herd - 1 && c.herd > 2) ch->vis.scale *= 0.6f; }   // a calf at the back
+        if (AnimalBrain* ab = reg.get<AnimalBrain>(e)) { ab->forceSpeed = c.herdSpeed * (i == c.herd - 1 && c.herd > 2 ? 1.1f : 1.f); ab->dest = p + d * 200.f; ab->home = ab->dest; }
+        cineHerd.push_back(e);
+    }
     cine.t = 0; cine.reveal = 0;
     if (c.tod >= 0) timeOfDay = c.tod;
     if (c.weather >= 0) { weather = weatherNext = c.weather; weatherBlend = 1; weatherTimer = 999; }
@@ -144,6 +216,7 @@ void Game::endCinematicShots(bool skipped) {
     if (!cine.active) return;
     std::string id = cine.id;
     cine.active = false;
+    clearHerd(*this); gMeteors.clear();
     timeOfDay = cine.id == "prologue" ? 7.5f : cine.savedTod;
     weather = weatherNext = cine.id == "prologue" ? W_CLEAR : cine.savedWeather; weatherBlend = 1; weatherTimer = 120;
     if (player != NullEntity) {
@@ -192,6 +265,41 @@ void Game::updateCinematicShots(float dt) {
     if (length(c.magic) > 0 && particles.rng.f() < dt * 18) {
         vec3 p = c.lookTo + vec3(particles.rng.range(-6.f, 6.f), particles.rng.range(0.f, 6.f), particles.rng.range(-6.f, 6.f));
         particles.magicTrail(p, c.magic, 1.4f);
+    }
+    if (c.meteors && cine.waitLoad <= 0) {
+        // fragments fall from the breach towards the land ahead of the camera, burn through the sky and burst on the ground
+        vec3 eye, look; float fv;
+        if (cinematicCamera(eye, look, fv) && particles.rng.f() < dt * 2.2f && gMeteors.size() < 5) {
+            const vec3 R{0.596f, 0.298f, -0.745f};
+            vec2 Rh = normalize(vec2(R.x, R.z)), sd = perp(Rh);
+            vec2 g2 = eye.xz() + Rh * particles.rng.range(60.f, 200.f) + sd * particles.rng.range(-110.f, 110.f);
+            CineMeteor m;
+            m.b = vec3(g2.x, groundAt(g2.x, g2.y), g2.y);
+            m.a = eye + R * 420.f + vec3(particles.rng.range(-60.f, 60.f), particles.rng.range(-20.f, 40.f), particles.rng.range(-60.f, 60.f));
+            m.dur = particles.rng.range(0.9f, 1.5f);
+            static const vec3 cols[] = {{0.7f, 0.35f, 1.f}, {0.3f, 0.85f, 1.f}, {1.f, 0.45f, 0.8f}, {1.f, 0.65f, 0.3f}};
+            m.col = cols[particles.rng.irange(0, 3)];
+            gMeteors.push_back(m);
+        }
+        for (size_t i = 0; i < gMeteors.size();) {
+            CineMeteor& m = gMeteors[i];
+            m.t += dt;
+            float u = saturate(m.t / m.dur);
+            vec3 dir = normalize(m.b - m.a), head = lerp(m.a, m.b, u * u * (2.f - u));
+            vfxBeam(head - dir * 28.f, head, m.col, 0.9f, 0.06f);
+            if (particles.rng.f() < 0.6f) particles.magicTrail(head, m.col, 2.2f);
+            if (u >= 1.f) {
+                particles.explosion(m.b, 3.2f, m.col);
+                particles.dust(m.b, 4.f);
+                lightningFlash = std::max(lightningFlash, 0.35f);
+                float dd = length(m.b - eye);
+                play("thunder", clampf(60.f / std::max(dd, 20.f), 0.15f, 0.7f), 1.4f + particles.rng.f() * 0.3f);
+                if (dd < 120.f) shake = std::max(shake, 0.35f);
+                gMeteors.erase(gMeteors.begin() + i);
+                continue;
+            }
+            ++i;
+        }
     }
     if (c.wristGlow && player != NullEntity && particles.rng.f() < dt * 25) {
         Character& p = pc();

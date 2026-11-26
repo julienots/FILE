@@ -636,6 +636,7 @@ void Game::updateEnvironment(float dt) {
         }
     }
     audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));
+    {   float fl = 0; env.rift = cinematicRift(&fl); env.riftFlash = fl; }   // 3.9.5 the sky breach (opens during the prologue)
     applyCinematicEnvironment();
 }
 

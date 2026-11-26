@@ -135,7 +135,7 @@ struct NpcBrain {
 
 struct WorldEvent { int kind = -1; vec3 pos; float t = 0, fallT = 0; bool active = false; uint32_t chestUid = 0; std::vector<Entity> foes; };   // 2.3.6
 
-struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; };
+struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; float forceSpeed = 0; };   // 3.9.5 forceSpeed > 0: heads for dest at that speed (cinematic herds)
 // 1.9.2 the player's domain
 // 1.13.0 co-op: a character driven by the network (the partner's hero; on the guest, the host's enemies)
 struct NetPuppet {
@@ -367,6 +367,9 @@ struct CineShot {
     float fogMul = 0.3f;          // cinematics see far: fog density multiplier
     float shake = 0;
     bool heroDown = false, heroRise = false, wristGlow = false;
+    float riftFrom = -1, riftTo = -1;   // 3.9.5 opening of the sky breach over the shot (-1: open, as in the game)
+    int herd = 0; float herdSpeed = 1.6f; vec3 herdAt, herdDir{1, 0, 0};   // 3.9.5 mammoths walking (or running) through the shot
+    bool meteors = false;              // 3.9.5 fragments of other worlds fall from the breach
 };
 // 1.13.0 two players on the same Wi-Fi (Coop.cpp)
 struct CoopHeroState {
@@ -621,6 +624,8 @@ public:
     vec3 cineFrom, cineTo, cineLook;
     std::string cinematicText;
     CinematicState cine;                       // multi-shot cinematics (prologue, story scenes)
+    std::vector<Entity> cineHerd;              // 3.9.5 animals spawned for a shot, removed with it
+    float cinematicRift(float* flash) const;
     bool pendingPrologue = false;
     void startShots(std::vector<CineShot> shots, const std::string& id);
     void startPrologue();

@@ -461,12 +461,15 @@ Entity Game::spawnAnimal(int kind, vec3 pos) {
     c.team = Team::Animal; c.pos = pos; c.animal = kind; c.maxHp = c.hp = kind == 5 ? 12 : 40;
     CreatureLook L; L.kind = kind; L.seed = (uint32_t)(pos.x * 13 + pos.z);
     if (kind == 4) { L.c1 = hexColor(0x8a6a4a); L.c2 = hexColor(0xd8c8a8); L.horns = true; }
+    else if (kind == 9) { L.c1 = hexColor(0x6a4a30); L.c2 = hexColor(0x8a6a4a); L.horns = true; }
     else { L.c1 = hexColor(0x9a8a7a); L.c2 = hexColor(0xe8e0d8); }
-    c.name = kind == 4 ? "Cerf" : "Lièvre";
-    setupVisualCreature(c.vis, Arch::Quadruped, L, kind == 5 ? 0.35f : 1.3f);
+    c.name = kind == 4 ? "Cerf" : kind == 9 ? "Mammouth" : "Lièvre";
+    if (kind == 9) c.maxHp = c.hp = 420;
+    setupVisualCreature(c.vis, Arch::Quadruped, L, kind == 5 ? 0.35f : kind == 9 ? 4.2f : 1.3f);
     if (kind == 4) applyImportedModel(c.vis, "deer", Arch::Quadruped);   // 2.9.0 the realistic stag (Tripo gallery)
-    c.vis.anim.gait.runSpeed = kind == 5 ? 6.f : 8.f; c.vis.anim.gait.walkSpeed = 1.f;
-    c.radius = kind == 5 ? 0.2f : 0.5f; c.height = kind == 5 ? 0.3f : 1.4f;
+    if (kind == 9) applyImportedModel(c.vis, "mammoth", Arch::Quadruped);   // 3.9.5 the woolly mammoth (the player's Tripo model)
+    c.vis.anim.gait.runSpeed = kind == 5 ? 6.f : kind == 9 ? 6.5f : 8.f; c.vis.anim.gait.walkSpeed = kind == 9 ? 1.6f : 1.f;
+    c.radius = kind == 5 ? 0.2f : kind == 9 ? 1.7f : 0.5f; c.height = kind == 5 ? 0.3f : kind == 9 ? 3.4f : 1.4f;
     c.vis.outline = false;
     reg.add<Character>(e, c);
     AnimalBrain ab; ab.home = pos; ab.dest = pos; ab.kind = kind;
@@ -607,6 +610,18 @@ void Game::updateSpawning(float dt) {
                     float wl = waterAt(sp.x, sp.z);
                     if (wl > -1e8f && sp.y < wl + 0.3f) continue;
                     list.push_back(spawnAnimal(kind, sp));
+                }
+            }
+            // 3.9.5 herds of mammoths in the cold north and on the high plateaus
+            if ((region == R_FROSTHEIM || region == R_HIGHCROWNS) && !camp && r.f() < 0.07f) {
+                int n = r.irange(2, 4);
+                for (int i = 0; i < n; i++) {
+                    vec2 o = r.inDisk() * 14.f;
+                    vec3 sp{cc.x + o.x, 0, cc.y + o.y};
+                    sp.y = groundAt(sp.x, sp.z);
+                    float wl = waterAt(sp.x, sp.z);
+                    if (wl > -1e8f && sp.y < wl + 0.3f) continue;
+                    list.push_back(spawnAnimal(9, sp));
                 }
             }
         }

@@ -1279,17 +1279,19 @@ static std::vector<Step> scenario(const std::string& name) {
         // 1.7.0: the animated prologue plays on a new game; one capture per shot, then the end state is checked,
         // then it is replayed and skipped with a real tap on "Passer"
         static int lastShot; static int res[6];
-        s.push_back({0.1f, [](Game& g) { g.ui.recordWidgets = true; lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue"; }, idle, "prologue started"});
-        s.push_back({110.f, none, [](Game& g, float) {
+        s.push_back({0.1f, [](Game& g) { g.ui.recordWidgets = true; lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue";
+            if (const char* f = getenv("LK_SHOT_FROM")) { g.cine.index = std::min(std::atoi(f), (int)g.cine.shots.size() - 1); g.beginShot(); }   // 3.9.5 dev: start at a given shot
+        }, idle, "prologue started"});
+        s.push_back({170.f, none, [](Game& g, float) {
             if (!g.cine.active) return;
-            if (g.cine.index != lastShot && g.cine.t > 3.2f) {
+            if (g.cine.index != lastShot && g.cine.t > std::min(6.5f, g.cine.shots[g.cine.index].dur - 1.2f)) {
                 lastShot = g.cine.index;
                 g.requestScreenshot(std::string("build/shots/D") + std::to_string(lastShot) + "_prologue.png");
                 AGR_LOG("PROLOGUE shot %d: \"%s\"", lastShot, g.cine.shots[lastShot].text.c_str());
             }
         }, "play prologue"});
         s.push_back({1.5f, [](Game& g) {
-            res[1] = !g.cine.active && lastShot + 1 == 10;
+            res[1] = !g.cine.active && lastShot + 1 == 13;   // 3.9.5 13 shots (mammoths, the sky tears, the other worlds)
             res[2] = g.storyFlags.count("prologue_seen") && g.loreFound.count("l1") && g.loreFound.count("l2") && g.loreFound.count("l3");
             res[3] = g.pc().vis.anim.state == BodyState::Locomotion;
         }, idle, "after"});

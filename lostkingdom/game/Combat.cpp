@@ -304,7 +304,8 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
             if (b.id == "abyss_lord") { questsDone.insert("m7"); queueChapter("ending_choice"); }   // 1.12.0 the player chooses the ending
         }
     } else if (c.team == Team::Animal) {
-        addItem("meat", 1); if (c.animal == 4) addItem("leather", 1);
+        addItem("meat", c.animal == 9 ? 4 : 1); if (c.animal == 4) addItem("leather", 1);
+        if (c.animal == 9) { addItem("leather", 3); gainXp(40); }   // 3.9.5 a mammoth
         advanceQuests(StepKind::Harvest, "hunt", 1);
         gainXp(6);
     }
