@@ -145,8 +145,7 @@ func run(m: Node) -> void:
 	await _shot("16_ciel_fissure")
 	# phase 4 : le mur du plateau
 	dir.set_phase(4)
-	p.place(Vector3(101.5, 0.06, 26.3), -PI * 0.5)
-	p.cam_yaw = PI * 0.5
+	p.place(Vector3(101.8, 0.06, 26.3), PI * 0.5)
 	p.cam_pitch = -0.1
 	await _frames(10)
 	_check("porte de service au bout de la rue", p.focus != null and p.focus.display_name == "Porte de service", p.focus.display_name if p.focus else "aucun")
@@ -154,8 +153,7 @@ func run(m: Node) -> void:
 	_check("fin de la démo atteinte", Game.flags.get("fin_demo", false) == true, "")
 	await _frames(4)
 	await _shot("17_mur_du_plateau")
-	p.place(Vector3(80.0, 0.06, 26.3), -PI * 0.5)
-	p.cam_yaw = PI * 0.5
+	p.place(Vector3(80.0, 0.06, 26.3), PI * 0.5)
 	p.cam_pitch = 0.05
 	await _frames(10)
 	await _shot("18_bout_de_la_rue")
