@@ -1,0 +1,14 @@
+{
+  "name": "julien-kit",
+  "owner": {
+    "name": "julienots"
+  },
+  "plugins": [
+    {
+      "name": "studio-kit",
+      "source": "./studio-kit",
+      "description": "Skills pour concevoir, construire, contrôler visuellement et publier des apps et jeux de niveau pro."
+    }
+  ],
+  "description": "Skills pour concevoir, construire et publier des apps et jeux de niveau pro."
+}

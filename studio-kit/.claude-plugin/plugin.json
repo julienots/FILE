@@ -1,0 +1,8 @@
+{
+  "name": "studio-kit",
+  "version": "1.1.1",
+  "description": "11 skills pour livrer des apps et jeux pro : conception, prompt-upgrade, long-build, game-polish, godot-realistic-3d, asset-sourcing, visual-qa-loop, ui-polish, debug-method, android-release, ship-check.",
+  "author": {
+    "name": "julienots"
+  }
+}
