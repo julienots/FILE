@@ -148,7 +148,7 @@ func _street() -> void:
 	var asphalt := MatLib.pbr("clean_asphalt", 4.0, Color(0.78, 0.78, 0.8), 1.0, 1.0)
 	var walk := MatLib.pbr("concrete_pavement", 2.4, Color(0.9, 0.89, 0.86))
 	var curb := MatLib.pbr("concrete_pavement", 1.2, Color(0.82, 0.81, 0.79))
-	var len := 190.0
+	var len := 212.0
 	Geo.box(self, Vector3(len, 0.1, ROAD_Z1 - ROAD_Z0), Vector3(0, -0.03, (ROAD_Z0 + ROAD_Z1) * 0.5), asphalt, 0.0, true)
 	for side in [[20.5, 22.1], [30.5, 32.1]]:
 		Geo.box(self, Vector3(len, 0.16, side[1] - side[0]), Vector3(0, 0.0, (side[0] + side[1]) * 0.5), walk, 0.01, true)
