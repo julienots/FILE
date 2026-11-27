@@ -17,6 +17,7 @@ const LOT := 26.0
 const KEEP := ["FrontDoor", "GarageDoor", "Fridge", "Wardrobe", "Television", "InteriorDoor"]
 
 func _ready() -> void:
+	add_to_group("world")
 	_lots = Node3D.new()
 	_lots.name = "Lots"
 	add_child(_lots)
@@ -47,6 +48,27 @@ func _ready() -> void:
 	_horizon_trees()
 	StaticBatcher.merge(self, PackedStringArray(KEEP + ["Lots"]))
 	Quality.apply(quality, env, sun, get_viewport())
+	GameClock.minute_changed.connect(func(_d: int, _m: int) -> void: update_daylight())
+	update_daylight()
+
+func set_quality(level: int) -> void:
+	quality = level
+	Quality.apply(level, env, sun, get_viewport())
+
+## Soleil, ciel et éclairage public suivent l'horloge du jeu.
+func update_daylight() -> void:
+	var a := GameClock.sun_angles()
+	var day_k := GameClock.daylight()
+	sun.rotation_degrees = Vector3(-maxf(a.x, 4.0), a.y - 32.0, 0.0)
+	sun.light_energy = 2.2 * day_k
+	sun.visible = day_k > 0.01
+	var warm := clampf(1.0 - a.x / 30.0, 0.0, 1.0)
+	sun.light_color = Color(1.0, 0.95, 0.86).lerp(Color(1.0, 0.68, 0.42), warm)
+	if env.sky and env.sky.sky_material is PanoramaSkyMaterial:
+		(env.sky.sky_material as PanoramaSkyMaterial).energy_multiplier = lerpf(0.04, 1.0, day_k)
+	env.ambient_light_energy = lerpf(0.25, 1.0, day_k)
+	for l in get_tree().get_nodes_in_group("street_lights"):
+		(l as Light3D).visible = day_k < 0.35
 
 # ---------------------------------------------------------------- ciel et lumière
 
@@ -143,8 +165,16 @@ func _street() -> void:
 	x = -LOT * 2.5
 	var n := 0
 	while x <= LOT * 2.5:
-		Geo.prop(self, "street_lamp_01", Vector3(x + 9.0, 0.08, 21.85), 180, 0.0, 6.0)
-		Geo.prop(self, "street_lamp_01", Vector3(x + 22.0, 0.08, 30.75), 0, 0.0, 6.0)
+		for lp in [Vector3(x + 9.0, 0.08, 21.85), Vector3(x + 22.0, 0.08, 30.75)]:
+			Geo.prop(self, "street_lamp_01", lp, 180 if lp.z < 25.0 else 0, 0.0, 6.0)
+			var sl := OmniLight3D.new()
+			sl.position = lp + Vector3(0, 5.3, 0)
+			sl.light_color = Color(1.0, 0.8, 0.55)
+			sl.light_energy = 2.5
+			sl.omni_range = 14.0
+			sl.visible = false
+			sl.add_to_group("street_lights")
+			add_child(sl)
 		if n % 2 == 0:
 			Geo.prop(self, "fire_hydrant", Vector3(x + 15.0, 0.08, 21.7), 0)
 		x += LOT

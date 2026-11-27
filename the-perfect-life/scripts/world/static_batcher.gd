@@ -38,7 +38,13 @@ static func merge(root: Node3D, keep: PackedStringArray = []) -> int:
 
 static func _collect(root: Node3D, n: Node, keep: PackedStringArray, groups: Dictionary, victims: Array[MeshInstance3D]) -> void:
 	for c in n.get_children():
-		if String(c.name) in keep:
+		var nm := String(c.name)
+		var skip := false
+		for k in keep:
+			if nm.contains(k):
+				skip = true
+				break
+		if skip:
 			continue
 		var taken := false
 		if c is MeshInstance3D:

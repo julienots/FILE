@@ -379,6 +379,7 @@ func bedroom() -> void:
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.85, 0.65); l.light_energy = 0.9; l.omni_range = 6.0
 	l.position = Vector3(12.0, HouseBuilder.TOP - 0.6, 8.3)
+	l.add_to_group("lights_chambre")
 	h.add_child(l)
 
 func _bed(head_pos: Vector3) -> void:
@@ -447,6 +448,7 @@ func _table_lamp(pos: Vector3) -> void:
 	l.omni_range = 3.2
 	l.shadow_enabled = true
 	l.position = Vector3(0, 0.42, 0.05)
+	l.add_to_group("lights_chambre")
 	r.add_child(l)
 
 func _wardrobe(pos: Vector3, rot_deg: float) -> void:
@@ -501,6 +503,7 @@ func lights() -> void:
 		l.omni_range = 7.5
 		l.omni_attenuation = 1.2
 		l.position = p
+		l.add_to_group("lights_rdc")
 		h.add_child(l)
 	Geo.prop(h, "ceiling_fan", Vector3(12.2, HouseBuilder.CEIL1 - 0.55, 8.4), 0)
 	# chandelier salle à manger

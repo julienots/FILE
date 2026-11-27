@@ -95,8 +95,9 @@ func _interior_door(axis_x: bool, fixed: float, o: Dictionary, y0: float, t: flo
 	holder.add_child(leaf)
 	leaf.position = Vector3(-w * 0.5 + 0.02, 0, -t * 0.5)
 	leaf.rotation.y = deg_to_rad(95)
+	leaf.set_meta("open_angle", 95.0)
 	var lw := w - 0.04
-	Geo.box(leaf, Vector3(lw, hh - 0.02, 0.04), Vector3(lw * 0.5, hh * 0.5, -0.02), m_trim, 0.004)
+	Geo.box(leaf, Vector3(lw, hh - 0.02, 0.04), Vector3(lw * 0.5, hh * 0.5, -0.02), m_trim, 0.004, true)
 	for r in 2:
 		Geo.box(leaf, Vector3(lw * 0.7, hh * 0.36, 0.012), Vector3(lw * 0.5, hh * (0.27 + r * 0.46), -0.045), m_trim, 0.006)
 		Geo.box(leaf, Vector3(lw * 0.7, hh * 0.36, 0.012), Vector3(lw * 0.5, hh * (0.27 + r * 0.46), 0.005), m_trim, 0.006)

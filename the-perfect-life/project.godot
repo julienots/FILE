@@ -7,10 +7,21 @@ config/description="Simulation de vie 3D — Android"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 
+[autoload]
+
+GameClock="*res://scripts/core/game_clock.gd"
+Game="*res://scripts/core/game_state.gd"
+
 [display]
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/handheld/orientation=0
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
 
 [rendering]
 renderer/rendering_method="forward_plus"
