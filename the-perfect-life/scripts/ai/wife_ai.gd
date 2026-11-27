@@ -12,7 +12,7 @@ const F2 := HouseBuilder.FLOOR2
 ## [heure de début en minutes, activité, position, direction du regard (yaw), réplique d'ambiance]
 var schedule := [
 	[0, "Dort", Vector3(11.4, F2 + 0.05, 6.3), 0.0, "Chut… il est tard."],
-	[6 * 60 + 45, "Prépare le café", Vector3(1.2, 0.05, 1.5), -PI * 0.5, "Le café est presque prêt !"],
+	[6 * 60 + 45, "Prépare le café", Vector3(2.4, 0.05, 1.45), PI, "Le café est presque prêt !"],
 	[7 * 60 + 35, "Cuisine le petit-déjeuner", Vector3(5.15, 0.05, 1.05), PI, "Des pancakes, comme tous les lundis."],
 	[8 * 60 + 10, "Lit les nouvelles", Vector3(12.0, 0.05, 1.3), 0.0, "Tu as vu ? On a encore gagné le prix de la ville la plus heureuse."],
 	[9 * 60 + 15, "Arrose les plantes", Vector3(15.2, 0.05, 5.9), PI * 0.5, "Les plantes adorent ce soleil."],
