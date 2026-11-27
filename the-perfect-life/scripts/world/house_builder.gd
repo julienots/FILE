@@ -245,6 +245,11 @@ func _floors() -> void:
 		var sz: float = p[3] - p[2]
 		Geo.box(self, Vector3(sx, 0.24, sz), Vector3((p[0] + p[1]) * 0.5, slab_y, (p[2] + p[3]) * 0.5), ceil_mat, 0.002, true)
 		Geo.box(self, Vector3(sx, 0.03, sz), Vector3((p[0] + p[1]) * 0.5, FLOOR2 + 0.015, (p[2] + p[3]) * 0.5), m_floor_wood, 0.002, true)
+	# faux-plafond plâtre du RDC (masque la structure du plancher)
+	for p in parts:
+		var csx: float = p[1] - p[0]
+		var csz: float = p[3] - p[2]
+		Geo.box(self, Vector3(csx - 0.02, 0.025, csz - 0.02), Vector3((p[0] + p[1]) * 0.5, CEIL1 - 0.0125, (p[2] + p[3]) * 0.5), m_plaster, 0.0)
 	# plafond de l'étage
 	Geo.box(self, Vector3(W, 0.15, D), Vector3(W * 0.5, TOP + 0.075, D * 0.5), m_plaster, 0.002)
 	# plinthes : ajoutées par pièce via _baseboard

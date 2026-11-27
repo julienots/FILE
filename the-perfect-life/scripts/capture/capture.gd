@@ -18,7 +18,7 @@ func run(cam: Camera3D, only := "") -> void:
 	print("BUILD DONE %.1fs" % (Time.get_ticks_msec() / 1000.0))
 	await get_tree().process_frame
 	for s in SHOTS:
-		if only != "" and not String(s.name).begins_with(only):
+		if only != "" and not String(s.name).left(1) in only.split(","):
 			continue
 		cam.position = s.pos
 		cam.look_at(s.look)

@@ -168,6 +168,7 @@ func kitchen() -> void:
 		_base_cabinet(Vector3(x + w * 0.5, y0, 0.12 + 0.31), w, 0.0, w > 0.85)
 		x += w
 	_counter(Vector3((0.13 + x) * 0.5, y0 + 0.88, 0.12 + 0.33), Vector2(x - 0.13, 0.66), 0.0)
+	Geo.box(h, Vector3(0.025, 0.9, 0.64), Vector3(x + 0.012, y0 + 0.45, 0.44), m_white_paint, 0.004)
 	# évier double sous la fenêtre + robinet col de cygne
 	_sink(Vector3(3.0, y0 + 0.9, 0.42))
 	# plaque de cuisson + hotte inox
