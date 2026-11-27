@@ -1565,6 +1565,19 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "feel") {
+        // 3.9.7 feel pass: the level-up moment, the XP bar and the purse counting up, an enemy bar draining (look at the pictures)
+        static Entity foe;
+        s.push_back({1.f, [](Game& g) { g.toastHint.clear(); g.gold = 50; }, idle, "settle"});
+        s.push_back({0.25f, [](Game& g) { g.gainXp(100000 > 0 ? (int)(100.f * std::pow((float)g.level, 1.55f)) + 5 : 0); g.gold += 400; }, idle, "level up"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/FE0_levelup_pop.png"); }, idle, "shot"});
+        s.push_back({0.7f, [](Game& g) { AGR_LOG("FEEL gold now %d", g.gold); g.requestScreenshot("build/shots/FE1_levelup_banner.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { Character& p = g.pc(); foe = g.spawnEnemy(enemyIndex("boar"), p.pos + vec3(std::sin(p.yaw) * 4.f, 0, std::cos(p.yaw) * 4.f)); g.lockTarget = foe; }, idle, "foe"});
+        s.push_back({0.4f, [](Game& g) { if (Character* c = g.reg.get<Character>(foe)) c->hp = c->maxHp * 0.35f; }, idle, "hit foe"});
+        s.push_back({0.15f, [](Game& g) { if (Character* c = g.reg.get<Character>(foe)) AGR_LOG("FEEL foe hp %.2f ghost %.2f", c->hp / c->maxHp, c->hpGhost); g.requestScreenshot("build/shots/FE2_enemy_bar.png"); }, idle, "shot"});
+        s.push_back({1.2f, [](Game& g) { if (Character* c = g.reg.get<Character>(foe)) AGR_LOG("FEEL foe ghost later %.2f", c->hpGhost); }, idle, "end"});
+        return s;
+    }
     if (name == "allheroes") {
         // 3.9.6 mod "Tous les héros": with it on, every hero is playable without its quest
         s.push_back({0.2f, [](Game& g) {

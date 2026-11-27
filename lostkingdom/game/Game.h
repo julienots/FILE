@@ -73,6 +73,7 @@ struct Status { float burn = 0, freeze = 0, slow = 0, root = 0, poison = 0, stun
 struct Character {
     Team team = Team::Neutral;
     std::string name;
+    float hpGhost = -1;   // 3.9.7 the health bar above an enemy drains behind the real value (-1: not shown yet)
     vec3 pos, vel;
     float yaw = 0, radius = 0.45f, height = 1.8f, mass = 1;
     bool grounded = true, inWater = false, swimming = false;

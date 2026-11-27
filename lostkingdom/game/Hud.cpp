@@ -469,7 +469,10 @@ void Game::drawHud(float dt) {
         if (c.team == Team::Enemy && c.bossDef < 0 && (c.hp < c.maxHp || e == lockTarget)) {
             Rect br{sp.x - 42, sp.y, 84, 12};
             u.rect({br.x - 1, br.y - 1, br.w + 2, br.h + 2}, vec4(0, 0, 0, 0.6f * a));
-            u.rect({br.x, br.y, br.w * saturate(c.hp / c.maxHp), br.h}, vec4(c.elite ? 0.95f : 0.85f, c.elite ? 0.55f : 0.18f, 0.12f, a));
+            float hf = saturate(c.hp / c.maxHp);
+            c.hpGhost = c.hpGhost < 0 || hf > c.hpGhost ? hf : damp(c.hpGhost, hf, 2.8f, dt);   // 3.9.7 the lost part fades out behind
+            if (c.hpGhost > hf + 0.002f) u.rect({br.x + br.w * hf, br.y, br.w * (c.hpGhost - hf), br.h}, vec4(1.f, 0.85f, 0.6f, 0.75f * a));
+            u.rect({br.x, br.y, br.w * hf, br.h}, vec4(c.elite ? 0.95f : 0.85f, c.elite ? 0.55f : 0.18f, 0.12f, a));
             if (e == lockTarget || c.elite) u.text(c.name + " · niv. " + std::to_string(c.level), sp.x, sp.y - 24, 17, rgba(c.elite ? 0xf2a03a : 0xf0e0d0, a), F_BOLD, A_CENTER, 0, true);
         }
         if (c.npcDef >= 0) {
@@ -511,11 +514,22 @@ void Game::drawHud(float dt) {
     drawStatusIcons(u, p, 112, 96);
     // xp line
     float xpN = (float)xp / std::max(1.f, 100.f * std::pow((float)level, 1.55f));
+    // 3.9.7 the bar fills smoothly (empties first on a level-up) and glows while it grows
+    static float xpShown = 0, xpGlow = 0; static int xpLevel = -1;
+    if (xpLevel != level) { if (xpLevel >= 0) xpShown = 0; xpLevel = level; }
+    xpN = saturate(xpN);
+    if (xpN > xpShown + 0.001f) { xpShown = damp(xpShown, xpN, 6.f, dt); xpGlow = 1.f; } else xpShown = xpN;
+    xpGlow = std::max(0.f, xpGlow - dt * 1.5f);
     u.rect({0, H_ - 5, W_, 5}, vec4(0, 0, 0, 0.5f));
-    u.rect({0, H_ - 5, W_ * saturate(xpN), 5}, rgba(0xc9a45c, 0.9f));
+    u.rect({0, H_ - 5, W_ * xpShown, 5}, rgba(0xc9a45c, 0.9f));
+    if (xpGlow > 0) u.rect({W_ * xpShown - 40, H_ - 8, 40, 8}, rgba(0xfff0b0, 0.7f * xpGlow));
     // gold
     u.sprite("i_coin", {16, 134, 28, 28});
-    u.text(std::to_string(gold), 50, 136, 20, rgba(0xf6dc9a), F_BOLD, A_LEFT, 0, true);
+    static float goldShown = -1;   // 3.9.7 the purse counts up (and down) instead of jumping
+    if (goldShown < 0 || std::fabs(goldShown - gold) > 100000.f) goldShown = (float)gold;
+    goldShown = damp(goldShown, (float)gold, 7.f, dt); if (std::fabs(goldShown - gold) < 0.6f) goldShown = (float)gold;
+    bool counting = (int)std::round(goldShown) != gold;
+    u.text(std::to_string((int)std::round(goldShown)), 50, 136, counting ? 22 : 20, rgba(counting ? 0xfff0b0 : 0xf6dc9a), F_BOLD, A_LEFT, 0, true);
     float hx = 50 + u.textWidth(std::to_string(gold), 20, F_BOLD) + 18;
     if (shards > 0) {   // 3.2.0 star shards, the currency of the Wonders
         u.sprite("i_crystal", {hx, 134, 26, 26}, rgba(0xb8a0ff));
@@ -572,13 +586,23 @@ void Game::drawHud(float dt) {
     // ---- region banner
     if (regionBannerT > 0) {
         float a = std::min(1.f, regionBannerT) * std::min(1.f, (5.f - regionBannerT) * 2.f);
+        if (levelUpT > 0) a *= saturate(1.f - levelUpT * 2.f);   // 3.9.7 the level-up moment has the stage; the region name comes back after
         u.sprite("divider", {W_ / 2 - 230, H_ * 0.3f + 62, 460, 22}, vec4(1, 1, 1, a));
         u.text(regionBanner, W_ / 2, H_ * 0.3f, 56, rgba(0xf6e2b0, a), F_TITLE, A_CENTER, 0, true);
         u.text(regionBannerSub, W_ / 2, H_ * 0.3f + 92, 24, rgba(0xe0d4bc, a), F_SERIF, A_CENTER, 0, true);
     }
     if (levelUpT > 0) {
-        float a = std::min(1.f, levelUpT);
-        u.text("NIVEAU " + std::to_string(level), W_ / 2, H_ * 0.2f, 50, rgba(0xf8d050, a), F_TITLE, A_CENTER, 0, true);
+        // 3.9.7 a moment, not a line of text: golden flash, the banner pops in (overshoot), a subtitle, then it fades
+        float t = 3.f - levelUpT;
+        if (t < 0.15f) u.rect({0, 0, W_, H_}, rgba(0xffd870, 0.45f * (1.f - t / 0.15f)));
+        float a = std::min(1.f, levelUpT * 1.5f);
+        float sc = easeOutBack(saturate((t - 0.05f) / 0.35f));
+        if (sc > 0.01f) {
+            u.text("NIVEAU " + std::to_string(level), W_ / 2, H_ * 0.2f, 60 * sc, rgba(0xf8d050, a), F_TITLE, A_CENTER, 0, true);
+            float sa = a * saturate((t - 0.35f) / 0.3f);
+            u.sprite("divider", {W_ / 2 - 200, H_ * 0.2f + 76, 400, 20}, vec4(1, 1, 1, sa));
+            u.text("+1 point de compétence · vie et mana restaurées", W_ / 2, H_ * 0.2f + 100, 20, rgba(0xf0e4c8, sa), F_SERIF, A_CENTER, 0, true);
+        }
     }
     // ---- touch controls
     float op = settings.layout.opacity;
