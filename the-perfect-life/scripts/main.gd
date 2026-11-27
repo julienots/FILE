@@ -36,6 +36,10 @@ func _ready() -> void:
 		return
 	Engine.max_fps = int(Game.settings.fps_cap)
 	_start_game()
+	if "--sky" in args:
+		var k: Node = load("res://tools/_sky.gd").new()
+		add_child(k)
+		k.run(self)
 	if "--claire" in args:
 		var c: Node = load("res://tools/_claire.gd").new()
 		add_child(c)
@@ -60,9 +64,10 @@ func _start_game() -> void:
 	add_child(hud)
 	add_child(UneaseFX.new())
 	add_child(AudioDirector.new())
-	director = AnomalyDirector.new()
-	add_child(director)
-	director.setup(self)
+	if not "--nodirector" in OS.get_cmdline_user_args():
+		director = AnomalyDirector.new()
+		add_child(director)
+		director.setup(self)
 	GameClock.minute = 7 * 60
 	GameClock.minute_changed.emit(GameClock.day, GameClock.minute)
 	Game.set_objective("Descendre prendre un café")

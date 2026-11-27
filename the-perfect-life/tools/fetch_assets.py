@@ -52,7 +52,7 @@ def jobs():
                 key = next(k for k in d if k.startswith("col"))
             yield d[key]["2k"]["jpg"]["url"], os.path.join(ROOT, "textures", t, f"{t}_{short}.jpg")
     for h in HDRIS:
-        yield info(h)["hdri"]["4k"]["hdr"]["url"], os.path.join(ROOT, "hdri", h + ".hdr")
+        yield info(h)["hdri"]["2k"]["hdr"]["url"], os.path.join(ROOT, "hdri", h + ".hdr")
 
 if __name__ == "__main__":
     todo = list(jobs())
