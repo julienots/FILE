@@ -94,5 +94,5 @@ object CrashGuard {
     fun clearReport() { runCatching { File(dir, "crash.txt").delete() } }
 
     /** Vrai si la session précédente a planté pendant l'analyse en mode GPU : on repasse alors en CPU. */
-    fun lastCrashWasGpu(report: String?) = report != null && report.contains("GPU")
+    fun lastCrashWasGpu(report: String?) = report != null && report.contains("Analyse") && report.contains("(GPU)")
 }

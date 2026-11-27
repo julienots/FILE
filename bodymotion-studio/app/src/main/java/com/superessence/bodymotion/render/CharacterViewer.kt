@@ -69,9 +69,9 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
     var viewHeight = 1; private set
     private val eye = DoubleArray(3); private val target = DoubleArray(3); private val up = DoubleArray(3)
     private var destroyed = false
+    private var frames = 0
 
     init {
-        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : création")
         scene.skybox = Skybox.Builder().color(0.035f, 0.04f, 0.05f, 1f).build(engine).also { skybox = it }
         ibl = IndirectLight.Builder()
             .irradiance(3, floatArrayOf(
@@ -94,7 +94,7 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
         view.scene = scene
         view.camera = camera
         applyQuality(quality)
-        renderer.clearOptions = Renderer.ClearOptions().apply { clear = true; clearColor = floatArrayOf(0.035f, 0.04f, 0.05f, 1f) }
+        renderer.clearOptions = Renderer.ClearOptions().apply { clear = true; clearColor = doubleArrayOf(0.035, 0.04, 0.05, 1.0) }
         uiHelper.renderCallback = object : UiHelper.RendererCallback {
             override fun onNativeWindowChanged(surface: android.view.Surface) {
                 swapChain?.let { engine.destroySwapChain(it) }
@@ -114,6 +114,8 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
             }
         }
         uiHelper.attachTo(textureView)
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : initialisation du pilote graphique")
+        engine.flushAndWait()
         textureView.setOnTouchListener { _, e -> onTouch(e); true }
     }
 
@@ -145,19 +147,22 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
 
     fun resetCamera() { manipulator.jumpToBookmark(manipulator.homeBookmark) }
 
-    private fun loadAsset(bytes: ByteArray): FilamentAsset? {
+    private fun loadAsset(bytes: ByteArray, what: String): FilamentAsset? {
         val buf = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).put(bytes).also { it.flip() }
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : lecture du modèle ($what)")
         val a = assetLoader.createAsset(buf) ?: return null
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : textures et maillages ($what)")
         resourceLoader.loadResources(a)
         a.releaseSourceData()
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : envoi au GPU ($what)")
+        engine.flushAndWait()
         return a
     }
 
     /** Charge le personnage (GLB interne) et le sol. Le personnage est mis à l'échelle ~1,8 m, pieds au sol. */
     fun setCharacter(glb: ByteArray, skel: Skeleton, forward: Vec3) {
-        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : chargement du personnage")
         character?.let { scene.removeEntities(it.entities); assetLoader.destroyAsset(it) }
-        val a = loadAsset(glb) ?: throw IllegalStateException("Le moteur 3D n'a pas pu charger ce modèle.")
+        val a = loadAsset(glb, "personnage") ?: throw IllegalStateException("Le moteur 3D n'a pas pu charger ce modèle.")
         character = a; skeleton = skel
         scene.addEntities(a.entities)
         val rm = engine.renderableManager
@@ -186,7 +191,7 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
         tm.setTransform(tm.getInstance(a.root), rootTransform.toFloatArray())
 
         if (ground == null) {
-            ground = loadAsset(ctx.assets.open("ground.glb").use { it.readBytes() })?.also { g ->
+            ground = loadAsset(ctx.assets.open("ground.glb").use { it.readBytes() }, "sol")?.also { g ->
                 scene.addEntities(g.entities)
                 for (e in g.entities) if (rm.hasComponent(e)) { val i = rm.getInstance(e); rm.setCastShadows(i, false); rm.setReceiveShadows(i, true) }
             }
@@ -251,10 +256,12 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
         resourceLoader.asyncUpdateLoad()
         manipulator.getLookAt(eye, target, up)
         camera.lookAt(eye[0], eye[1], eye[2], target[0], target[1], target[2], up[0], up[1], up[2])
+        if (frames < 3) com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : rendu (image ${frames + 1})")
         if (renderer.beginFrame(sc, frameTimeNanos)) {
             renderer.render(view)
             renderer.endFrame()
         }
+        if (frames < 3) { engine.flushAndWait(); frames++; if (frames == 3) com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : rendu en cours") }
     }
 
     fun destroy() {

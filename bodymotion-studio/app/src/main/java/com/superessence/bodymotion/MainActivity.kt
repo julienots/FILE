@@ -49,7 +49,7 @@ private fun CrashReportDialog() {
         title = { Text("L'application s'est fermée", style = T.h2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Voici le rapport du problème. Envoyez-le pour qu'il soit corrigé. La détection sur GPU a été désactivée par sécurité si elle était en cause.", style = T.small)
+                Text("Voici le rapport du problème. Envoyez-le pour qu'il soit corrigé." + if (text.contains("Viewport 3D")) " L'affichage compatible a été activé : l'application reste utilisable (Paramètres › Rendu 3D pour réessayer le moteur 3D)." else if (text.contains("(GPU)")) " La détection sur GPU a été désactivée." else "", style = T.small)
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()).background(C.Bg).padding(8.dp)) {
                     Text(text, style = T.mono.copy(color = C.Text2))
                 }

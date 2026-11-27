@@ -109,6 +109,7 @@ fun SettingsScreen(nav: NavHostController) {
             SectionLabel("Qualité graphique du viewport")
             Segmented(listOf(0, 1, 2), s.quality, { listOf("Basse", "Moyenne", "Haute")[it] }) { v -> store.updateSettings { it.copy(quality = v) } }
             Text("Haute : ombres 2048, MSAA 4×, occlusion ambiante. Basse : résolution dynamique, sans ombres (appareils modestes). La capture utilise toujours la qualité basse pour l'aperçu afin de préserver le suivi.", style = T.small)
+            Group { ToggleRow("Affichage compatible", s.compatRender, "Remplace le moteur 3D (Filament) par un rendu logiciel. Activé automatiquement si le moteur 3D plante sur cet appareil.") { v -> store.updateSettings { it.copy(compatRender = v) } } }
             SectionLabel("Capture")
             Segmented(listOf(0, 1, 2), s.smoothing, { listOf("Lissage faible", "Moyen", "Fort")[it] }) { v -> store.updateSettings { it.copy(smoothing = v) } }
             Segmented(listOf(24, 30, 60), s.captureFps, { "$it FPS" }) { v -> store.updateSettings { it.copy(captureFps = v) } }

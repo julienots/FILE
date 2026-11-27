@@ -13,8 +13,8 @@ android {
         applicationId = "com.superessence.bodymotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
@@ -81,7 +81,7 @@ dependencies {
 
     implementation("com.google.mediapipe:tasks-vision:0.10.35")
 
-    val filament = "1.56.0"
+    val filament = "1.75.1"
     implementation("com.google.android.filament:filament-android:$filament")
     implementation("com.google.android.filament:gltfio-android:$filament")
     implementation("com.google.android.filament:filament-utils-android:$filament")

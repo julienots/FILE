@@ -12,8 +12,10 @@ class BodyMotionApp : Application() {
         renderAvailable = runCatching { Utils.init() }.isSuccess
         store = Store(this)
         // Plantage pendant l'analyse GPU lors de la session précédente : retour automatique au CPU.
-        if (com.superessence.bodymotion.data.CrashGuard.lastCrashWasGpu(com.superessence.bodymotion.data.CrashGuard.pendingReport()))
-            store.updateSettings { it.copy(gpu = false) }
+        val report = com.superessence.bodymotion.data.CrashGuard.pendingReport()
+        if (com.superessence.bodymotion.data.CrashGuard.lastCrashWasGpu(report)) store.updateSettings { it.copy(gpu = false) }
+        // Plantage dans le moteur 3D : on passe en affichage compatible pour que l'application reste utilisable.
+        if (report != null && report.contains("Plantage natif") && report.contains("Viewport 3D")) store.updateSettings { it.copy(compatRender = true) }
     }
 
     companion object {
