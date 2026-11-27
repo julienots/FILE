@@ -141,6 +141,10 @@ func save_settings() -> void:
 
 func load_settings() -> void:
 	if not FileAccess.file_exists("user://reglages.json"):
+		# premier lancement sur téléphone : réglages sûrs (le joueur peut monter en qualité)
+		if OS.has_feature("mobile"):
+			settings.quality = 2
+			settings.fps_cap = 30
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("user://reglages.json"))
 	if typeof(parsed) == TYPE_DICTIONARY:
