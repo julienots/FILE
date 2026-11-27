@@ -36,12 +36,12 @@ func _ready() -> void:
 	var i := 0
 	for x in [-LOT, LOT, -LOT * 2, LOT * 2]:
 		var v: Array = variants[i % variants.size()]
-		StaticBatcher.merge(_lot(Transform3D(Basis.IDENTITY, Vector3(x, 0, 0)), v[0], v[1], v[2], false).get_parent(), PackedStringArray(KEEP))
+		StaticBatcher.merge(_lot(Transform3D(Basis.IDENTITY, Vector3(x, 0, 0)), v[0], v[1], v[2], false, "full" if i % 2 == 0 else "canopy").get_parent(), PackedStringArray(KEEP))
 		i += 1
 	for x in [-LOT * 1.5, -LOT * 0.5, LOT * 0.5, LOT * 1.5, LOT * 2.5]:
 		var v: Array = variants[i % variants.size()]
 		var t := Transform3D(Basis(Vector3.UP, PI), Vector3(x + 16.0 + 2.0, 0, 52.6))
-		StaticBatcher.merge(_lot(t, v[0], v[1], v[2], false).get_parent(), PackedStringArray(KEEP))
+		StaticBatcher.merge(_lot(t, v[0], v[1], v[2], false, "full" if i % 2 == 1 else "canopy").get_parent(), PackedStringArray(KEEP))
 		i += 1
 	_cars()
 	_horizon_trees()
@@ -88,7 +88,7 @@ func _environment() -> void:
 	# exposition automatique (comme un appareil photo) : intérieurs lisibles, extérieurs non brûlés
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = true
-	ca.auto_exposure_scale = 0.24
+	ca.auto_exposure_scale = 0.22
 	ca.auto_exposure_speed = 4.0
 	ca.auto_exposure_min_sensitivity = 50.0
 	ca.auto_exposure_max_sensitivity = 220.0
@@ -154,7 +154,7 @@ func _street() -> void:
 	Geo.prop(self, "utility_box_01", Vector3(-2.2, 0.08, 21.6), 0)
 
 ## Une parcelle : maison + allée + chemin + haies + arbre de façade + boîte aux lettres.
-func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: bool) -> HouseBuilder:
+func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: bool, porch := "canopy") -> HouseBuilder:
 	var root := Node3D.new()
 	root.name = "Lot"
 	root.transform = t
@@ -164,6 +164,7 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 	hb.roof_tint = roof
 	hb.door_color = door
 	hb.with_interior = interior
+	hb.porch_style = porch
 	root.add_child(hb)
 	hb.build()
 	var drive := MatLib.pbr("concrete_pavement", 3.0, Color(0.95, 0.94, 0.92))
@@ -174,8 +175,14 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 	var mulch: Material = MatLib.pbr("forest_floor", 2.0) if ResourceLoader.exists("res://assets/polyhaven/textures/forest_floor/forest_floor_diff.jpg") else MatLib.flat(Color(0.2, 0.13, 0.08), 0.95)
 	Geo.box(root, Vector3(7.6, 0.06, 1.3), Vector3(12.0, 0.0, 12.75), mulch, 0.01)
 	var shrubs := ["shrub_02", "shrub_04", "shrub_03"]
-	for k in 6:
-		Geo.prop(root, shrubs[k % shrubs.size()], Vector3(8.8 + k * 1.3, 0.03, 12.8), k * 47.0, 0.0, 0.9 + (k % 3) * 0.15)
+	var front_z := 12.8 if porch == "canopy" else 14.85
+	if porch == "full":
+		Geo.box(root, Vector3(10.6, 0.06, 1.1), Vector3(11.0, 0.0, front_z), mulch, 0.01)
+	for k in 8:
+		Geo.prop(root, shrubs[k % shrubs.size()], Vector3(8.3 + k * 1.0, 0.03, front_z - 0.05 + (k % 2) * 0.25), k * 47.0, 0.0, 0.75 + (k % 3) * 0.2)
+		Geo.prop(root, "flower_gazania", Vector3(8.8 + k * 1.0, 0.03, front_z + 0.45), k * 61.0, 0.0, 0.0)
+	for z in [13.2, 14.2]:
+		Geo.prop(root, "shrub_04", Vector3(4.9, 0.03, z), z * 40.0, 0.0, 0.8)
 	Geo.prop(root, "planter_box_01", Vector3(5.3, 0.18, 13.1), 0)
 	# arbre de façade
 	Geo.prop(root, "island_tree_01", Vector3(18.6, 0.0, 17.0), randf() * 360.0, 0.0, 8.5)

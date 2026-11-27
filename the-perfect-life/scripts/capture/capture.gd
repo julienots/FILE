@@ -6,7 +6,7 @@ const FRAMES := 36
 const SHOTS := [
 	{name = "1_exterieur_maison", pos = Vector3(20.5, 1.65, 31.2), look = Vector3(8.0, 3.6, 10.0), fov = 52.0},
 	{name = "2_salon", pos = Vector3(8.9, 1.55, 11.3), look = Vector3(13.5, 0.9, 6.0), fov = 70.0},
-	{name = "3_cuisine", pos = Vector3(9.2, 1.65, 3.9), look = Vector3(2.6, 0.95, 1.3), fov = 62.0},
+	{name = "3_cuisine", pos = Vector3(9.6, 1.7, 0.9), look = Vector3(2.4, 0.95, 2.7), fov = 60.0},
 	{name = "4_chambre", pos = Vector3(8.9, 4.8, 11.3), look = Vector3(13.2, 3.75, 5.9), fov = 64.0},
 	{name = "5_personnage", pos = Vector3(5.6, 1.6, 3.2), look = Vector3(4.2, 1.15, 1.25), fov = 50.0},
 	{name = "6_quartier", pos = Vector3(-40.0, 13.0, 26.3), look = Vector3(10.0, 2.0, 21.0), fov = 55.0},

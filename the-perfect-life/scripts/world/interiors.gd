@@ -55,6 +55,8 @@ func living() -> void:
 	curtains(Vector3(15.83, 2.6, 9.0), 2.0, 2.55, 90.0)
 	# lampadaire d'angle
 	_floor_lamp(Vector3(8.6, 0.04, 6.0))
+	Geo.prop(h, "book_encyclopedia_set_01", Vector3(15.5, 0.62, 7.6), -90)
+	Geo.prop(h, "potted_plant_04", Vector3(15.5, 0.62, 6.2), 0)
 
 func _tv(pos: Vector3, rot_deg: float, width: float) -> void:
 	var root := Node3D.new()
@@ -364,6 +366,9 @@ func bedroom() -> void:
 	Geo.prop(h, "mid_century_lounge_chair", Vector3(14.6, y, 10.6), -135)
 	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 0)
 	Geo.prop(h, "drawer_cabinet", Vector3(15.62, y, 9.2), -90)
+	Geo.prop(h, "hanging_picture_frame_02", Vector3(8.09, y + 1.55, 8.6), 90, 0.0, 0.8)
+	Geo.prop(h, "modern_wooden_cabinet", Vector3(8.4, y, 8.6), 90, 1.4)
+	Geo.prop(h, "ceramic_vase_01", Vector3(8.4, y + 0.62, 8.2), 0)
 	Geo.prop(h, "ceramic_vase_03", Vector3(15.6, y + 0.82, 8.95), 0)
 	Geo.prop(h, "book_encyclopedia_set_01", Vector3(15.6, y + 0.82, 9.5), -90)
 	for wx in [10.6, 14.0]:

@@ -10,6 +10,8 @@ extends Node3D
 @export var shutter_color := Color(0.09, 0.11, 0.13)
 @export var door_color := Color(0.42, 0.08, 0.07)
 @export var with_interior := true
+## "canopy" : petit auvent ; "full" : grand porche à colonnes sur toute la façade du salon.
+@export var porch_style := "canopy"
 
 const W := 16.0
 const D := 12.0
@@ -406,6 +408,8 @@ func _roof() -> void:
 	Geo.box(self, Vector3(1.25, 0.12, 1.05), Vector3(13.2, eave_y + rise + 1.12, 3.6), m_found, 0.01)
 
 func _porch() -> void:
+	if porch_style == "full":
+		_full_porch()
 	var step_mat := m_found
 	Geo.box(self, Vector3(2.6, 0.18, 1.6), Vector3(6.5, 0.09, D + 0.8), step_mat, 0.02, true)
 	Geo.box(self, Vector3(2.2, 0.16, 0.4), Vector3(6.5, -0.08, D + 1.8), step_mat, 0.02, true)
@@ -442,3 +446,29 @@ func _garage_door() -> void:
 		g.position = Vector3(-1.44 + c * 0.96, 2.0, 0.045)
 		root.add_child(g)
 	doors.append(root)
+
+
+## Grand porche couvert (style « farmhouse ») : plancher, colonnes, garde-corps, toit en appentis.
+func _full_porch() -> void:
+	var x0 := 5.6
+	var x1 := W + 0.3
+	var depth := 2.4
+	var deck := MatLib.pbr("wood_floor_deck", 2.0, Color(0.9, 0.88, 0.84), 0.9)
+	Geo.box(self, Vector3(x1 - x0, 0.25, depth), Vector3((x0 + x1) * 0.5, 0.12, D + depth * 0.5), deck, 0.01, true)
+	Geo.box(self, Vector3(x1 - x0 + 0.3, 0.1, depth + 0.3), Vector3((x0 + x1) * 0.5, 2.95, D + depth * 0.5), m_trim, 0.02)
+	var roof := Geo.box(self, Vector3(x1 - x0 + 0.5, 0.08, depth + 0.6), Vector3((x0 + x1) * 0.5, 3.18, D + depth * 0.5 + 0.05), m_roof, 0.01)
+	roof.rotation.x = deg_to_rad(12)
+	var n := 6
+	for i in n:
+		var x := x0 + 0.15 + (x1 - x0 - 0.3) * i / (n - 1)
+		Geo.box(self, Vector3(0.2, 2.7, 0.2), Vector3(x, 1.6, D + depth - 0.15), m_trim, 0.02)
+		Geo.box(self, Vector3(0.28, 0.14, 0.28), Vector3(x, 0.32, D + depth - 0.15), m_trim, 0.02)
+		if i < n - 1:
+			var nx := x0 + 0.15 + (x1 - x0 - 0.3) * (i + 1) / (n - 1)
+			if absf((x + nx) * 0.5 - 6.5) < 0.9:
+				continue
+			Geo.box(self, Vector3(nx - x, 0.07, 0.07), Vector3((x + nx) * 0.5, 1.15, D + depth - 0.15), m_trim, 0.01)
+			var k := 0.0
+			while k < nx - x - 0.2:
+				Geo.box(self, Vector3(0.04, 0.8, 0.04), Vector3(x + 0.15 + k, 0.7, D + depth - 0.15), m_trim, 0.005)
+				k += 0.14
