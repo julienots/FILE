@@ -707,6 +707,7 @@ bool Game::loadGame(int slot) {
     if (data.rfind("LOSTKINGDOM_SAVE", 0) != 0 || data.find("\nend\n") == std::string::npos) { AGR_ERR("corrupt save slot %d", slot); return false; }
     // reset world-dependent state
     reg.clear();
+    amber = false; amberK = 0; amberEternity = 0; amberRifts.clear(); amberMemories.clear(); amberSpots.clear(); worldTint = vec3(1);   // 3.10.0
     world.clearDigs(); world.clearFelled(); bombs.clear(); digMode = false;   // 2.4.0 (3.6.0 + felled trees)
     gameOpts = GameOpts();   // 2.6.0 (older saves: normal difficulty)
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)

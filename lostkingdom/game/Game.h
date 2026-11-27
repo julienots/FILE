@@ -195,7 +195,10 @@ struct Pickup { std::string item; int count; Rarity rarity; float t = 0; vec3 po
 
 struct NodeComp { NodeSpawn node; std::shared_ptr<Mesh> mesh; float hits = 0; float shake = 0; };
 
-enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle, Cellar };
+enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle, Cellar, Amber };
+// 3.10.0 the Amber (Envers.cpp): a rift in the ground (kind 0) or a memory caught in the amber (kind 1)
+struct AmberSpot { int kind = 0, idx = 0; vec3 pos; };
+struct AmberEcho {};   // a creature of the Amber (removed when the hero leaves it)
 // 1.11.0 vehicles (Vehicles.cpp)
 struct VehicleRef { int idx; };
 struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; bool fly = false; };   // 3.4.0 fly: the sky-ship (procedural, no model file)
@@ -575,6 +578,22 @@ public:
     bool mineCellar(Character& c);
     bool placeCellarHatch();
     void spawnCellarHatch();
+    // ---- 3.10.0 the Amber: the reflection of the kingdom where Malgrath got his eternity (Envers.cpp)
+    bool amber = false;                 // the hero is in the Amber
+    float amberK = 0;                   // 0 kingdom .. 1 Amber (blend of the look)
+    float amberEternity = 0;            // 0..100: the Amber slowly claims the hero; at 100 it throws him out
+    float amberEchoT = 0, amberShiftT = -1, amberHintT = 0;
+    vec3 worldTint{1, 1, 1};            // multiplies the whole landscape (the Amber turns it to honey)
+    std::vector<vec3> amberRifts, amberMemories;
+    std::vector<Entity> amberSpots;
+    bool amberRiftNear = false;
+    void initAmber();
+    void updateAmber(float dt);
+    void enterAmber(int rift);
+    void exitAmber(bool forced);
+    void applyAmberEnvironment();
+    void drawAmberHud();
+    void onAmberSpot(Entity e);
     void renderCellarHatch();
     void renderFairBunting();   // 3.9.0
     std::string saveCellar() const;
@@ -836,7 +855,7 @@ public:
     Vfx& vfxAdd(int shape, int style, vec3 pos, vec3 col, vec3 col2, float radius, float life);
     void vfxShockwave(vec3 p, vec3 col, float radius, float life = 0.7f);
     void vfxCircle(vec3 p, vec3 col, float radius, float life = 1.2f, Entity follow = NullEntity, vec3 dir = vec3(0, 1, 0));
-    void vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life = 0.6f);
+    void vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life = 0.6f, float light = 1.2f);
     void vfxPillar(vec3 p, vec3 col, float radius, float height, float life = 1.f);
     void vfxVortex(vec3 p, vec3 col, float radius, float height, float life = 1.f, Entity follow = NullEntity);
     void vfxSphere(vec3 p, vec3 col, vec3 col2, float radius, float life, int style, float grow = 0, Entity follow = NullEntity);

@@ -92,7 +92,7 @@ static std::vector<CineShot> prologueShots(Game& g) {
         const vec3 R{0.596f, 0.298f, -0.745f};   // the breach's direction (sky shader)
         vec2 Rh = normalize(vec2(R.x, R.z)), side = perp(Rh);
         vec3 eye = at(P.x, P.y, 5);
-        c = CineShot(); c.dur = 10.f; c.tod = 22.2f; c.weather = Game::W_STORM; c.fogTint = vec3(0.55f, 0.3f, 0.85f); c.fogMul = 0.35f;
+        c = CineShot(); c.dur = 10.f; c.tod = 22.2f; c.weather = Game::W_STORM; c.fogTint = vec3(0.3f, 0.42f, 0.55f); c.fogMul = 0.35f;
         c.shake = 0.3f; c.sfx = "thunder"; c.music = "shadows"; c.fov = 50.f * DEG;
         c.riftFrom = 0.f; c.riftTo = 1.f; c.meteors = true;
         c.herd = 3; c.herdSpeed = 6.5f; c.herdAt = at(P.x + Rh.x * 34 - side.x * 30, P.y + Rh.y * 34 - side.y * 30, 0); c.herdDir = vec3(side.x, 0, side.y);
@@ -101,8 +101,8 @@ static std::vector<CineShot> prologueShots(Game& g) {
         c.text = "Trois cents ans ont passé. Le sceau s'est fissuré… et cette nuit-là, le ciel lui-même se déchira.";
         s.push_back(c);
         // 7b. the other worlds look through
-        c = CineShot(); c.dur = 9.f; c.tod = 22.4f; c.weather = Game::W_STORM; c.fogTint = vec3(0.55f, 0.3f, 0.85f); c.fogMul = 0.3f;
-        c.shake = 0.12f; c.meteors = true; c.fov = 30.f * DEG; c.magic = vec3(0.6f, 0.4f, 1.f);
+        c = CineShot(); c.dur = 9.f; c.tod = 22.4f; c.weather = Game::W_STORM; c.fogTint = vec3(0.3f, 0.42f, 0.55f); c.fogMul = 0.3f;
+        c.shake = 0.12f; c.meteors = true; c.fov = 30.f * DEG; c.magic = vec3(1.f, 0.72f, 0.3f);
         vec3 e2 = at(P.x - Rh.x * 20, P.y - Rh.y * 20, 3);
         c.from = e2; c.to = e2 + vec3(side.x, 0, side.y) * 8.f + vec3(0, 3, 0);
         c.lookFrom = e2 + vec3(Rh.x, 0, Rh.y) * 45.f + vec3(0, 11, 0); c.lookTo = e2 + vec3(Rh.x, 0, Rh.y) * 45.f + vec3(0, 14.5f, 0);
@@ -277,7 +277,7 @@ void Game::updateCinematicShots(float dt) {
             m.b = vec3(g2.x, groundAt(g2.x, g2.y), g2.y);
             m.a = eye + R * 420.f + vec3(particles.rng.range(-60.f, 60.f), particles.rng.range(-20.f, 40.f), particles.rng.range(-60.f, 60.f));
             m.dur = particles.rng.range(0.9f, 1.5f);
-            static const vec3 cols[] = {{0.7f, 0.35f, 1.f}, {0.3f, 0.85f, 1.f}, {1.f, 0.45f, 0.8f}, {1.f, 0.65f, 0.3f}};
+            static const vec3 cols[] = {{1.f, 0.72f, 0.28f}, {1.f, 0.9f, 0.65f}, {1.f, 0.45f, 0.15f}, {0.35f, 0.75f, 0.8f}};   // 3.10.0 amber
             m.col = cols[particles.rng.irange(0, 3)];
             gMeteors.push_back(m);
         }
@@ -286,7 +286,7 @@ void Game::updateCinematicShots(float dt) {
             m.t += dt;
             float u = saturate(m.t / m.dur);
             vec3 dir = normalize(m.b - m.a), head = lerp(m.a, m.b, u * u * (2.f - u));
-            vfxBeam(head - dir * 28.f, head, m.col, 0.9f, 0.06f);
+            vfxBeam(head - dir * 28.f, head, m.col, 0.9f, 0.06f, 0.6f);
             if (particles.rng.f() < 0.6f) particles.magicTrail(head, m.col, 2.2f);
             if (u >= 1.f) {
                 particles.explosion(m.b, 3.2f, m.col);

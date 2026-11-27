@@ -303,6 +303,7 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
             saveGame(saveSlot);
             if (b.id == "abyss_lord") { questsDone.insert("m7"); queueChapter("ending_choice"); }   // 1.12.0 the player chooses the ending
         }
+        if (reg.get<AmberEcho>(e)) { gold += 12 + c.level * 3; gainXp(25 + c.level * 4); floatText(c.pos + vec3(0, 2.2f, 0), "Ambre libéré", vec3(1.f, 0.72f, 0.28f), 22); }   // 3.10.0 a Figé
     } else if (c.team == Team::Animal) {
         addItem("meat", c.animal == 9 ? 4 : 1); if (c.animal == 4) addItem("leather", 1);
         if (c.animal == 9) { addItem("leather", 3); gainXp(40); }   // 3.9.5 a mammoth
@@ -628,6 +629,7 @@ void Game::updateCharacters(float dt) {
         float d2 = dist2XZ(c.pos, camFocus);
         bool near = d2 < 90.f * 90.f || c.bossDef >= 0 || dist2XZ(c.pos, partnerPos) < 90.f * 90.f || e == coop.partner || reg.get<NetPuppet>(e);
         if (!near && e != player) return;
+        if (amber && e != player && e != mountEnt && !reg.get<AmberEcho>(e)) return;   // 3.10.0 the living stay in their own world
         c.invuln = std::max(0.f, c.invuln - dt);
         c.hitStun = std::max(0.f, c.hitStun - dt);
         c.vis.flash = std::max(0.f, c.vis.flash - dt * 3.5f);

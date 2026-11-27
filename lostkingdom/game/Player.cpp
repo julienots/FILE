@@ -511,10 +511,11 @@ void Game::findInteractTarget() {
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
     reg.each<Interact>([&](Entity e, Interact& it) {
         vec3 p;
-        if (Character* o = reg.get<Character>(e)) { if (o->dead || e == player) return; p = o->pos; if (e == mountEnt && riding) return; }
+        if (Character* o = reg.get<Character>(e)) { if (o->dead || e == player || !o->vis.visible) return; p = o->pos; if (e == mountEnt && riding) return; }
         else if (NodeComp* n = reg.get<NodeComp>(e)) { p = n->node.pos; if (n->node.type == NodeType::Chest && openedChests.count(n->node.uid)) return; if (n->node.type != NodeType::Chest && n->node.type != NodeType::FishingSpot && !world.nodeAvailable(n->node.uid, gameTime)) return; }
         else if (Pickup* pk = reg.get<Pickup>(e)) p = pk->pos;
         else if (e == cellarEnt) { if (!cellar.owned || dungeon.active) return; p = cellar.hatch; }   // 3.6.0
+        else if (AmberSpot* as = reg.get<AmberSpot>(e)) { if (as->kind == 1 && (!amber || loreFound.count("ambre_" + std::to_string(as->idx + 1)))) return; p = as->pos; }   // 3.10.0
         else if (VehicleRef* vr = reg.get<VehicleRef>(e)) { if (driving >= 0 || vr->idx >= (int)vehicles.size() || !vehicleUnlocked(vr->idx)) return; p = vehicles[vr->idx].pos; }
         else return;
         float d = distXZ(p, c.pos);
@@ -679,6 +680,7 @@ void Game::playerInteract() {
     }
     case InterKind::Mount: toggleMount(); break;
     case InterKind::Cellar: enterCellar(); break;   // 3.6.0
+    case InterKind::Amber: onAmberSpot(e); break;   // 3.10.0
     case InterKind::Vehicle:
         if (driving >= 0) exitVehicle();
         else enterVehicle(it->param);

@@ -301,8 +301,10 @@ static GLuint loadBrandTex(const char* path, vec2* size) {
 
 void Game::drawSplash(float dt) {
     UI& u = ui;
-    float t = stateT, W_ = u.W, H_ = u.H;
-    if (t < 0.05f) audio.playMusic("studio", 0.2f);
+    // 3.10.0 studio skill timing: the whole sequence in ~2.7 s (word, dot drop, gleam, STUDIO, fade); the animation
+    // keeps its original choreography, played 2.3x faster
+    float t = stateT * 2.3f, W_ = u.W, H_ = u.H;
+    if (stateT < 0.05f) audio.playMusic("studio", 0.2f);
     static GLuint texS = 0, texE = 0, texD = 0, shS = 0, shE = 0, shD = 0;
     static vec2 sS, sE, sD, tmp;
     static bool tried = false;
@@ -375,9 +377,14 @@ void Game::drawSplash(float dt) {
     }
     float a4 = saturate((t - 3.8f) * 2.f) * out;
     u.text("Propulsé par AGR ENGINE", W_ / 2, H_ - 50, 16, rgba(0x8a8070, a4), F_BOLD, A_CENTER);
+    // a tap skips it only once it has been seen in full at least once
+    static int seen = -1;
+    if (seen < 0) seen = platform::fileExists(platform::writableDir() + "/splash_seen") ? 1 : 0;
     bool skip = false;
     for (auto& f : u.fingers) if (f.released) skip = true;
-    if (t > 6.3f || (skip && t > 0.8f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); }
+    bool done = t > 6.3f;
+    if (done && !seen) { platform::writeFileAtomic(platform::writableDir() + "/splash_seen", "1"); seen = 1; }
+    if (done || (skip && seen && t > 0.8f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); }
     (void)dt;
 }
 
@@ -385,6 +392,7 @@ void Game::newGame() {
     coopLeave(true);   // 1.13.0
     reg.clear();
     clearBase(); nightHunters.clear();
+    amber = false; amberK = 0; amberEternity = 0; amberRifts.clear(); amberMemories.clear(); amberSpots.clear(); worldTint = vec3(1);   // 3.10.0
     vehicles.clear(); vehicleEnts.clear(); driving = -1; vehiclesUnlocked.clear();   // 3.4.0 the vehicles are earned
     cellar = CellarState(); cellarEnt = NullEntity; cellarHits.clear();   // 3.6.0
     raceBest.clear(); race = RaceState();
@@ -462,7 +470,7 @@ void Game::drawTitle(float dt) {
     u.text("LOST KINGDOM", W_ / 2 + 3, ly + 4, 104, rgba(0x000000, 0.5f * a), F_TITLE, A_CENTER);
     u.text("LOST KINGDOM", W_ / 2, ly, 104, rgba(0xf6dc9a, a), F_TITLE, A_CENTER, 0, true);
     u.sprite("divider", {W_ / 2 - 260, ly + 128, 520, 26}, vec4(1, 1, 1, a));
-    u.text("A world waiting to be discovered.", W_ / 2, ly + 160, 26, rgba(0xe8dcc0, a), F_SERIF, A_CENTER, 0, true);
+    u.text("Trois siècles après la Chute, le ciel se fend.", W_ / 2, ly + 160, 26, rgba(0xe8dcc0, a), F_SERIF, A_CENTER, 0, true);   // 3.10.0
     // menu
     int last = latestSlot();
     bool hasSave = last >= 0;
@@ -482,7 +490,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v3.9.7 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v3.10.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods

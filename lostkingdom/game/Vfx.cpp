@@ -19,10 +19,10 @@ void Game::vfxCircle(vec3 p, vec3 col, float radius, float life, Entity follow, 
     Vfx& v = vfxAdd(FX_DISC, 1, p + vec3(0, 0.06f, 0), col, lerp(col, vec3(1.f), 0.25f), radius, life);
     v.follow = follow; v.followOff = vec3(0, 0.06f, 0); v.dir = normalize(dir); v.light = 0.8f;
 }
-void Game::vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life) {
+void Game::vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life, float light) {
     Vfx& v = vfxAdd(FX_CYLINDER, 0, a, vec3(1.f, 0.97f, 0.9f), col, width, life);
     v.col = lerp(col, vec3(1.f), 0.2f); v.col2 = col;
-    v.dir = normalize(b - a); v.length = length(b - a); v.intensity = 1.8f; v.light = 1.2f;
+    v.dir = normalize(b - a); v.length = length(b - a); v.intensity = 1.8f; v.light = light;
 }
 void Game::vfxPillar(vec3 p, vec3 col, float radius, float height, float life) { Vfx& v = vfxAdd(FX_CYLINDER, 1, p, lerp(col, vec3(1.f), 0.15f), col, radius, life); v.length = height; v.light = 1.2f; }
 void Game::vfxVortex(vec3 p, vec3 col, float radius, float height, float life, Entity follow) {

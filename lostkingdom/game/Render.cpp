@@ -289,7 +289,7 @@ void Game::renderWorld(float dt) {
             if (!cam.frustum.visible(ch.bounds)) return;
             float d = distXZ(ch.bounds.center(), focus);
             if (d > (cine.active ? std::max(gs.drawDistance, 150.f) : gs.drawDistance) + CHUNK) return;
-            DrawItem it; it.tint = vec4(1, 1, 1, 0);
+            DrawItem it; it.tint = vec4(worldTint, 0);   // 3.10.0 the Amber turns the land to honey
             if (ch.terrain.valid()) { it.mesh = &ch.terrain; it.flags = LIT_TERRAIN; it.castShadow = d < 70.f; renderer.submit(it); }
             // shadow casters limited to what the ~43 m shadow map around the hero can actually show
             if (ch.props.valid()) { it.mesh = &ch.props; it.flags = 0; it.tint.w = ch.snow * 0.55f; it.castShadow = d < 44.f; renderer.submit(it); }
@@ -309,7 +309,7 @@ void Game::renderWorld(float dt) {
                 if (far && (!P->lodMesh || !P->lodMesh->valid())) { P->lodMesh = std::make_shared<Mesh>(); P->lodMesh->upload(P->lodVerts, P->lodIdx); }
                 if (!P->tex.id) P->tex.create2D(P->data.texW, P->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, P->data.rgba.data(), true, false);
                 DrawItem bi; bi.mesh = far ? P->lodMesh.get() : P->mesh.get(); bi.model = xf; bi.flags = LIT_TEXTURED; bi.albedo = P->tex.id;
-                bi.tint = vec4(1, 1, 1, ch.snow * 0.55f); bi.castShadow = db < 44.f;
+                bi.tint = vec4(worldTint, ch.snow * 0.55f); bi.castShadow = db < 44.f;
                 renderer.submit(bi);
             }
             if (d < 42.f && ch.lod == 0 && gs.grassDensity > 0.01f) {
@@ -342,6 +342,7 @@ void Game::renderWorld(float dt) {
                 else if (ch.region == R_FROSTHEIM) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }
                 else if (ch.region == R_CORAL) { deep = srgb(0x0a5a82); shallow = srgb(0x35d6c8); }   // 2.0.0 tropical lagoons: azure over white sand
                 else if (ch.region == R_AMBER) { deep = srgb(0x0e5260); shallow = srgb(0x4ac0a0); }   // oases
+                if (amberK > 0.01f) { deep = lerp(deep, srgb(0x5a2c06), amberK); shallow = lerp(shallow, srgb(0xd89a3a), amberK); }   // 3.10.0 water turned to honey
                 renderer.submitWater({&ch.water, mat4(), deep, shallow, 0.f, false});
             }
             if (ch.lava.valid()) renderer.submitWater({&ch.lava, mat4(), vec3(0), vec3(0), 0.f, true});

@@ -310,7 +310,7 @@ void Game::updatePlaying(float dt) {
     gameTime += dt;
     playSeconds += dt;
     // time of day: 1 in-game hour = 60 s
-    timeOfDay += dt / 60.f * gameTuning().timeSpeed;   // 2.7.0 mods: time speed (0 = frozen)
+    if (!amber) timeOfDay += dt / 60.f * gameTuning().timeSpeed;   // 2.7.0 mods: time speed (0 = frozen); 3.10.0 the Amber: time stands still
     if (gameTuning().hour >= 0.f) timeOfDay = gameTuning().hour;   // 2.7.0 mods: a fixed hour (eternal night...)
     if (timeOfDay >= 24.f) { timeOfDay -= 24.f; day++; }
     gProfFrames++;
@@ -322,6 +322,7 @@ void Game::updatePlaying(float dt) {
     updateSoundscape(dt);  // 3.7.1
     updateDialogScene(dt); // 3.8.0
     updateVfx(dt);       // 3.0.1
+    updateAmber(dt);     // 3.10.0 the Amber (multiverse)
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
@@ -637,6 +638,7 @@ void Game::updateEnvironment(float dt) {
     }
     audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));
     {   float fl = 0; env.rift = cinematicRift(&fl); env.riftFlash = fl; }   // 3.9.5 the sky breach (opens during the prologue)
+    if (!dungeon.active) applyAmberEnvironment();   // 3.10.0
     applyCinematicEnvironment();
 }
 

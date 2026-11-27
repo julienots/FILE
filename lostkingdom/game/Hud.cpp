@@ -604,6 +604,7 @@ void Game::drawHud(float dt) {
             u.text("+1 point de compétence · vie et mana restaurées", W_ / 2, H_ * 0.2f + 100, 20, rgba(0xf0e4c8, sa), F_SERIF, A_CENTER, 0, true);
         }
     }
+    drawAmberHud();   // 3.10.0
     // ---- touch controls
     float op = settings.layout.opacity;
     // joystick

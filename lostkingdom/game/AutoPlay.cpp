@@ -40,7 +40,7 @@ static std::vector<Step> scenario(const std::string& name) {
     auto idle = [](Game&, float) {};
     if (name == "logo") {
         // 2.2.1 the SuperEssence studio logo animation, frame by frame (look at the pictures)
-        static const float at[] = {0.6f, 1.25f, 1.9f, 2.3f, 2.9f, 3.8f};
+        static const float at[] = {0.26f, 0.54f, 0.83f, 1.0f, 1.26f, 1.65f, 2.6f, 3.1f};   // 3.10.0 the faster studio sequence (2.7 s)
         float prev = 0.f; int i = 0;
         for (float a : at) {
             s.push_back({a - prev, none, idle, "wait"});
@@ -1563,6 +1563,41 @@ static std::vector<Step> scenario(const std::string& name) {
                 g.env.wetness = v.wet; g.camPitch = v.pitch; g.camDist = g.camDistTarget = 5.f; }, [v](Game& g, float) { g.camIdleT = 0; g.env.wetness = std::max(g.env.wetness, v.wet * 0.9f); }, "view"});
             s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
         }
+        return s;
+    }
+    if (name == "amber") {
+        // 3.10.0 the Amber: walk to the first rift, cross it with a real interaction, look around, free a memory, meet a
+        // Figé, leave with the button, check the world is back (pictures + AMBER TEST line)
+        static int res[8];
+        s.push_back({1.f, [](Game& g) { for (int& r : res) r = 0; g.ui.recordWidgets = true; g.toastHint.clear(); g.updateAmber(0.f); res[0] = g.amberRifts.size() >= 6 && g.amberMemories.size() == 6;
+            vec3 r = g.amberRifts[0]; teleport(g, r.x + std::sin(0.8f) * 6.f + std::cos(0.8f) * 2.5f, r.z + std::cos(0.8f) * 6.f - std::sin(0.8f) * 2.5f, 0.8f); g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "to the rift"});
+        s.push_back({2.5f, [](Game& g) { g.camPitch = 0.2f; g.camDist = g.camDistTarget = 9.f; }, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/AM0_rift_kingdom.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { for (Entity e : g.amberSpots) { AmberSpot* a = g.reg.get<AmberSpot>(e); if (a && a->kind == 0 && a->idx == 0) { g.onAmberSpot(e); break; } } res[1] = g.amber; }, idle, "cross"});
+        s.push_back({3.f, none, [](Game& g, float) { g.camIdleT = 0; }, "amber settles"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/AM1_amber.png"); res[2] = g.amberK > 0.9f; int hidden = 0; g.reg.each<Character>([&](Entity e, Character& c) { if (e != g.player && !c.vis.visible) hidden++; }); AGR_LOG("AMBER k %.2f tint %.2f %.2f %.2f, hidden %d, tod %.2f", g.amberK, g.worldTint.x, g.worldTint.y, g.worldTint.z, hidden, g.timeOfDay); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { vec3 m = g.amberMemories[0]; teleport(g, m.x + 1.5f, m.z + 1.5f, 2.4f); g.camPitch = 0.15f; g.camDist = g.camDistTarget = 7.f; }, idle, "to memory"});
+        s.push_back({2.f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/AM2_memory.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { float before = g.amberEternity; for (Entity e : g.amberSpots) { AmberSpot* a = g.reg.get<AmberSpot>(e); if (a && a->kind == 1 && a->idx == 0) { g.onAmberSpot(e); break; } } res[3] = g.loreFound.count("ambre_1") && g.loreFound.count("ambre_0"); AGR_LOG("AMBER memory: eternity %.1f -> %.1f", before, g.amberEternity); }, idle, "memory"});
+        s.push_back({9.f, none, [](Game& g, float) { g.camIdleT = 0; }, "wait for a Figé"});
+        s.push_back({0.1f, [](Game& g) { int n = 0; std::string nm; g.reg.each<AmberEcho, Character>([&](Entity, AmberEcho&, Character& c) { n++; nm = c.name; }); res[4] = n > 0; AGR_LOG("AMBER echoes %d (%s)", n, nm.c_str());
+            Entity f = NullEntity; g.reg.each<AmberEcho>([&](Entity e, AmberEcho&) { f = e; }); if (f != NullEntity) { Character& p = g.pc(); if (Character* c = g.reg.get<Character>(f)) { c->pos = p.pos + vec3(std::sin(p.yaw) * 3.5f, 0, std::cos(p.yaw) * 3.5f); c->pos.y = g.groundAt(c->pos.x, c->pos.z); } } }, idle, "echoes"});
+        s.push_back({0.6f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/AM3_fige.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { const Rect* r = g.ui.findWidget("Revenir"); res[5] = r != nullptr; if (r) { float k = g.ui.scale; vec2 c{r->x + r->w / 2, r->y + r->h / 2}; g.touch(TouchEvent{TouchEvent::Down, 700, c.x * k, c.y * k}); } }, idle, "press back"});
+        s.push_back({0.3f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 700) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 700, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({2.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "back settles"});
+        s.push_back({0.1f, [](Game& g) {
+            int echoes = 0, hidden = 0; g.reg.each<AmberEcho>([&](Entity, AmberEcho&) { echoes++; }); g.reg.each<Character>([&](Entity e, Character& c) { if (e != g.player && !c.vis.visible) hidden++; });
+            res[6] = !g.amber && g.amberK < 0.1f && echoes == 0 && hidden == 0;
+            g.requestScreenshot("build/shots/AM4_back.png");
+            // eternity: thrown out when full
+            g.enterAmber(0); g.amberEternity = 99.95f; }, idle, "check back"});
+        s.push_back({0.4f, none, idle, "eternity"});
+        s.push_back({0.1f, [](Game& g) { res[7] = !g.amber;
+            AGR_LOG("AMBER TEST: rifts=%d crossed=%d look=%d memory=%d figes=%d backButton=%d worldBack=%d thrownOut=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
+            bool ok = true; for (int r : res) ok = ok && r; AGR_LOG("AMBER TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
     if (name == "feel") {
