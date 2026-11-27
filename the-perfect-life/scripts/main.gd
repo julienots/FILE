@@ -10,6 +10,7 @@ var wife: Node3D
 var player: Player
 var hud: HUD
 var interactions: HouseInteractions
+var director: AnomalyDirector
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -57,6 +58,11 @@ func _start_game() -> void:
 	Game.player = player
 	hud = HUD.new(player)
 	add_child(hud)
+	add_child(UneaseFX.new())
+	add_child(AudioDirector.new())
+	director = AnomalyDirector.new()
+	add_child(director)
+	director.setup(self)
 	GameClock.minute = 7 * 60
 	GameClock.minute_changed.emit(GameClock.day, GameClock.minute)
 	Game.set_objective("Descendre prendre un café")

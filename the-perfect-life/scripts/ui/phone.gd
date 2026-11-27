@@ -3,6 +3,8 @@ extends Control
 ## Téléphone du personnage : 9 applications fonctionnelles (aucun bouton décoratif).
 ## Messages · Contacts · Appels · Appareil photo · Galerie · Calendrier · Carte · Actualités · Entre Voisins
 
+signal reply_sent(who: String, text: String)
+
 const W := 430.0
 const H := 860.0
 const APPS := [
@@ -127,6 +129,17 @@ func _ready() -> void:
 	screen.add_child(home)
 	GameClock.minute_changed.connect(func(_d: int, _m: int) -> void: clock_lbl.text = GameClock.time_text())
 	_home()
+
+## Message entrant (crée la conversation si besoin), notification + vibration.
+func receive(sender: String, text: String, reply_options: Array = []) -> void:
+	if not threads.has(sender):
+		threads[sender] = []
+	threads[sender].append([sender, text])
+	if not reply_options.is_empty():
+		replies[sender] = reply_options
+	Game.notify("Nouveau message · " + sender)
+	Input.vibrate_handheld(250)
+	Game.flags["sms_" + sender] = int(Game.flags.get("sms_" + sender, 0)) + 1
 
 func _dark(t: String, size := 20, bold := false) -> Label:
 	var l := UIKit.label(t, size, Color(0.08, 0.09, 0.11), bold)
@@ -319,6 +332,7 @@ func _thread(who: String) -> void:
 				_row(String(r), "Envoyer", func() -> void:
 					threads[who].append(["moi", String(r)])
 					replies.erase(who)
+					reply_sent.emit(who, String(r))
 					if who == "Claire":
 						Game.relations.claire = float(Game.relations.claire) + (4.0 if String(r).begins_with("Très") else 1.0)
 						Game.flags["repondu_claire"] = true

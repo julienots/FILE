@@ -11,6 +11,8 @@ var seated := false
 var _tv_screen: MeshInstance3D
 var _tv_light: OmniLight3D
 var _tv_on_mat: Material
+## Écran de la TV (le directeur d'anomalies y branche le direct).
+var tv_screen_mat: StandardMaterial3D
 var _tv_off_mat: Material
 
 func _init(house: Node3D) -> void:
@@ -78,6 +80,7 @@ func _fridge() -> void:
 				GameClock.advance(10)
 				Game.notify("Un yaourt et des fruits. Faim +30")
 				Game.flags["a_mange"] = true
+				Game.log_action("Il mange un yaourt, debout devant le frigo.")
 				state.step = 2
 				it.action_text = "Fermer"
 			_:
@@ -92,6 +95,7 @@ func _kitchen() -> void:
 		Game.apply({energie = 15.0, humeur = 4.0})
 		GameClock.advance(5)
 		Game.flags["cafe"] = true
+		Game.log_action("Il se sert un café. Sans sucre, comme toujours.")
 		Game.notify("Café chaud. Énergie +15")
 	, 1.4)
 	Interactable.attach(h, Vector3(5.15, 1.0, 0.5), "Plaque de cuisson", "Préparer le petit-déjeuner", func(_p: Node, it: Interactable) -> void:
@@ -99,6 +103,7 @@ func _kitchen() -> void:
 			GameClock.advance(20)
 			Game.apply({faim = 45.0, humeur = 6.0})
 			Game.flags["petit_dejeuner"] = true
+			Game.log_action("Il prépare des œufs brouillés.")
 		)
 		Game.notify("Œufs brouillés et toasts. Faim +45")
 	, 1.4)
@@ -106,6 +111,7 @@ func _kitchen() -> void:
 		Game.apply({hygiene = 8.0})
 		GameClock.advance(2)
 		Game.notify("Hygiène +8")
+		Game.log_action("Il se lave les mains. Longtemps.")
 	, 1.3)
 
 func _tv_and_sofa() -> void:
@@ -119,6 +125,7 @@ func _tv_and_sofa() -> void:
 				_tv_light = c
 		if _tv_screen:
 			_tv_on_mat = _tv_screen.material_override
+			tv_screen_mat = _tv_on_mat as StandardMaterial3D
 			_tv_off_mat = MatLib.flat(Color(0.02, 0.02, 0.025), 0.06, 0.0, 0.8)
 		Interactable.attach(h, tv.to_global(Vector3(0, -0.6, 0.5)) - h.global_position, "Télévision", "Éteindre", func(_p: Node, it: Interactable) -> void:
 			set_tv(not tv_on)
@@ -138,6 +145,7 @@ func _tv_and_sofa() -> void:
 			it.action_text = "Se lever"
 			it.radius = 3.0
 			Game.flags["tele"] = true
+			Game.log_action("Il s'assoit pour nous regarder.")
 		else:
 			pl.model.visible = true
 			pl.spring.spring_length = 2.4
@@ -176,6 +184,7 @@ func _bedroom() -> void:
 	, 2.0)
 	Interactable.attach(h, Vector3(8.95, F2 + 1.0, 10.6), "Dressing", "S'habiller", func(_p: Node, it: Interactable) -> void:
 		Game.flags["habille"] = true
+		Game.log_action("Il choisit la chemise bleue. Excellent choix.")
 		Game.apply({humeur = 4.0})
 		GameClock.advance(5)
 		Game.notify("Chemise repassée, prêt pour la journée.")

@@ -103,12 +103,69 @@ func run(m: Node) -> void:
 	await _frames(10)
 	await _shot("10_claire_dialogue")
 
-	# 9. nuit dehors
+	# 9. anomalies : phase 2 déclenchée par les actions (café + repas)
+	var dir: AnomalyDirector = main.director
+	_check("phase 2 atteinte (incohérences)", dir.phase >= 2, "phase %d" % dir.phase)
+	_check("SMS du numéro inconnu reçu", int(Game.flags.get("sms_Numéro inconnu", 0)) >= 1, str(Game.flags.get("sms_Numéro inconnu", 0)))
+	_check("la télé commente le joueur en direct", dir.tv_ticker != null and dir.tv_ticker.text.begins_with("EN DIRECT"), dir.tv_ticker.text if dir.tv_ticker else "pas de TV")
+	hud.phone.toggle(p)
+	hud.phone._thread("Numéro inconnu")
+	await _frames(4)
+	await _shot("12_sms_inconnu")
+	hud.phone.close()
+	# télé en direct, vue du canapé
+	p.place(Vector3(13.2, 0.06, 6.9), PI * 0.5)
+	p.cam_yaw = -PI * 0.5
+	p.cam_pitch = -0.05
+	await _frames(6)
+	await _shot("13_tele_en_direct")
+	# phase 3 : Claire se fige
+	dir.set_phase(3)
+	Game.flags["talks_claire"] = 2
+	var w2: WifeAI = main.wife
+	p.place(w2.global_position + Vector3(-1.2, 0.0, 0.6), PI * 0.5)
+	p.cam_yaw = -PI * 0.3
+	await _frames(3)
+	p.interact()
+	await _frames(3)
+	_check("Claire se fige (T-pose)", w2.frozen, "frozen=%s" % w2.frozen)
+	await _shot("14_claire_figee")
+	# dehors : le voisin, la caméra du lampadaire, le ciel
+	p.place(Vector3(11.0, 0.06, 18.5), 0.0)
+	p.cam_yaw = PI
+	p.cam_pitch = -0.05
+	dir._watch_step = 3
+	dir.watcher.global_position = dir.WATCH_PATH[3]
+	await _frames(8)
+	_check("le voisin est apparu", dir.watcher.visible, "")
+	await _shot("15_voisin_qui_fixe")
+	p.cam_pitch = 0.35
+	dir._flash_sky()
+	await _frames(2)
+	await _shot("16_ciel_fissure")
+	# phase 4 : le mur du plateau
+	dir.set_phase(4)
+	p.place(Vector3(101.5, 0.06, 26.3), -PI * 0.5)
+	p.cam_yaw = PI * 0.5
+	p.cam_pitch = -0.1
+	await _frames(10)
+	_check("porte de service au bout de la rue", p.focus != null and p.focus.display_name == "Porte de service", p.focus.display_name if p.focus else "aucun")
+	p.interact()
+	_check("fin de la démo atteinte", Game.flags.get("fin_demo", false) == true, "")
+	await _frames(4)
+	await _shot("17_mur_du_plateau")
+	p.place(Vector3(80.0, 0.06, 26.3), -PI * 0.5)
+	p.cam_yaw = PI * 0.5
+	p.cam_pitch = 0.05
+	await _frames(10)
+	await _shot("18_bout_de_la_rue")
+
+	# 10. nuit dehors
 	GameClock.skip_to(21 * 60 + 30)
 	p.place(Vector3(9.5, 0.06, 19.5), PI)
 	p.cam_pitch = -0.12
 	await _frames(14)
-	await _shot("11_nuit_facade")
+	await _shot("19_nuit_facade")
 	print("PLAYTEST %s (%d échec(s))" % ["OK" if fails == 0 else "ÉCHEC", fails])
 	get_tree().quit()
 

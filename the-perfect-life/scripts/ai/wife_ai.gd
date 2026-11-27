@@ -34,6 +34,9 @@ var activity := ""
 var _anim := ""
 var _talk_timer := 0.0
 var _away_until := -1
+## Réglé par le directeur d'anomalies (0 = normal … 4 = vérité).
+var phase := 1
+var frozen := false
 
 func _ready() -> void:
 	name = "Claire"
@@ -184,5 +187,38 @@ func _on_talk(_p: Node, it: Interactable) -> void:
 	Game.flags["parle_claire"] = true
 	Game.relations.claire = minf(100.0, float(Game.relations.claire) + 2.0)
 	Game.apply({humeur = 4.0})
+	# anomalies : répétition (phase 2+), gel en T-pose (phase 3+), mauvais nom (phase 4)
+	if phase >= 3 and talks % 3 == 2:
+		freeze_glitch()
+		return
+	if phase >= 2 and talks % 2 == 1:
+		Game.notify("Claire : « " + line + " »")
+		Game.notify("Claire : « " + line + " »")
+		Game.notify("Claire : « " + line + " »")
+		Game.add_suspicion(0.08)
+		Game.log_action("Il lui parle. Elle récite.")
+		return
+	if phase >= 4:
+		line = "Bonne journée, Sujet 1. … Pardon. Bonne journée, mon chéri."
+		Game.add_suspicion(0.1)
 	Game.notify("Claire (" + activity.to_lower() + ") : « " + line + " »")
 	it.action_text = "Parler"
+
+
+## Gel : elle se fige bras en croix (pose de référence du rig), fixe le joueur, puis reprend.
+func freeze_glitch() -> void:
+	if frozen or anim == null:
+		return
+	frozen = true
+	state = State.TALKING
+	_talk_timer = 4.0
+	if anim.has_animation("TPose"):
+		anim.play("TPose", 0.0)
+		_anim = "TPose"
+	Game.add_suspicion(0.18)
+	Game.log_action("Elle a buggé devant lui.")
+	get_tree().call_group("anomaly", "on_glitch", 1.2)
+	await get_tree().create_timer(2.6).timeout
+	_play("loco/Idle")
+	Game.notify("Claire : « Pardon, je… Tout va bien, mon chéri. Tout va très bien. »")
+	frozen = false

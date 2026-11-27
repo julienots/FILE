@@ -6,6 +6,9 @@ signal objective_changed(text: String)
 signal toast(text: String)
 ## Fondu au noir : le HUD noircit l'écran, appelle `mid`, puis revient.
 signal fade_requested(mid: Callable)
+## Chaque action du joueur est « observée » (la télé la commente en phase 2+).
+signal action_logged(time_text: String, text: String)
+signal suspicion_changed(v: float)
 
 const NEED_KEYS := ["energie", "faim", "hygiene", "sommeil", "humeur"]
 const NEED_NAMES := {energie = "Énergie", faim = "Faim", hygiene = "Hygiène", sommeil = "Sommeil", humeur = "Humeur"}
@@ -19,6 +22,8 @@ var flags := {}
 var objective := ""
 var settings := {quality = 1, sensitivity = 1.0, master = 0.8, music = 0.7, sfx = 0.9, fps_cap = 60}
 var player: Node3D
+var suspicion := 0.0
+var action_log: Array[String] = []
 var photos: Array[Image] = []
 
 func _ready() -> void:
@@ -43,6 +48,14 @@ func set_objective(text: String) -> void:
 
 func fade(mid: Callable) -> void:
 	fade_requested.emit(mid)
+
+func log_action(text: String) -> void:
+	action_log.append(GameClock.time_text() + " · " + text)
+	action_logged.emit(GameClock.time_text(), text)
+
+func add_suspicion(v: float) -> void:
+	suspicion = clampf(suspicion + v, 0.0, 1.0)
+	suspicion_changed.emit(suspicion)
 
 func notify(text: String) -> void:
 	toast.emit(text)
@@ -76,7 +89,7 @@ func save_game(slot: int, extra: Dictionary = {}) -> bool:
 		version = 1,
 		saved_at = Time.get_datetime_string_from_system(),
 		clock = GameClock.to_dict(),
-		needs = needs, relations = relations, flags = flags, objective = objective,
+		needs = needs, relations = relations, flags = flags, objective = objective, suspicion = suspicion,
 	}
 	if player:
 		data.player = {pos = [player.global_position.x, player.global_position.y, player.global_position.z], rot = player.rotation.y}
@@ -99,6 +112,8 @@ func load_game(slot: int) -> Dictionary:
 	needs.merge(data.get("needs", {}), true)
 	relations.merge(data.get("relations", {}), true)
 	flags = data.get("flags", {})
+	suspicion = float(data.get("suspicion", 0.0))
+	suspicion_changed.emit(suspicion)
 	set_objective(String(data.get("objective", "")))
 	if player and data.has("player"):
 		var p: Array = data.player.pos
