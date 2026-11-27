@@ -166,10 +166,11 @@ func _round_button(icon: String, size_px: float) -> Button:
 	b.add_theme_stylebox_override("normal", UIKit.panel_style(UIKit.GLASS, int(size_px * 0.5)))
 	b.add_theme_stylebox_override("hover", UIKit.panel_style(Color(0.15, 0.18, 0.22, 0.7), int(size_px * 0.5)))
 	b.add_theme_stylebox_override("pressed", UIKit.panel_style(Color(0.25, 0.28, 0.32, 0.8), int(size_px * 0.5)))
-	var ic := UIIcon.new(icon, UIKit.INK, size_px * 0.5)
-	ic.set_anchors_preset(Control.PRESET_CENTER)
-	ic.position = Vector2(size_px * 0.25, size_px * 0.25)
-	b.add_child(ic)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(UIIcon.new(icon, UIKit.INK, size_px * 0.5))
+	b.add_child(cc)
 	b.focus_mode = Control.FOCUS_NONE
 	return b
 

@@ -7,7 +7,7 @@ var display_name := ""
 var action_text := ""
 var radius := 1.7
 var enabled := true
-## func(player: Player) -> void ; peut modifier action_text (ex. Ouvrir -> Fermer).
+## func(player: Node, it: Interactable) -> void ; peut modifier it.action_text (ex. Ouvrir -> Fermer).
 var on_interact: Callable
 
 func _ready() -> void:
@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func interact(player: Node) -> void:
 	if on_interact.is_valid():
-		on_interact.call(player)
+		on_interact.call(player, self)
 
 static func attach(parent: Node, pos: Vector3, label: String, action: String, cb: Callable, reach := 1.7) -> Interactable:
 	var it := Interactable.new()

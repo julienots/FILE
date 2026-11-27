@@ -132,8 +132,7 @@ static func local_aabb(n: Node3D) -> AABB:
 	var out := AABB()
 	var first := true
 	for mi in n.find_children("*", "MeshInstance3D", true, false):
-		# maillage riggé : son AABB est déjà dans l'espace du modèle (le squelette fait le reste)
-		var t: Transform3D = Transform3D.IDENTITY if (mi as MeshInstance3D).skin != null else _rel_transform(n, mi)
+		var t: Transform3D = _rel_transform(n, mi)
 		var b: AABB = t * (mi as MeshInstance3D).get_aabb()
 		if first:
 			out = b; first = false
@@ -168,6 +167,13 @@ static func prop(parent: Node3D, path_or_name: String, pos: Vector3, rot_y_deg :
 	pivot.name = path.get_file().get_basename()
 	var m: Node3D = ps.instantiate()
 	pivot.add_child(m)
+	# modèles riggés (personnages) : déjà à l'échelle réelle, leur AABB de maillage n'est pas fiable
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		if (mi as MeshInstance3D).skin != null:
+			pivot.position = pos
+			pivot.rotation_degrees.y = rot_y_deg
+			parent.add_child(pivot)
+			return pivot
 	var b := local_aabb(pivot)
 	var s := 1.0
 	if fit_len > 0.0:

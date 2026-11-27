@@ -41,8 +41,7 @@ func _door(leaf: Node3D, anchor: Vector3, label: String, angle: float, starts_op
 	var closed_rot := leaf.rotation.y - (angle if starts_open else 0.0)
 	var open_rot := closed_rot + angle
 	var state := {open = starts_open}
-	var it: Interactable
-	it = Interactable.attach(h, anchor, label, "Fermer" if starts_open else "Ouvrir", func(_p: Node) -> void:
+	Interactable.attach(h, anchor, label, "Fermer" if starts_open else "Ouvrir", func(_p: Node, it: Interactable) -> void:
 		state.open = not state.open
 		var tw := leaf.create_tween()
 		tw.tween_property(leaf, "rotation:y", open_rot if state.open else closed_rot, 0.7).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -67,8 +66,7 @@ func _fridge() -> void:
 		hinge.set_meta("dir", -sx)
 		hinges.append(hinge)
 	var state := {step = 0}
-	var it: Interactable
-	it = Interactable.attach(h, fridge.to_global(Vector3(0, 1.1, 0.6)) - h.global_position, "Réfrigérateur", "Ouvrir", func(_p: Node) -> void:
+	Interactable.attach(h, fridge.to_global(Vector3(0, 1.1, 0.6)) - h.global_position, "Réfrigérateur", "Ouvrir", func(_p: Node, it: Interactable) -> void:
 		match int(state.step):
 			0:
 				for hg in hinges:
@@ -90,13 +88,13 @@ func _fridge() -> void:
 	)
 
 func _kitchen() -> void:
-	Interactable.attach(h, Vector3(0.45, 1.0, 1.3), "Bouilloire", "Préparer un café", func(_p: Node) -> void:
+	Interactable.attach(h, Vector3(0.45, 1.0, 1.3), "Bouilloire", "Préparer un café", func(_p: Node, it: Interactable) -> void:
 		Game.apply({energie = 15.0, humeur = 4.0})
 		GameClock.advance(5)
 		Game.flags["cafe"] = true
 		Game.notify("Café chaud. Énergie +15")
 	, 1.4)
-	Interactable.attach(h, Vector3(5.15, 1.0, 0.5), "Plaque de cuisson", "Préparer le petit-déjeuner", func(_p: Node) -> void:
+	Interactable.attach(h, Vector3(5.15, 1.0, 0.5), "Plaque de cuisson", "Préparer le petit-déjeuner", func(_p: Node, it: Interactable) -> void:
 		Game.fade(func() -> void:
 			GameClock.advance(20)
 			Game.apply({faim = 45.0, humeur = 6.0})
@@ -104,7 +102,7 @@ func _kitchen() -> void:
 		)
 		Game.notify("Œufs brouillés et toasts. Faim +45")
 	, 1.4)
-	Interactable.attach(h, Vector3(3.0, 1.0, 0.5), "Évier", "Se laver les mains", func(_p: Node) -> void:
+	Interactable.attach(h, Vector3(3.0, 1.0, 0.5), "Évier", "Se laver les mains", func(_p: Node, it: Interactable) -> void:
 		Game.apply({hygiene = 8.0})
 		GameClock.advance(2)
 		Game.notify("Hygiène +8")
@@ -122,13 +120,11 @@ func _tv_and_sofa() -> void:
 		if _tv_screen:
 			_tv_on_mat = _tv_screen.material_override
 			_tv_off_mat = MatLib.flat(Color(0.02, 0.02, 0.025), 0.06, 0.0, 0.8)
-		var it: Interactable
-		it = Interactable.attach(h, tv.to_global(Vector3(0, -0.6, 0.5)) - h.global_position, "Télévision", "Éteindre", func(_p: Node) -> void:
+		Interactable.attach(h, tv.to_global(Vector3(0, -0.6, 0.5)) - h.global_position, "Télévision", "Éteindre", func(_p: Node, it: Interactable) -> void:
 			set_tv(not tv_on)
 			it.action_text = "Éteindre" if tv_on else "Allumer"
 		, 1.8)
-	var sofa_it: Interactable
-	sofa_it = Interactable.attach(h, Vector3(10.4, 0.6, 6.9), "Canapé", "Regarder la télé", func(p: Node) -> void:
+	Interactable.attach(h, Vector3(10.4, 0.6, 6.9), "Canapé", "Regarder la télé", func(p: Node, it: Interactable) -> void:
 		var pl := p as Player
 		seated = not seated
 		if seated:
@@ -139,8 +135,8 @@ func _tv_and_sofa() -> void:
 			pl.pivot.position.y = 1.12
 			GameClock.speed = 10.0
 			Game.apply({humeur = 5.0})
-			sofa_it.action_text = "Se lever"
-			sofa_it.radius = 3.0
+			it.action_text = "Se lever"
+			it.radius = 3.0
 			Game.flags["tele"] = true
 		else:
 			pl.model.visible = true
@@ -148,8 +144,8 @@ func _tv_and_sofa() -> void:
 			pl.pivot.position.y = 1.5
 			GameClock.speed = 1.0
 			pl.place(Vector3(11.2, 0.05, 6.9), PI * 0.5)
-			sofa_it.action_text = "Regarder la télé"
-			sofa_it.radius = 1.7
+			it.action_text = "Regarder la télé"
+			it.radius = 1.7
 	)
 
 func set_tv(on: bool) -> void:
@@ -160,7 +156,7 @@ func set_tv(on: bool) -> void:
 		_tv_light.visible = on
 
 func _bedroom() -> void:
-	Interactable.attach(h, Vector3(12.0, F2 + 0.6, 6.6), "Lit", "Dormir", func(p: Node) -> void:
+	Interactable.attach(h, Vector3(12.0, F2 + 0.6, 6.6), "Lit", "Dormir", func(p: Node, it: Interactable) -> void:
 		var pl := p as Player
 		var night := GameClock.hour() >= 20 or GameClock.hour() < 5
 		Game.fade(func() -> void:
@@ -177,7 +173,7 @@ func _bedroom() -> void:
 			pl.place(Vector3(13.6, F2 + 0.05, 6.6), -PI * 0.5)
 		)
 	, 2.0)
-	Interactable.attach(h, Vector3(8.95, F2 + 1.0, 10.6), "Dressing", "S'habiller", func(_p: Node) -> void:
+	Interactable.attach(h, Vector3(8.95, F2 + 1.0, 10.6), "Dressing", "S'habiller", func(_p: Node, it: Interactable) -> void:
 		Game.flags["habille"] = true
 		Game.apply({humeur = 4.0})
 		GameClock.advance(5)
@@ -190,8 +186,7 @@ func _switches() -> void:
 		var plate := Geo.box(h, Vector3(0.08, 0.12, 0.015), sw[0], MatLib.flat(Color(0.95, 0.95, 0.93), 0.4), 0.004)
 		plate.rotation.y = PI * 0.5
 		var state := {on = true}
-		var it: Interactable
-		it = Interactable.attach(h, sw[0], String(sw[2]), "Éteindre", func(_p: Node) -> void:
+		Interactable.attach(h, sw[0], String(sw[2]), "Éteindre", func(_p: Node, it: Interactable) -> void:
 			state.on = not state.on
 			for l in h.get_tree().get_nodes_in_group(group):
 				(l as Light3D).visible = state.on
@@ -205,8 +200,7 @@ func _garage() -> void:
 	var door := gd[0] as Node3D
 	var base := door.position
 	var state := {open = false}
-	var it: Interactable
-	it = Interactable.attach(h, Vector3(2.5, 1.0, 12.6), "Porte de garage", "Ouvrir", func(_p: Node) -> void:
+	Interactable.attach(h, Vector3(2.5, 1.0, 12.6), "Porte de garage", "Ouvrir", func(_p: Node, it: Interactable) -> void:
 		state.open = not state.open
 		var tw := door.create_tween().set_parallel(true)
 		tw.tween_property(door, "position", base + (Vector3(0, 2.2, -0.35) if state.open else Vector3.ZERO), 2.2).set_trans(Tween.TRANS_SINE)
