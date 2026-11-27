@@ -1,7 +1,13 @@
 {
   "name": "julien-kit",
-  "owner": { "name": "julienots" },
+  "owner": {
+    "name": "julienots"
+  },
   "plugins": [
-    { "name": "claude-kit", "source": "./claude-kit", "description": "Skills perso pour concevoir, polir, déboguer et publier." }
+    {
+      "name": "claude-kit",
+      "source": "./claude-kit",
+      "description": "Skills pour concevoir, construire, contrôler visuellement et publier des apps et jeux de niveau pro."
+    }
   ]
 }
