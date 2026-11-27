@@ -478,9 +478,9 @@ func hall() -> void:
 
 func lights() -> void:
 	# sondes de réflexion par pièce (projection en boîte) : métal, verre, sols vernis
-	for r in [[Vector3(4.0, 1.45, 2.5), Vector3(8.0, 2.9, 5.0)], [Vector3(12.0, 1.45, 8.5), Vector3(8.0, 2.9, 7.0)],
-			[Vector3(12.0, 1.45, 2.5), Vector3(8.0, 2.9, 5.0)], [Vector3(12.0, F2 + 1.4, 8.5), Vector3(8.0, 2.85, 7.0)],
-			[Vector3(6.5, 1.45, 8.5), Vector3(3.0, 2.9, 7.0)]]:
+	for r in [[Vector3(4.0, 1.5, 2.5), Vector3(8.8, 3.3, 5.6)], [Vector3(12.0, 1.5, 8.5), Vector3(8.6, 3.3, 7.6)],
+			[Vector3(12.0, 1.5, 2.5), Vector3(8.6, 3.3, 5.6)], [Vector3(12.0, F2 + 1.45, 8.5), Vector3(8.4, 3.2, 7.4)],
+			[Vector3(6.5, 1.5, 8.5), Vector3(3.6, 3.3, 7.6)]]:
 		var probe := ReflectionProbe.new()
 		probe.position = r[0]
 		probe.size = r[1]
@@ -488,6 +488,7 @@ func lights() -> void:
 		probe.interior = true
 		probe.enable_shadows = true
 		probe.update_mode = ReflectionProbe.UPDATE_ONCE
+		probe.blend_distance = 0.8
 		probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 		probe.ambient_color = Color(0.95, 0.88, 0.8)
 		probe.ambient_color_energy = 0.8
