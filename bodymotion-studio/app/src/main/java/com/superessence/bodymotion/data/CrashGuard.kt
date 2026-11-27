@@ -21,9 +21,11 @@ import java.util.Locale
 object CrashGuard {
     private lateinit var dir: File
     @Volatile private var lastStep = ""
+    private var version = ""
 
     fun install(ctx: Context) {
         dir = File(ctx.filesDir, "diagnostic").apply { mkdirs() }
+        version = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             runCatching {
@@ -48,8 +50,13 @@ object CrashGuard {
                     ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Ressources excessives"
                     else -> null
                 }
-                if (reason != null) File(dir, "crash.txt").writeText(header(ctx) +
-                    "Type : $reason\nDescription : ${last.description ?: "—"}\nÉtape : ${readStep()}\nDate : ${fmt(last.timestamp)}\n")
+                if (reason != null) {
+                    val trace = if (Build.VERSION.SDK_INT >= 31 && last.reason == ApplicationExitInfo.REASON_CRASH_NATIVE)
+                        runCatching { last.traceInputStream?.use { tombstoneSummary(it.readBytes()) } }.getOrNull() else null
+                    File(dir, "crash.txt").writeText(header(ctx) +
+                        "Type : $reason\nDescription : ${last.description ?: "—"}\nÉtape : ${readStep().ifEmpty { "(non enregistrée : version antérieure à 1.0.1)" }}\nDate : ${fmt(last.timestamp)}\n" +
+                        (trace?.let { "\nPile d'appels native :\n$it\n" } ?: ""))
+                }
             }
         }
     }
@@ -63,7 +70,21 @@ object CrashGuard {
     fun step(s: String) {
         if (s == lastStep) return
         lastStep = s
-        runCatching { File(dir, "step.txt").writeText(s) }
+        runCatching { File(dir, "step.txt").writeText("$s · v$version") }
+    }
+
+    /**
+     * Le tombstone Android (format protobuf) contient la bibliothèque, la fonction et le message d'arrêt
+     * sous forme de chaînes : on extrait les plus utiles, dans l'ordre (cause puis pile d'appels).
+     */
+    private fun tombstoneSummary(b: ByteArray): String {
+        val out = ArrayList<String>(); val cur = StringBuilder()
+        fun flush() { if (cur.length >= 5) out.add(cur.toString()); cur.setLength(0) }
+        for (x in b) { val c = x.toInt() and 0xff; if (c in 0x20..0x7e) cur.append(c.toChar()) else flush() }
+        flush()
+        val keep = Regex("""\.so|SIG[A-Z]+|abort|Abort|Check failed|assert|fault|mediapipe|filament|gltfio|tflite|camera|egl|EGL|vulkan|Exception|error""")
+        return out.filter { keep.containsMatchIn(it) && !it.startsWith("/system/framework") }
+            .distinct().take(45).joinToString("\n") { it.take(200) }
     }
 
     fun readStep(): String = runCatching { File(dir, "step.txt").readText() }.getOrDefault("")
