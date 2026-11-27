@@ -116,9 +116,9 @@ func _build_top_left() -> void:
 		var l := UIKit.label(String(Game.NEED_NAMES[k]), 13, UIKit.INK_DIM)
 		v.add_child(l)
 		var bar := ProgressBar.new()
-		bar.custom_minimum_size = Vector2(74, 6)
+		bar.custom_minimum_size = Vector2(74, 5)
 		bar.show_percentage = false
-		bar.add_theme_stylebox_override("background", UIKit.panel_style(Color(1, 1, 1, 0.18), 3))
+		bar.add_theme_stylebox_override("background", UIKit.panel_style(Color(0, 0, 0, 0.45), 3))
 		var fill := UIKit.panel_style(UIKit.INK, 3)
 		fill.content_margin_top = 0
 		fill.content_margin_bottom = 0

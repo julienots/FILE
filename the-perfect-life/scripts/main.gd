@@ -18,8 +18,8 @@ func _ready() -> void:
 	world.name = "World"
 	world.quality = Quality.Level.ULTRA if capture else int(Game.settings.quality)
 	add_child(world)
-	_characters()
 	if capture:
+		_characters()
 		camera = Camera3D.new()
 		camera.current = true
 		camera.near = 0.05
@@ -43,6 +43,9 @@ func _ready() -> void:
 func _start_game() -> void:
 	interactions = HouseInteractions.new(world.main_house)
 	interactions.setup()
+	NavBaker.bake(world.main_house.get_parent())
+	wife = WifeAI.new()
+	world.main_house.get_parent().add_child(wife)
 	player = Player.new()
 	add_child(player)
 	player.place(Vector3(13.6, HouseBuilder.FLOOR2 + 0.05, 6.6), -PI * 0.5)

@@ -35,7 +35,8 @@ func _ready() -> void:
 	cs.shape = cap
 	cs.position.y = 0.875
 	add_child(cs)
-	model = Geo.prop(self, "res://assets/thirdparty/Soldier.glb", Vector3.ZERO, 180.0, 0.0, 1.8)
+	model = Geo.prop(self, "res://assets/thirdparty/Soldier.glb", Vector3.ZERO, 0.0)
+	(model.get_child(0) as Node3D).rotation.y = PI   # le modèle regarde vers -Z
 	var aps := model.find_children("*", "AnimationPlayer", true, false)
 	if aps.size() > 0:
 		anim = aps[0]

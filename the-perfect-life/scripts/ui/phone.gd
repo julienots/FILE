@@ -156,6 +156,7 @@ func open() -> void:
 	is_open = true
 	visible = true
 	_layout()
+	_home()
 	if player:
 		player.locked = true
 	var end_y := frame.position.y

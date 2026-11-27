@@ -143,7 +143,8 @@ func _tv_and_sofa() -> void:
 			pl.spring.spring_length = 2.4
 			pl.pivot.position.y = 1.5
 			GameClock.speed = 1.0
-			pl.place(Vector3(11.2, 0.05, 6.9), PI * 0.5)
+			pl.place(Vector3(11.3, 0.05, 7.9), PI * 0.5)
+			pl.cam_yaw = -PI * 0.25
 			it.action_text = "Regarder la télé"
 			it.radius = 1.7
 	)

@@ -86,12 +86,29 @@ func run(m: Node) -> void:
 	await _shot("09_pause")
 	hud.pause_menu.close()
 
-	# 8. nuit dehors
+	# 8. Claire : routine + navigation + dialogue
+	var w: WifeAI = main.wife
+	_check("Claire suit sa routine du matin", w.activity in ["Prépare le café", "Cuisine le petit-déjeuner"], w.activity)
+	GameClock.skip_to(9 * 60 + 20)
+	await _frames(2)
+	var d0 := w.global_position.distance_to(Vector3(15.2, 0.05, 5.9))
+	var p0 := w.global_position
+	await _frames(25)
+	_check("Claire se déplace vers les plantes", w.global_position.distance_to(Vector3(15.2, 0.05, 5.9)) < d0 - 0.5, "%.1f m -> %.1f m (de %s à %s)" % [d0, w.global_position.distance_to(Vector3(15.2, 0.05, 5.9)), str(p0), str(w.global_position)])
+	p.place(w.global_position + Vector3(-1.2, 0.0, 0.6), PI * 0.5)
+	p.cam_yaw = -PI * 0.3
+	await _frames(4)
+	_check("focus sur Claire", p.focus != null and p.focus.display_name == "Claire", p.focus.display_name if p.focus else "aucun")
+	p.interact()
+	await _frames(10)
+	await _shot("10_claire_dialogue")
+
+	# 9. nuit dehors
 	GameClock.skip_to(21 * 60 + 30)
 	p.place(Vector3(9.5, 0.06, 19.5), PI)
 	p.cam_pitch = -0.12
 	await _frames(14)
-	await _shot("10_nuit_facade")
+	await _shot("11_nuit_facade")
 	print("PLAYTEST %s (%d échec(s))" % ["OK" if fails == 0 else "ÉCHEC", fails])
 	get_tree().quit()
 
