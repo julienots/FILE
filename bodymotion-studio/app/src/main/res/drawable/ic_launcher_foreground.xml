@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="22" android:translateY="22">
+        <!-- trajectoires de mouvement -->
+        <path android:pathData="M3,50 C9,44 14,42 21,41" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeAlpha="0.55" android:strokeColor="#A78BFA"/>
+        <path android:pathData="M10,28 C13,24 17,22 22,21" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeAlpha="0.45" android:strokeColor="#8FA8F8"/>
+        <!-- squelette -->
+        <path android:strokeWidth="4.2" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M36,19 L30,36 M35,21 L42,28 L49,23 M35,21 L27,26 L21,21 M30,36 L39,43 L37,55 M30,36 L24,46 L14,49">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear" android:startX="6" android:startY="54" android:endX="54" android:endY="8">
+                    <item android:offset="0" android:color="#FFA78BFA"/>
+                    <item android:offset="1" android:color="#FF22D3EE"/>
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#22D3EE" android:pathData="M39,6.3 a5.2,5.2 0 1,0 0.01,0 z"/>
+        <path android:fillColor="#07080B" android:strokeColor="#E9FBFF" android:strokeWidth="1.6"
+            android:pathData="M35,19 a2,2 0 1,0 0.01,0 z M30,33.8 a2.2,2.2 0 1,0 0.01,0 z M39,41 a2,2 0 1,0 0.01,0 z M42,26 a2,2 0 1,0 0.01,0 z"/>
+    </group>
+</vector>
