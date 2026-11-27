@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Super Essence Studio — démarrage</title>
+<style>
+  :root{
+    --se-yellow:#FCCC24; --se-white:#FEFEFE; --se-black:#000;
+    /* Palette du projet d'exemple (jamais celle du studio) */
+    --p-deep:#0F3B3A; --p-cream:#F6E7C8; --p-coral:#F07A5A; --p-moss:#8FB573; --p-ink:#1B1A17;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+  /* ---------- 1. Intro studio ---------- */
+  #studio{background:#000;transition:opacity .35s ease}
+  #studio.out{opacity:0}
+  .logo{position:relative;width:min(78vw,420px);aspect-ratio:720/152}
+  .logo img{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+  .word{opacity:0;transform:scale(.62);transform-origin:50% 60%}
+  .play .word{animation:pop .62s cubic-bezier(.34,1.56,.64,1) .15s forwards}
+  .dot{opacity:0;transform:translateY(-140%)}
+  .play .dot{animation:drop .5s cubic-bezier(.3,1.6,.5,1) .72s forwards}
+  .shine{position:absolute;inset:0;
+    -webkit-mask:url(WORD_SRC) center/100% 100% no-repeat;mask:url(WORD_SRC) center/100% 100% no-repeat;
+    background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.85) 48%,transparent 60%) no-repeat;
+    background-size:250% 100%;background-position:150% 0;opacity:0}
+  .play .shine{animation:shine .7s ease-in-out 1.05s forwards}
+  .ring{position:absolute;right:0.6%;bottom:12%;width:7%;aspect-ratio:1;border-radius:50%;
+    border:3px solid var(--se-yellow);opacity:0;transform:scale(.3)}
+  .play .ring{animation:ring .55s ease-out 1.0s forwards}
+  .studio-txt{margin-top:22px;color:rgba(255,255,255,.72);font-weight:800;font-size:13px;
+    letter-spacing:.9em;padding-left:.9em;opacity:0}
+  .play .studio-txt{animation:spread .7s ease-out 1.1s forwards}
+
+  @keyframes pop{0%{opacity:0;transform:scale(.62)}60%{opacity:1}100%{opacity:1;transform:scale(1)}}
+  @keyframes drop{0%{opacity:0;transform:translateY(-140%)}30%{opacity:1}100%{opacity:1;transform:translateY(0)}}
+  @keyframes shine{0%{opacity:1;background-position:150% 0}100%{opacity:1;background-position:-60% 0}}
+  @keyframes ring{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
+  @keyframes spread{from{opacity:0;letter-spacing:.9em}to{opacity:1;letter-spacing:.5em}}
+
+  /* ---------- 2. Chargement du projet (exemple : Atelier des Essences) ---------- */
+  #load{background:radial-gradient(120% 80% at 50% 30%,#164f4d 0%,var(--p-deep) 60%,#0a2726 100%);
+    opacity:0;pointer-events:none;transition:opacity .4s ease;color:var(--p-cream)}
+  #load.in{opacity:1;pointer-events:auto}
+  .emblem{width:132px;height:160px;margin-bottom:18px;filter:drop-shadow(0 6px 0 rgba(0,0,0,.25))}
+  .emblem .float{transform-origin:66px 100px;animation:bob 3s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-5px)}}
+  .title{font-weight:900;font-size:clamp(28px,8vw,40px);line-height:1.02;text-align:center;color:var(--p-cream);
+    text-shadow:0 3px 0 var(--p-ink),0 5px 0 rgba(0,0,0,.25);letter-spacing:.01em}
+  .title small{display:block;font-size:.42em;font-weight:800;color:var(--p-moss);letter-spacing:.32em;margin-top:8px;text-shadow:none}
+  .bar{margin-top:44px;width:min(70vw,300px);height:18px;border-radius:12px;background:var(--p-ink);
+    padding:3px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+  .fill{height:100%;width:0;border-radius:9px;background:linear-gradient(var(--p-coral),#d9603f);
+    box-shadow:inset 0 3px 0 rgba(255,255,255,.35);transition:width .25s ease}
+  .pct{margin-top:10px;font-weight:800;font-size:13px;color:var(--p-cream);opacity:.8}
+  .tip{position:absolute;bottom:calc(40px + env(safe-area-inset-bottom));left:24px;right:24px;text-align:center;
+    font-size:14px;line-height:1.4;color:var(--p-cream);opacity:.75;font-style:italic;min-height:40px;transition:opacity .3s}
+  .go{margin-top:34px;border:0;font:inherit;font-weight:900;font-size:18px;color:var(--p-ink);
+    background:var(--p-cream);padding:14px 34px;border-radius:16px;box-shadow:0 5px 0 #c9b48c;
+    opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;cursor:pointer;min-height:48px}
+  .go.show{opacity:1;transform:none}
+  .go:active{transform:translateY(4px);box-shadow:0 1px 0 #c9b48c}
+  .replay{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;border:0;background:rgba(0,0,0,.25);
+    color:var(--p-cream);font:700 12px system-ui;padding:10px 14px;border-radius:10px;min-height:40px;cursor:pointer}
+
+  @media (prefers-reduced-motion:reduce){
+    .play .word,.play .dot,.play .studio-txt{animation:fade .4s forwards}
+    .play .shine,.play .ring{animation:none}
+    .emblem .float{animation:none}
+    @keyframes fade{from{opacity:0;transform:none}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+
+<section id="studio" class="screen" aria-label="Super Essence Studio">
+  <div class="logo">
+    <img class="word" src="WORD_SRC" alt="SuperEssence">
+    <img class="dot" src="DOT_SRC" alt="">
+    <span class="ring"></span>
+    <span class="shine"></span>
+  </div>
+  <div class="studio-txt">STUDIO</div>
+</section>
+
+<section id="load" class="screen" aria-live="polite">
+  <svg class="emblem" viewBox="0 0 132 160" aria-hidden="true">
+    <g class="float">
+      <rect x="52" y="8" width="28" height="14" rx="4" fill="#8a5a3b"/>
+      <rect x="56" y="20" width="20" height="18" fill="#F6E7C8" opacity=".55"/>
+      <path d="M56 36 Q20 52 20 100 Q20 150 66 150 Q112 150 112 100 Q112 52 76 36Z" fill="#F6E7C8" opacity=".22" stroke="#F6E7C8" stroke-width="4"/>
+      <path d="M28 112 Q46 96 66 108 Q88 120 104 104 L104 112 Q104 142 66 142 Q28 142 28 112Z" fill="#8FB573"/>
+      <path d="M50 108 l10 -22 l10 22Z" fill="#F07A5A"/>
+      <rect x="57" y="96" width="6" height="12" fill="#1B1A17" opacity=".35"/>
+      <circle cx="86" cy="76" r="5" fill="#FCE3A6"/>
+      <path d="M40 60 Q46 50 54 48" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity=".5"/>
+    </g>
+  </svg>
+  <h1 class="title">Atelier<br>des Essences<small>EXEMPLE DE PROJET</small></h1>
+  <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="fill"></div></div>
+  <div class="pct" id="pct">0 %</div>
+  <button class="go" id="go">Toucher pour jouer</button>
+  <p class="tip" id="tip"></p>
+  <button class="replay" id="replay">Rejouer l'intro</button>
+</section>
+
+<script>
+(() => {
+  'use strict';
+  const STUDIO_MS = 2350;          // durée de l'intro studio avant le fondu
+  const studio = document.getElementById('studio');
+  const load = document.getElementById('load');
+  const fill = document.getElementById('fill');
+  const pct = document.getElementById('pct');
+  const bar = load.querySelector('.bar');
+  const tip = document.getElementById('tip');
+  const go = document.getElementById('go');
+
+  const store = {
+    get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+    set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+  };
+
+  const tips = [
+    "Chaque goutte d'Essence garde le souvenir d'un monde.",
+    "Une bouteille, une île, une lumière : à toi de l'assembler.",
+    "Rien ne se perd ici. Tout se range dans le verre."
+  ];
+
+  let timer = null, leaving = false, loadTimer = null;
+
+  function startStudio(){
+    leaving = false;
+    load.classList.remove('in');
+    go.classList.remove('show');
+    studio.style.display = 'flex';
+    studio.classList.remove('out','play');
+    void studio.offsetWidth;            // relance les animations CSS
+    studio.classList.add('play');
+    clearTimeout(timer);
+    timer = setTimeout(leaveStudio, STUDIO_MS);
+  }
+
+  function leaveStudio(){
+    if (leaving) return;
+    leaving = true;
+    clearTimeout(timer);
+    store.set('se_intro_seen','1');
+    studio.classList.add('out');
+    setTimeout(() => { studio.style.display = 'none'; startProjectLoad(); }, 360);
+  }
+
+  // Le toucher ne passe l'intro qu'après un premier visionnage complet.
+  const canSkip = store.get('se_intro_seen') === '1';
+  studio.addEventListener('pointerdown', () => { if (canSkip) leaveStudio(); });
+
+  // Chargement : dans un vrai jeu, appeler setProgress() depuis le chargeur de ressources.
+  function setProgress(p){
+    const v = Math.max(0, Math.min(100, Math.round(p)));
+    fill.style.width = v + '%';
+    pct.textContent = v + ' %';
+    bar.setAttribute('aria-valuenow', v);
+    if (v >= 100) go.classList.add('show');
+  }
+
+  function startProjectLoad(){
+    load.classList.add('in');
+    setProgress(0);
+    let i = 0;
+    tip.textContent = tips[0];
+    clearInterval(loadTimer);
+    let p = 0;
+    loadTimer = setInterval(() => {   // simulation de pré‑chargement pour la démo
+      p += 4 + Math.random() * 9;
+      setProgress(p);
+      if (p >= 100) clearInterval(loadTimer);
+      if (Math.random() < .12){ i = (i + 1) % tips.length; tip.style.opacity = 0;
+        setTimeout(() => { tip.textContent = tips[i]; tip.style.opacity = .75; }, 300); }
+    }, 180);
+  }
+
+  go.addEventListener('click', () => { go.textContent = 'C’est parti !'; });
+  document.getElementById('replay').addEventListener('click', () => { clearInterval(loadTimer); go.textContent='Toucher pour jouer'; startStudio(); });
+
+  // Attendre que le logo soit décodé pour éviter un saut à l'écran.
+  const imgs = [...studio.querySelectorAll('img')];
+  Promise.all(imgs.map(im => im.decode ? im.decode().catch(()=>{}) : Promise.resolve()))
+    .then(startStudio);
+})();
+</script>
+</body>
+</html>
