@@ -66,14 +66,26 @@ func _ready() -> void:
 func _borrow_locomotion() -> void:
 	var src: Node = load("res://assets/thirdparty/Soldier.glb").instantiate()
 	var sap: AnimationPlayer = src.find_children("*", "AnimationPlayer", true, false)[0]
+	var ssk: Skeleton3D = src.find_children("*", "Skeleton3D", true, false)[0]
+	var tsk: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
 	var lib := AnimationLibrary.new()
 	for n in ["Idle", "Walk", "Run"]:
-		var a: Animation = sap.get_animation(n).duplicate()
+		var a: Animation = sap.get_animation(n).duplicate(true)
 		a.loop_mode = Animation.LOOP_LINEAR
-		# on garde la hauteur des hanches de Claire : on retire les pistes de position
 		for t in range(a.get_track_count() - 1, -1, -1):
-			if a.track_get_type(t) == Animation.TYPE_POSITION_3D:
-				a.remove_track(t)
+			var path := a.track_get_path(t)
+			var bone := String(path.get_concatenated_subnames())
+			var sb := ssk.find_bone(bone)
+			var tb := tsk.find_bone(bone)
+			if a.track_get_type(t) != Animation.TYPE_ROTATION_3D or sb < 0 or tb < 0:
+				a.remove_track(t)      # positions/échelles : on garde les proportions de Claire
+				continue
+			# reciblage : rotation relative au repos source, réappliquée sur le repos cible
+			var rs := ssk.get_bone_rest(sb).basis.get_rotation_quaternion()
+			var rt := tsk.get_bone_rest(tb).basis.get_rotation_quaternion()
+			for k in a.track_get_key_count(t):
+				var q: Quaternion = a.track_get_key_value(t, k)
+				a.track_set_key_value(t, k, rt * (rs.inverse() * q))
 		lib.add_animation(n, a)
 	anim.add_animation_library("loco", lib)
 	src.free()
@@ -141,10 +153,10 @@ func _physics_process(delta: float) -> void:
 				dir = dir.normalized()
 				model.rotation.y = lerp_angle(model.rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-10.0 * delta))
 			velocity = dir * SPEED
-			velocity.y = -0.5 if not is_on_floor() else 0.0
-			# escalier : la navigation donne la hauteur, on suit la pente
-			if absf(next.y - global_position.y) > 0.05:
-				velocity.y = signf(next.y - global_position.y) * 1.2
+			velocity.y = -3.0
+			# escalier : on monte quand le chemin s'élève nettement (marches de 20 cm)
+			if next.y - global_position.y > 0.15:
+				velocity.y = 1.4
 			move_and_slide()
 			_play("loco/Walk")
 		State.TALKING:

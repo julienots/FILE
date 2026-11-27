@@ -35,6 +35,10 @@ func _ready() -> void:
 		return
 	Engine.max_fps = int(Game.settings.fps_cap)
 	_start_game()
+	if "--claire" in args:
+		var c: Node = load("res://tools/_claire.gd").new()
+		add_child(c)
+		c.run(self)
 	if "--playtest" in args:
 		var pt := preload("res://scripts/capture/playtest.gd").new()
 		add_child(pt)
