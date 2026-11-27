@@ -1,0 +1,107 @@
+name: The Perfect Life — APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "the-perfect-life/**"
+      - ".github/workflows/the-perfect-life-apk.yml"
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.5.1"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: the-perfect-life
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Outils glTF
+        run: npm install -g @gltf-transform/cli@4
+
+      - name: Cache des assets
+        id: assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            the-perfect-life/assets/polyhaven
+            the-perfect-life/assets/drive
+            the-perfect-life/assets/thirdparty
+            the-perfect-life/assets/optimized
+          key: assets-${{ hashFiles('the-perfect-life/tools/fetch_*', 'the-perfect-life/tools/optimize_assets.sh') }}
+
+      - name: Télécharger et préparer les assets
+        if: steps.assets.outputs.cache-hit != 'true'
+        run: |
+          python3 tools/fetch_assets.py
+          bash tools/fetch_drive.sh
+          bash tools/fetch_thirdparty.sh
+          bash tools/optimize_assets.sh
+
+      - name: Godot et modèles d'export
+        run: |
+          mkdir -p ~/godot && cd ~/godot
+          wget -q https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          wget -q https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          T=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p $T
+          unzip -q -j Godot_v${GODOT_VERSION}-stable_export_templates.tpz "templates/android_*" "templates/version.txt" -d $T
+          rm -f *.tpz
+
+      - name: SDK Android et keystore
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;35.0.0" "platforms;android-35" > /dev/null
+          keytool -genkeypair -keystore ~/debug.keystore -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.5.tres <<CFG
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          CFG
+          sed -i 's/^ *//' ~/.config/godot/editor_settings-4.5.tres
+
+      - name: Import et export de l'APK
+        run: |
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          mkdir -p build
+          $G --headless --import --path . || true
+          $G --headless --path . --export-debug "Android" build/ThePerfectLife.apk
+          ls -la build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ThePerfectLife-apk
+          path: the-perfect-life/build/ThePerfectLife.apk
+          retention-days: 30
+
+      - name: Publier une pré-version téléchargeable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-${{ github.run_number }}" build/ThePerfectLife.apk \
+            --prerelease --target "${{ github.sha }}" \
+            --title "The Perfect Life — build ${{ github.run_number }}" \
+            --notes "APK Android (debug, arm64). Installer : autoriser les sources inconnues puis ouvrir le fichier."

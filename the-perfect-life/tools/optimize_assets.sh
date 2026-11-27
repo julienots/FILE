@@ -4,9 +4,11 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p assets/optimized
+GT="gltf-transform"
+command -v $GT >/dev/null || GT="npx -y @gltf-transform/cli@4"
 opt() { # source ratio sortie
-  gltf-transform simplify "$1" "/tmp/_s.glb" --ratio "$2" --error 0.01 >/dev/null
-  gltf-transform resize "/tmp/_s.glb" "assets/optimized/$3.glb" --width 1024 --height 1024 >/dev/null
+  $GT simplify "$1" "/tmp/_s.glb" --ratio "$2" --error 0.01 >/dev/null
+  $GT resize "/tmp/_s.glb" "assets/optimized/$3.glb" --width 1024 --height 1024 >/dev/null
   echo "$3 ok"
 }
 opt assets/polyhaven/models/island_tree_01/island_tree_01.gltf 0.04 island_tree_01
