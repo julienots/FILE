@@ -129,7 +129,7 @@ func _update_focus() -> void:
 			var facing := fwd.dot(flat_to)
 			if facing < -0.2 and d > 0.7:
 				continue
-			var score := d - facing * 0.6
+			var score := d - facing * 0.6 - it.priority
 			if score < best_score:
 				best_score = score
 				best = it

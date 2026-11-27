@@ -7,6 +7,8 @@ var display_name := ""
 var action_text := ""
 var radius := 1.7
 var enabled := true
+## Priorité de focus (personnages > objets).
+var priority := 0.0
 ## func(player: Node, it: Interactable) -> void ; peut modifier it.action_text (ex. Ouvrir -> Fermer).
 var on_interact: Callable
 

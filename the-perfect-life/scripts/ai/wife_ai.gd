@@ -59,6 +59,7 @@ func _ready() -> void:
 	agent.avoidance_enabled = false
 	add_child(agent)
 	talk_it = Interactable.attach(self, Vector3(0, 1.2, 0), "Claire", "Parler", _on_talk, 1.9)
+	talk_it.priority = 1.0
 	GameClock.minute_changed.connect(func(_d: int, _m: int) -> void: _check_schedule())
 	call_deferred("_check_schedule", true)
 
