@@ -75,7 +75,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-private class TrackerHolder { @Volatile var tracker: BodyTracker? = null; @Volatile var smoothing = -1; @Volatile var delegate = ""; var failed = 0 }
+private class TrackerHolder { @Volatile var tracker: BodyTracker? = null; @Volatile var smoothing = -1; @Volatile var delegate = ""; @Volatile var gpu = false; var failed = 0 }
 
 private enum class Phase { IDLE, CALIBRATING, COUNTDOWN, RECORDING, PROCESSING, VIDEO }
 
@@ -134,16 +134,16 @@ fun CaptureScreen(nav: NavHostController, characterId: String, startWithVideo: B
     // Détecteur : créé et utilisé sur le thread d'analyse (exigence du délégué GPU), recréé si le lissage change.
     val executor = remember { Executors.newSingleThreadExecutor() }
     val holder = remember { TrackerHolder() }
-    val handsState = rememberUpdatedState(hands); val faceState = rememberUpdatedState(face); val smoothState = rememberUpdatedState(settings.smoothing)
+    val handsState = rememberUpdatedState(hands); val faceState = rememberUpdatedState(face); val smoothState = rememberUpdatedState(settings.smoothing); val gpuState = rememberUpdatedState(settings.gpu)
     DisposableEffect(Unit) { onDispose { executor.execute { holder.tracker?.close(); holder.tracker = null }; executor.shutdown() } }
     fun trackerOnAnalysisThread(): BodyTracker? {
         val cur = holder.tracker
-        if (cur != null && holder.smoothing == smoothState.value) { cur.hands = handsState.value; cur.face = faceState.value; return cur }
+        if (cur != null && holder.smoothing == smoothState.value && holder.gpu == gpuState.value) { cur.hands = handsState.value; cur.face = faceState.value; return cur }
         cur?.close()
         if (holder.failed >= 3) return null
-        return runCatching { BodyTracker(ctx, handsState.value, faceState.value, smoothState.value) }
+        return runCatching { BodyTracker(ctx, handsState.value, faceState.value, smoothState.value, forceCpu = !gpuState.value) }
             .onFailure { if (holder.failed++ == 0) error = "Initialisation de la détection impossible : ${it.message}" }
-            .getOrNull().also { holder.tracker = it; holder.smoothing = smoothState.value; holder.delegate = it?.delegateName ?: "" }
+            .getOrNull().also { holder.tracker = it; holder.smoothing = smoothState.value; holder.gpu = gpuState.value; holder.delegate = it?.delegateName ?: "" }
     }
 
     // Rafraîchissement de l'interface (~15 Hz)
@@ -153,7 +153,7 @@ fun CaptureScreen(nav: NavHostController, characterId: String, startWithVideo: B
         live.tick()
         live.frame = f
         if (f.hasBody) {
-            rt.solve(f, calibState.value, optState.value)?.let { live.pose = it }
+            runCatching { rt.solve(f, calibState.value, optState.value) }.getOrNull()?.let { live.pose = it }
             f.faceBlendshapes?.let { bs -> if (faceAvailable) { val w = character.face.evaluate(bs); live.morphs = morphMap(character, w) } }
         }
         if (live.recording) synchronized(live.recorded) { live.recorded.add(f) }
@@ -194,10 +194,14 @@ fun CaptureScreen(nav: NavHostController, characterId: String, startWithVideo: B
         live.recording = false; phase = Phase.PROCESSING
         val frames = synchronized(live.recorded) { live.recorded.toList() }
         scope.launch {
-            val rep = withContext(Dispatchers.Default) {
-                ClipBuilder.build(frames, rt, calib, opt, if (face && faceAvailable) character.face else null, settings.captureFps.toDouble(), "Capture ${store.clips.value.size + 1}", character.info.id)
+            com.superessence.bodymotion.data.CrashGuard.step("Capture : traitement de l'enregistrement (${frames.size} images)")
+            val rep = runCatching {
+                withContext(Dispatchers.Default) {
+                    ClipBuilder.build(frames, Retargeter(character.skeleton, character.boneMap), calib, opt, if (face && faceAvailable) character.face else null, settings.captureFps.toDouble(), "Capture ${store.clips.value.size + 1}", character.info.id)
+                }
             }
-            if (rep == null) { error = "Pas assez d'images avec un corps détecté. Placez-vous entièrement dans le cadre, bien éclairé."; phase = Phase.IDLE } else result = rep
+            rep.onFailure { error = "Traitement impossible : ${it.message ?: it.javaClass.simpleName}"; phase = Phase.IDLE }
+            rep.onSuccess { if (it == null) { error = "Pas assez d'images avec un corps détecté. Placez-vous entièrement dans le cadre, bien éclairé."; phase = Phase.IDLE } else result = it }
         }
     }
     LaunchedEffect(phase) {
@@ -208,7 +212,7 @@ fun CaptureScreen(nav: NavHostController, characterId: String, startWithVideo: B
                     val f = live.frame
                     val ok = f != null && f.hasBody && f.trackingQuality() > 0.65f && PL.run { f.visible(L_ANKLE, 0.5f) && f.visible(R_ANKLE, 0.5f) }
                     val now = SystemClock.uptimeMillis()
-                    if (ok) { if (stableSince == 0L) stableSince = now; if (now - stableSince > 1200) { calib = rt.calibrate(f!!); phase = Phase.COUNTDOWN } } else stableSince = 0L
+                    if (ok) { if (stableSince == 0L) stableSince = now; if (now - stableSince > 1200) { runCatching { rt.calibrate(f!!) }.onSuccess { calib = it; phase = Phase.COUNTDOWN }.onFailure { stableSince = 0L } } } else stableSince = 0L
                     delay(50)
                 }
             }
@@ -236,10 +240,10 @@ fun CaptureScreen(nav: NavHostController, characterId: String, startWithVideo: B
                 val first = frames.firstOrNull { it.hasBody && it.trackingQuality() > 0.6f }
                 val cal = first?.let { rt.calibrate(it) } ?: Calibration()
                 calib = cal
-                val rep = withContext(Dispatchers.Default) { ClipBuilder.build(frames, rt, cal, opt, if (face && faceAvailable) character.face else null, settings.captureFps.toDouble(), "Vidéo ${store.clips.value.size + 1}", character.info.id) }
+                val rep = withContext(Dispatchers.Default) { ClipBuilder.build(frames, Retargeter(character.skeleton, character.boneMap), cal, opt, if (face && faceAvailable) character.face else null, settings.captureFps.toDouble(), "Vidéo ${store.clips.value.size + 1}", character.info.id) }
                 if (rep == null) { error = "Aucun corps détecté de façon fiable dans cette vidéo."; phase = Phase.IDLE } else result = rep
             } catch (e: Throwable) {
-                if (e !is kotlinx.coroutines.CancellationException) { error = "Vidéo illisible : ${e.message}"; phase = Phase.IDLE }
+                if (e !is kotlinx.coroutines.CancellationException) { error = "Analyse de la vidéo impossible : ${e.message ?: e.javaClass.simpleName}"; phase = Phase.IDLE }
             } finally { withContext(kotlinx.coroutines.NonCancellable + videoExec) { vt.close() }; videoExec.close(); videoBitmap = null }
         }
     }

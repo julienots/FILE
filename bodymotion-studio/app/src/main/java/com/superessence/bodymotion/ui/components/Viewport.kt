@@ -80,11 +80,13 @@ fun Viewport3D(
         val cb = object : Choreographer.FrameCallback {
             override fun doFrame(t: Long) {
                 Choreographer.getInstance().postFrameCallback(this)
-                val fp = runCatching { currentPose.value(t) }.getOrNull()
-                v.applyPose(fp?.pose)
-                fp?.morphs?.let { v.applyMorphs(it) }
-                v.render(t)
-                if (showB.value && (frameCount++ % 2 == 0)) joints = v.projectJoints(fp?.pose, boneIdx)
+                runCatching {
+                    val fp = runCatching { currentPose.value(t) }.getOrNull()
+                    v.applyPose(fp?.pose)
+                    fp?.morphs?.let { v.applyMorphs(it) }
+                    v.render(t)
+                    if (showB.value && (frameCount++ % 2 == 0)) joints = v.projectJoints(fp?.pose, boneIdx)
+                }.onFailure { android.util.Log.w("Viewport", "image", it) }
             }
         }
         Choreographer.getInstance().postFrameCallback(cb)

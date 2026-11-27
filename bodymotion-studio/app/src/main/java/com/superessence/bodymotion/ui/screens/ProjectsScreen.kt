@@ -112,6 +112,7 @@ fun SettingsScreen(nav: NavHostController) {
             SectionLabel("Capture")
             Segmented(listOf(0, 1, 2), s.smoothing, { listOf("Lissage faible", "Moyen", "Fort")[it] }) { v -> store.updateSettings { it.copy(smoothing = v) } }
             Segmented(listOf(24, 30, 60), s.captureFps, { "$it FPS" }) { v -> store.updateSettings { it.copy(captureFps = v) } }
+            Group { ToggleRow("Accélération GPU (expérimental)", s.gpu, "Détection plus rapide, mais instable sur certains téléphones. Désactivée automatiquement après un plantage.") { v -> store.updateSettings { it.copy(gpu = v) } } }
             Group { ToggleRow("Garder l'orientation du modèle", s.keepModelFacing, "Le personnage conserve son orientation d'origine (recommandé pour les moteurs de jeu)") { v -> store.updateSettings { it.copy(keepModelFacing = v) } } }
             SectionLabel("Limites de la capture (en toute transparence)")
             Group {

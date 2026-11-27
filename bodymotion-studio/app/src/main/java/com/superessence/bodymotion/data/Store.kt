@@ -49,6 +49,8 @@ data class Settings(
     val captureFps: Int = 30,
     val keepModelFacing: Boolean = true,
     val introSeen: Boolean = false,
+    /** Détection sur GPU : plus rapide mais instable sur certains téléphones (désactivée par défaut). */
+    val gpu: Boolean = false,
 )
 
 /** Stockage local (aucun serveur, aucun compte). */
@@ -229,12 +231,12 @@ class Store(private val ctx: Context) {
     fun updateSettings(f: (Settings) -> Settings) {
         val s = f(_settings.value); _settings.value = s
         File(root, "settings.json").writeText(Json.stringify(linkedMapOf("quality" to s.quality, "smoothing" to s.smoothing, "fps" to s.captureFps,
-            "facing" to s.keepModelFacing, "intro" to s.introSeen)))
+            "facing" to s.keepModelFacing, "intro" to s.introSeen, "gpu" to s.gpu)))
     }
 
     private fun loadSettings(): Settings = runCatching {
         val m = Json.parse(File(root, "settings.json").readText()).obj()
-        Settings((m["quality"] as Number).toInt(), (m["smoothing"] as Number).toInt(), (m["fps"] as Number).toInt(), m["facing"] != false, m["intro"] == true)
+        Settings((m["quality"] as Number).toInt(), (m["smoothing"] as Number).toInt(), (m["fps"] as Number).toInt(), m["facing"] != false, m["intro"] == true, m["gpu"] == true)
     }.getOrDefault(Settings())
 
     fun exportDir() = File(ctx.cacheDir, "exports").apply { mkdirs() }

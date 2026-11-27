@@ -2,7 +2,7 @@
 
 **Create. Capture. Animate.** Application Android de motion capture : filmez-vous, votre personnage 3D reproduit vos mouvements, puis exportez l'animation pour Unity, Unreal ou Godot.
 
-- **APK signé** : [`release/BodyMotion-Studio-1.0.0.apk`](release/BodyMotion-Studio-1.0.0.apk) (Android 8.0+, arm64 / armv7, ~70 Mo, aucun compte, aucun réseau)
+- **APK signé** : [`release/BodyMotion-Studio-1.0.1.apk`](release/BodyMotion-Studio-1.0.1.apk) (Android 8.0+, arm64 / armv7, ~70 Mo, aucun compte, aucun réseau)
 - **Captures de l'application** : [`branding/captures/`](branding/captures/)
 
 ## Ce qui fonctionne

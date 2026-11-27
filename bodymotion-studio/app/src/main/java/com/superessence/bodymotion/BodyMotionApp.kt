@@ -7,9 +7,13 @@ import com.superessence.bodymotion.data.Store
 class BodyMotionApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.superessence.bodymotion.data.CrashGuard.install(this)
         // Charge Filament, gltfio et filament-utils (bibliothèques natives).
         renderAvailable = runCatching { Utils.init() }.isSuccess
         store = Store(this)
+        // Plantage pendant l'analyse GPU lors de la session précédente : retour automatique au CPU.
+        if (com.superessence.bodymotion.data.CrashGuard.lastCrashWasGpu(com.superessence.bodymotion.data.CrashGuard.pendingReport()))
+            store.updateSettings { it.copy(gpu = false) }
     }
 
     companion object {

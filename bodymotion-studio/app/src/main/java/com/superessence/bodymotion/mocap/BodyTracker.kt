@@ -10,6 +10,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
+import com.superessence.bodymotion.data.CrashGuard
 import com.superessence.bodymotion.math.Vec3
 
 /**
@@ -17,7 +18,7 @@ import com.superessence.bodymotion.math.Vec3
  * corps (33 points 2D + 3D), mains (21 points), visage (52 expressions).
  * Mode « vidéo » synchrone : une image analysée => un [PoseFrame] cohérent.
  */
-class BodyTracker(ctx: Context, var hands: Boolean, var face: Boolean, smoothing: Int, forceCpu: Boolean = false) : AutoCloseable {
+class BodyTracker(ctx: Context, var hands: Boolean, var face: Boolean, smoothing: Int, forceCpu: Boolean = true) : AutoCloseable {
     private var pose: PoseLandmarker
     private var hand: HandLandmarker? = null
     private var faceLm: FaceLandmarker? = null
@@ -37,6 +38,7 @@ class BodyTracker(ctx: Context, var hands: Boolean, var face: Boolean, smoothing
         imgFilter = PointSetFilter(PL.COUNT, mc * 1.5, beta * 2)
         handFilterL = PointSetFilter(21, mc * 1.5, beta); handFilterR = PointSetFilter(21, mc * 1.5, beta)
         var d = if (forceCpu) "CPU" else "GPU"
+        CrashGuard.step("Détecteur du corps : création ($d)")
         pose = if (forceCpu) createPose(Delegate.CPU) else try { createPose(Delegate.GPU) } catch (e: Throwable) { Log.w("BodyTracker", "GPU indisponible, CPU", e); d = "CPU"; createPose(Delegate.CPU) }
         delegateName = d
     }
@@ -61,6 +63,7 @@ class BodyTracker(ctx: Context, var hands: Boolean, var face: Boolean, smoothing
         lastTs = ts
         val img = BitmapImageBuilder(bmp).build()
         val aspect = bmp.width.toFloat() / bmp.height
+        CrashGuard.step("Analyse : corps${if (hands) " + mains" else ""}${if (face) " + visage" else ""} ($delegateName)")
         val r = try { pose.detectForVideo(img, ts) } catch (e: Throwable) {
             if (delegateName != "GPU") throw e
             // Repli automatique : certains GPU refusent le délégué au moment de l'inférence.

@@ -232,7 +232,7 @@ class Retargeter(val skel: Skeleton, val map: BoneMap) {
 
     /** Direction de repos (monde) d'un os : vers son os enfant humanoïde. */
     private val restDirCache = HashMap<HumanBone, Vec3?>()
-    private fun restDirection(b: HumanBone, i: Int): Vec3? = restDirCache.getOrPut(b) {
+    private fun restDirection(b: HumanBone, i: Int): Vec3? = synchronized(restDirCache) { restDirCache.getOrPut(b) {
         val here = skel.restPos(i)
         val nextName: HumanBone? = when (b) {
             LeftUpperArm -> LeftLowerArm; LeftLowerArm -> LeftHand; RightUpperArm -> RightLowerArm; RightLowerArm -> RightHand
@@ -255,7 +255,7 @@ class Retargeter(val skel: Skeleton, val map: BoneMap) {
             }
             else -> null
         }?.takeIf { it != Vec3.ZERO }
-    }
+    } }
 
     private fun fingerNext(b: HumanBone): HumanBone? {
         if (!b.isFinger) return null

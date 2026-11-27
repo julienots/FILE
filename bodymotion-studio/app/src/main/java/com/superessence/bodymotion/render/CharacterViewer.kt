@@ -71,6 +71,7 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
     private var destroyed = false
 
     init {
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : création")
         scene.skybox = Skybox.Builder().color(0.035f, 0.04f, 0.05f, 1f).build(engine).also { skybox = it }
         ibl = IndirectLight.Builder()
             .irradiance(3, floatArrayOf(
@@ -154,6 +155,7 @@ class CharacterViewer(private val ctx: Context, private val textureView: Texture
 
     /** Charge le personnage (GLB interne) et le sol. Le personnage est mis à l'échelle ~1,8 m, pieds au sol. */
     fun setCharacter(glb: ByteArray, skel: Skeleton, forward: Vec3) {
+        com.superessence.bodymotion.data.CrashGuard.step("Viewport 3D : chargement du personnage")
         character?.let { scene.removeEntities(it.entities); assetLoader.destroyAsset(it) }
         val a = loadAsset(glb) ?: throw IllegalStateException("Le moteur 3D n'a pas pu charger ce modèle.")
         character = a; skeleton = skel
