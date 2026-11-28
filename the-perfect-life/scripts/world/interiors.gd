@@ -75,6 +75,7 @@ func _tv(pos: Vector3, rot_deg: float, width: float) -> void:
 	scr.position = Vector3(0, 0, 0.019)
 	root.add_child(scr)
 	var glow := OmniLight3D.new()
+	glow.add_to_group("lights_decor")
 	glow.light_color = Color(0.55, 0.65, 0.9)
 	glow.light_energy = 0.25
 	glow.omni_range = 2.5
@@ -101,6 +102,7 @@ func _floor_lamp(pos: Vector3) -> void:
 	shade.position = Vector3(0, 1.55, 0)
 	root.add_child(shade)
 	var l := OmniLight3D.new()
+	l.add_to_group("lights_decor")
 	l.light_color = Color(1.0, 0.78, 0.52)
 	l.light_energy = 1.2
 	l.omni_range = 4.0
@@ -340,6 +342,7 @@ func _pendant(pos: Vector3) -> void:
 	r.add_child(shade)
 	Geo.cylinder(r, 0.05, 0.01, Vector3(0, -0.97, 0), MatLib.emissive(Color(1.0, 0.85, 0.65), 6.0))
 	var l := SpotLight3D.new()
+	l.add_to_group("lights_decor")
 	l.light_color = Color(1.0, 0.82, 0.6)
 	l.light_energy = 2.0
 	l.spot_range = 3.0
@@ -443,6 +446,7 @@ func _table_lamp(pos: Vector3) -> void:
 	shade.position = Vector3(0, 0.46, 0)
 	r.add_child(shade)
 	var l := OmniLight3D.new()
+	l.add_to_group("lights_decor")
 	l.light_color = Color(1.0, 0.76, 0.5)
 	l.light_energy = 0.8
 	l.omni_range = 3.2

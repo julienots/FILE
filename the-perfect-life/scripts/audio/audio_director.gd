@@ -4,7 +4,7 @@ extends Node
 ## nappe douce et rassurante → drone grave qui bat → acouphène aigu, selon la suspicion.
 ## Coups (« stingers ») sur les anomalies, bourdonnement électrique pendant les coupures.
 
-const RATE := 22050.0
+const RATE := 16000.0
 
 var player: AudioStreamPlayer
 var gen: AudioStreamGeneratorPlayback

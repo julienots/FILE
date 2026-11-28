@@ -43,3 +43,34 @@ static func apply(level: int, env: Environment, sun: DirectionalLight3D, vp: Vie
 		RenderingServer.SHADOW_QUALITY_SOFT_HIGH if ultra else (RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM if high else RenderingServer.SHADOW_QUALITY_SOFT_LOW))
 	RenderingServer.positional_soft_shadow_filter_set_quality(
 		RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM if high else RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	_tune_lights(level, vp.get_tree())
+
+## Rendu Mobile : 8 lumières max par objet. On coupe les ombres des lampes décoratives,
+## on éteint les lumières lointaines (fondu à distance) et, en Performance, les lampes déco.
+static func _tune_lights(level: int, tree: SceneTree) -> void:
+	if tree == null:
+		return
+	var high := level <= Level.HIGH
+	for l in tree.get_nodes_in_group("lights_decor"):
+		var li := l as Light3D
+		li.shadow_enabled = high and li is SpotLight3D
+		li.distance_fade_enabled = true
+		li.distance_fade_begin = 9.0 if high else 6.0
+		li.distance_fade_length = 3.0
+		li.set_meta("allowed", level != Level.PERFORMANCE)
+		if level == Level.PERFORMANCE:
+			li.visible = false
+	for g in ["lights_rdc", "lights_chambre"]:
+		for l in tree.get_nodes_in_group(g):
+			var li := l as Light3D
+			li.distance_fade_enabled = true
+			li.distance_fade_begin = 16.0
+			li.distance_fade_length = 4.0
+			if not high:
+				li.shadow_enabled = false
+	for l in tree.get_nodes_in_group("street_lights"):
+		var li := l as Light3D
+		li.distance_fade_enabled = true
+		li.distance_fade_begin = 22.0 if high else 14.0
+		li.distance_fade_length = 6.0
+
