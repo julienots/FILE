@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Noctea"
 include(":app")
+include(":voxea")

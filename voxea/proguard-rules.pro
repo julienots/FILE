@@ -1,0 +1,6 @@
+-keep class de.sciss.jump3r.** { *; }
+-dontwarn de.sciss.jump3r.**
+-dontwarn javax.sound.**
+-keepclassmembers class com.superessence.voxea.data.** { *; }
+-keep,includedescriptorclasses class com.superessence.voxea.**$$serializer { *; }
+-keepclassmembers class com.superessence.voxea.** { *** Companion; }

@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <!-- ondes gauche (magenta) / droite (cyan) -->
+  <path android:pathData="M30,46v16" android:strokeColor="#E24A8D" android:strokeWidth="4" android:strokeLineCap="round"/>
+  <path android:pathData="M37,40v28" android:strokeColor="#E24A8D" android:strokeWidth="4" android:strokeLineCap="round"/>
+  <path android:pathData="M71,40v28" android:strokeColor="#3FD0C9" android:strokeWidth="4" android:strokeLineCap="round"/>
+  <path android:pathData="M78,46v16" android:strokeColor="#3FD0C9" android:strokeWidth="4" android:strokeLineCap="round"/>
+  <!-- micro -->
+  <path android:pathData="M54,30c-5,0 -9,4 -9,9v14c0,5 4,9 9,9s9,-4 9,-9v-14c0,-5 -4,-9 -9,-9z" android:fillColor="#F4EDE4"/>
+  <path android:pathData="M45,48h18" android:strokeColor="#3A1F5C" android:strokeWidth="1.6"/>
+  <path android:pathData="M45,52h18" android:strokeColor="#3A1F5C" android:strokeWidth="1.6"/>
+  <path android:pathData="M41,52c0,8 6,14 13,14s13,-6 13,-14" android:strokeColor="#F4EDE4" android:strokeWidth="3.4" android:strokeLineCap="round"/>
+  <path android:pathData="M54,66v8M47,76h14" android:strokeColor="#F4EDE4" android:strokeWidth="3.4" android:strokeLineCap="round"/>
+</vector>
