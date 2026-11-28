@@ -81,4 +81,24 @@ class DspTest {
             assertTrue(y.all { abs(it) <= 0.99f })
         }
     }
+
+    /** Une montée de hauteur ne doit pas laisser de « trous » dans le spectre (son métallique). */
+    @Test fun pitchUpLeavesNoSpectralHoles() {
+        val rnd = java.util.Random(1)
+        val x = FloatArray(sr * 2) { (rnd.nextGaussian() * 0.1).toFloat() }
+        val y = VoiceDsp.process(x, sr, VoiceSettings(8f, 1f))
+        val n = 2048; val avg = DoubleArray(n / 2)
+        var frames = 0
+        var pos = sr / 2
+        while (pos + n < y.size - sr / 2) {
+            val re = DoubleArray(n) { y[pos + it] * (0.5 - 0.5 * kotlin.math.cos(2 * PI * it / n)) }; val im = DoubleArray(n)
+            VoiceDsp.fft(re, im, false)
+            for (k in 0 until n / 2) avg[k] += sqrt(re[k] * re[k] + im[k] * im[k])
+            frames++; pos += n
+        }
+        val band = (n * 500 / sr until n * 5000 / sr).map { avg[it] / frames }
+        val median = band.sorted()[band.size / 2]
+        val minRatio = band.min() / median // 0,48 avant correction des trous
+        assertTrue("creux=$minRatio", minRatio > 0.53)
+    }
 }

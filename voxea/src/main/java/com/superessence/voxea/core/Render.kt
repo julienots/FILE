@@ -37,6 +37,14 @@ object Audio {
         return y
     }
 
+    /** Une prise quasi vide (double toucher) ne remplace jamais une bonne prise existante. */
+    fun shouldKeepTake(x: FloatArray, sr: Int, replacing: Boolean): Boolean {
+        if (!replacing) return true
+        var peak = 0f
+        for (v in x) peak = max(peak, abs(v))
+        return x.size >= sr * 3 / 10 && peak >= 0.02f
+    }
+
     fun resample(x: FloatArray, from: Int, to: Int): FloatArray {
         if (from == to || x.isEmpty()) return x
         val n = (x.size.toLong() * to / from).toInt()

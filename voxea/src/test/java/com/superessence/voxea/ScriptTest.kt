@@ -59,4 +59,23 @@ class ScriptTest {
         assertEquals(VoiceType.FEMME, ScriptParser.parse("ÉLODIE [FÉMININE] : a").single().voiceHint)
         assertEquals(VoiceType.ENFANT, ScriptParser.parse("BÉBÉ [BÉBÉ] : a").single().voiceHint)
     }
+
+    @Test fun claudeHeadingsAndSentencesAreNotCharacters() {
+        val raw = """
+            Scène 1 : La gare
+            Personnages : Léa, Marc
+            Titre : Le retour
+            INT. GARE – NUIT
+            **LÉA :** Salut
+
+            Il dit : non.
+            Elle hésite — puis sort.
+            À 10:30, le train part.
+            MARC — Bonsoir.
+        """.trimIndent()
+        val ls = ScriptParser.parse(raw)
+        assertEquals(listOf("LÉA", "NARRATEUR", "MARC"), ls.map { it.character })
+        assertEquals("Salut", ls[0].text)
+        assertEquals("Il dit : non. Elle hésite — puis sort. À 10:30, le train part.", ls[1].text)
+    }
 }

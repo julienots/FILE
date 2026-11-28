@@ -116,9 +116,12 @@ object VoiceDsp {
             }
             for (j in 0..HALF) {
                 if (srcBin[j] < 0) {
-                    // Trou (montée de hauteur) : bin source fractionnaire le plus proche
-                    val k = (j / r).roundToInt().coerceIn(0, HALF)
-                    srcBin[j] = k
+                    // Trou (montée de hauteur) : on interpole l'excitation au bin source fractionnaire j / r
+                    val kf = (j / r).coerceIn(0.0, HALF.toDouble())
+                    val k0 = kf.toInt(); val k1 = min(k0 + 1, HALF); val fr = kf - k0
+                    srcBin[j] = if (fr < 0.5) k0 else k1
+                    outMag[j] = (mag[k0] / env[k0]) * (1 - fr) + (mag[k1] / env[k1]) * fr
+                    outFreq[j] = trueFreq[srcBin[j]] * r
                 }
                 // Enveloppe déplacée selon le facteur de formant
                 val pos2 = j / formant

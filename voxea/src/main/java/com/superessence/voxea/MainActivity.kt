@@ -33,7 +33,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handleIntent(intent)
+        // Après une rotation / un changement de thème, l'intent a déjà été importé
+        if (savedInstanceState == null) handleIntent(intent)
         setContent {
             VoxeaTheme {
                 val screen by vm.screen.collectAsState()

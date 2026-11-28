@@ -106,3 +106,24 @@ python3 tools/make_icons.py                                      # régénère l
 *NOCTÉA est un outil de bien-être et ne remplace pas un avis médical.*
 
 **Une création Superessence Studio.**
+
+---
+
+# 🎙️ VOXÉA — dialogues avec ta voix (by Superessence Studio)
+
+Deuxième application du dépôt (module Gradle `:voxea`, `com.superessence.voxea`).
+
+- **APK** : [`release/VOXEA-Superessence-Studio.apk`](release/VOXEA-Superessence-Studio.apk) (Android 8.0+, signé, ~1,6 Mo, hors ligne)
+- **Principe** : tu importes un script (.txt, coller, ou « Partager » depuis Claude), tu le lis dans le **prompteur** (une réplique en gros, la suivante en aperçu ; toucher l'écran ou un bouton de volume = suivant, sans couper le micro), tu choisis la voix de chaque personnage (Ma voix, Femme, Homme, Enfant, Âgée, Robot, avec réglages fins hauteur / timbre / vibrato), et VOXÉA génère **un MP3 par réplique** (`01_LEA.mp3`, `02_MARC.mp3`…) + `00_DIALOGUE_COMPLET.mp3`, copiés dans `Musique/VOXEA/<dialogue>` et partageables (un par un, tous, ou en ZIP).
+- **Format du script** : `NOM [VOIX] : réplique` — balises `[FEMME]`, `[HOMME]`, `[ENFANT]`, `[ÂGÉ]`, `[ROBOT]`, `[MA VOIX]` (ou entre parenthèses). Ligne sans nom = narrateur ; titres `#`, `Scène 1 : …`, `Personnages : …`, `INT./EXT.` ignorés.
+- **Transformation de voix hors ligne** : vocodeur de phase (STFT 2048, saut 256) avec séparation source/filtre par lissage cepstral : hauteur et formants sont décalés indépendamment (pas d'effet « chipmunk »), phase verrouillée aux pics, même volume que l'enregistrement. C'est ta voix transformée, pas une autre personne.
+- **Option IA** : ElevenLabs *speech-to-speech* (clé saisie dans Réglages, stockée sur l'appareil, aucune clé dans le code). Repli automatique sur la transformation hors ligne en cas d'erreur.
+- **MP3** : LAME en Java pur (jump3r, LGPL), 128 kb/s mono.
+
+```bash
+./gradlew :voxea:testDebugUnitTest                       # 43 tests (parseur, DSP, MP3, rendu, projets, écrans)
+./gradlew :voxea:testDebugUnitTest --tests '*Screenshot*' -Pscreenshots=true   # captures dans voxea/build/screenshots
+./gradlew :voxea:assembleRelease
+```
+
+<p align="center"><img src="branding/voxea/03_chargement.png" width="180"/> <img src="branding/voxea/05_voix.png" width="180"/> <img src="branding/voxea/07_prompteur.png" width="180"/> <img src="branding/voxea/09_mp3.png" width="180"/></p>

@@ -10,9 +10,12 @@ import java.nio.ByteOrder
 
 /** Lecture / écriture WAV PCM 16 bits mono. */
 object Wav {
+    /** Écrit dans un fichier temporaire puis renomme : jamais de WAV à moitié écrit. */
     fun write(file: File, pcm: FloatArray, sampleRate: Int) {
         file.parentFile?.mkdirs()
-        file.outputStream().buffered().use { write(it, pcm, sampleRate) }
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        tmp.outputStream().buffered().use { write(it, pcm, sampleRate) }
+        if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
     }
 
     fun write(out: OutputStream, pcm: FloatArray, sampleRate: Int) {

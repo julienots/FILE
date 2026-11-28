@@ -58,6 +58,8 @@ object ScriptParser {
             if (trimmed.startsWith("#") || trimmed.matches(Regex("""^[-=*_]{3,}$"""))) { joinable = false; continue }
 
             val line = cleanStart(trimmed)
+            // Lignes de mise en page (« Scène 1 : … », « Personnages : … », « INT. GARE – NUIT ») : à ne pas lire
+            if (metaRe.containsMatchIn(line.replace(decorRe, ""))) { joinable = false; continue }
             val dialogue = splitDialogue(line)
             if (dialogue != null) {
                 out += Acc(dialogue.first, StringBuilder(dialogue.second), dialogue.third)
@@ -95,17 +97,34 @@ object ScriptParser {
             name = name.replace(t.value, "").trim()
         }
         name = name.replace(decorRe, "").trim()
-        if (!looksLikeName(name) || text.isEmpty()) return null
-        return Triple(name, text, hint)
+        val cleanText = text.replace(Regex("""^[*_\s]+"""), "").trim()
+        if (!looksLikeName(name) || cleanText.isEmpty()) return null
+        // « À 10:30 » : une heure, pas un nom
+        if (name.last().isDigit() && cleanText.first().isDigit()) return null
+        // Tiret : seulement après un nom en majuscules (« MARC — Bonsoir »)
+        val usedColon = work.substring(m.groups[1]!!.range.last + 1).trimStart().startsWith(":")
+        if (!usedColon && name != name.uppercase()) return null
+        return Triple(name, cleanText, hint)
     }
+
+    private val metaRe = Regex(
+        """^(sc[èe]ne|acte|titre|title|personnages?|d[ée]cor|lieu|chapitre|partie|r[ée]sum[ée]|int\.|ext\.)(\s|$|\d|:)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private val notNames = Regex(
+        """^(sc[èe]ne|acte|titre|title|personnages?|d[ée]cor|lieu|chapitre|partie|fin|r[ée]sum[ée]|note|int\.?|ext\.?|il|elle|ils|elles|on|je|tu|nous|vous)(\b|\s|$).*""",
+        RegexOption.IGNORE_CASE,
+    )
 
     private fun looksLikeName(n: String): Boolean {
         if (n.isEmpty() || n.length > 30) return false
+        if (notNames.matches(n)) return false
         if (n.last() in ".!?,;") return false
         val words = n.split(Regex("""\s+"""))
         if (words.size > 4) return false
         if (!n.first().isLetterOrDigit()) return false
-        // Un nom commence par une majuscule (ou est entièrement en majuscules)
-        return n.first().isUpperCase() || n.first().isDigit()
+        // Chaque mot commence par une majuscule (« Papi Jo », « LÉA ») : écarte « Il dit », « Elle hésite »
+        return words.all { w -> w.first().isUpperCase() || w.first().isDigit() || w.lowercase() in setOf("de", "du", "la", "le", "d'", "des") }
     }
 }

@@ -306,6 +306,14 @@ private fun ExportTab(vm: AppViewModel, p: Project, recorded: Set<Int>) {
     val hasKey = vm.settings.apiKey.isNotBlank()
     val existing = remember(ex.result, p) { vm.store.outDir(p).listFiles()?.filter { it.extension == "mp3" }?.sortedBy { it.name }.orEmpty() }
     val result = ex.result
+    val askStorage = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { vm.generate(p) } // même si refusée : les MP3 restent partageables depuis l'app
+    fun generate() {
+        val needs = android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P &&
+            androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (needs) askStorage.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) else vm.generate(p)
+    }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -333,7 +341,7 @@ private fun ExportTab(vm: AppViewModel, p: Project, recorded: Set<Int>) {
                 } else {
                     BigAction(Icons.Outlined.GraphicEq, if (existing.isEmpty()) "Générer les MP3" else "Régénérer les MP3",
                         if (recorded.isEmpty()) Vx.Surface2 else Vx.Magenta) {
-                        if (recorded.isEmpty()) vm.toast("Enregistre d'abord au moins une réplique.") else vm.generate(p)
+                        if (recorded.isEmpty()) vm.toast("Enregistre d'abord au moins une réplique.") else generate()
                     }
                 }
                 ex.savedTo?.let { Text("✓ Copiés dans $it", color = Vx.Ok, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 10.dp)) }

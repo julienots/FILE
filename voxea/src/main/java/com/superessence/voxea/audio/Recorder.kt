@@ -22,9 +22,13 @@ class Recorder {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running
 
-    private var record: AudioRecord? = null
-    private var ns: NoiseSuppressor? = null
-    @Volatile private var active = false
+    /** Une session = un AudioRecord + son fil de lecture, avec son propre drapeau d'arrêt. */
+    private class Session(val record: AudioRecord, val ns: NoiseSuppressor?) {
+        @Volatile var active = true
+        var thread: Thread? = null
+    }
+
+    private var session: Session? = null
     private val lock = Any()
     private var buf = ShortArray(sampleRate * 30)
     private var size = 0
@@ -32,7 +36,7 @@ class Recorder {
 
     @SuppressLint("MissingPermission")
     fun start(): Boolean {
-        if (active) return true
+        if (session != null) return true
         val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (min <= 0) return false
         val r = try {
@@ -40,17 +44,18 @@ class Recorder {
                 AudioFormat.ENCODING_PCM_16BIT, max(min, sampleRate / 2))
         } catch (e: Exception) { return false }
         if (r.state != AudioRecord.STATE_INITIALIZED) { r.release(); return false }
-        if (NoiseSuppressor.isAvailable()) ns = runCatching { NoiseSuppressor.create(r.audioSessionId)?.apply { enabled = true } }.getOrNull()
-        record = r
+        val ns = if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(r.audioSessionId)?.apply { enabled = true } }.getOrNull() else null
+        try { r.startRecording() } catch (e: Exception) { ns?.release(); r.release(); return false }
+        val s = Session(r, ns)
         synchronized(lock) { size = 0; segStart = 0 }
-        active = true
+        session = s
         _running.value = true
-        r.startRecording()
-        thread(name = "voxea-rec", priority = Thread.MAX_PRIORITY) {
+        s.thread = thread(name = "voxea-rec", priority = Thread.MAX_PRIORITY) {
             val tmp = ShortArray(2048)
-            while (active) {
+            while (s.active) {
                 val n = r.read(tmp, 0, tmp.size)
-                if (n <= 0) continue
+                if (n < 0) break // micro perdu (ERROR_DEAD_OBJECT…)
+                if (n == 0) continue
                 var peak = 0
                 synchronized(lock) {
                     if (size + n > buf.size) buf = buf.copyOf(buf.size * 2)
@@ -59,6 +64,9 @@ class Recorder {
                 for (i in 0 until n) peak = max(peak, abs(tmp[i].toInt()))
                 _level.value = peak / 32768f
             }
+            // Libération par le fil lui-même : jamais pendant un read() en cours
+            runCatching { r.stop() }
+            r.release(); s.ns?.release()
         }
         return true
     }
@@ -77,11 +85,11 @@ class Recorder {
     }
 
     fun stop() {
-        active = false
+        val s = session ?: return
+        session = null
+        s.active = false
+        s.thread?.join(500)
         _running.value = false
         _level.value = 0f
-        runCatching { record?.stop() }
-        record?.release(); record = null
-        ns?.release(); ns = null
     }
 }

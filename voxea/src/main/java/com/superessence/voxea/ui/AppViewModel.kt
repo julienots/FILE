@@ -138,11 +138,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun reparse(p: Project, raw: String) {
         val lines = ScriptParser.parse(raw)
         if (lines.isEmpty()) { toast("Aucune réplique trouvée."); return }
-        val fresh = Project.create(p.name, raw, lines)
+        val created = Project.create(p.name, raw, lines)
         // conserve les voix déjà choisies pour les personnages existants
-        update(fresh.copy(id = p.id, createdAt = p.createdAt,
-            castType = fresh.castType.mapValues { (c, t) -> p.castType[c] ?: t },
-            castSettings = p.castSettings.filterKeys { it in fresh.characters }))
+        val fresh = created.copy(id = p.id, createdAt = p.createdAt,
+            castType = created.castType.mapValues { (c, t) -> p.castType[c] ?: t },
+            castSettings = p.castSettings.filterKeys { it in created.characters })
+        // chaque prise suit sa réplique (même personnage, même texte)
+        store.remapRecordings(p, fresh)
+        update(fresh)
         _recVersion.value++
     }
 
@@ -168,8 +171,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _prompter.value = _prompter.value.copy(recording = false)
     }
 
+    private var lastNext = 0L
+
     /** Suivant : enregistre la réplique en cours (si on enregistre) puis passe à la suivante. */
     fun prompterNext(p: Project) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastNext < 400) return // double toucher / double appui
+        lastNext = now
         val st = _prompter.value
         if (!st.recording) {
             if (st.index < p.lines.lastIndex) _prompter.value = st.copy(index = st.index + 1, message = null)
@@ -210,14 +218,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun replay(p: Project, index: Int) {
         if (_prompter.value.recording) stopSession()
         val f = store.recFile(p, index)
-        if (f.exists()) player.toggle(f) else toast("Pas encore enregistrée.")
+        viewModelScope.launch(io) { // attend la fin de l'écriture éventuelle de cette prise
+            withContext(Dispatchers.Main) {
+                if (!f.exists()) toast("Pas encore enregistrée.")
+                else if (!player.toggle(f)) toast("Lecture impossible.")
+            }
+        }
     }
 
+    /** Un seul enregistrement de fichier à la fois (pas deux écritures du même WAV). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val io = Dispatchers.IO.limitedParallelism(1)
+
     private fun saveSegment(p: Project, index: Int, seg: FloatArray) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(io) {
             val trimmed = Audio.trimSilence(seg, recorder.sampleRate)
             var peak = 0f
             for (v in trimmed) peak = maxOf(peak, abs(v))
+            if (!Audio.shouldKeepTake(trimmed, recorder.sampleRate, replacing = store.hasRecording(p, index))) {
+                toast("Réplique ${index + 1} : prise vide ignorée, l'ancienne est gardée.")
+                return@launch
+            }
             Wav.write(store.recFile(p, index), trimmed, recorder.sampleRate)
             if (peak < 0.02f || trimmed.size < recorder.sampleRate / 5) {
                 toast("Réplique ${index + 1} : presque rien entendu. Tu peux la refaire.")
@@ -249,7 +270,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val y = VoiceDsp.process(cut, sr, settings)
                 File(getApplication<Application>().cacheDir, "preview.wav").also { Wav.write(it, y, sr) }
             }
-            player.play(f) { _previewing.value = null }
+            if (!player.play(f) { _previewing.value = null }) { _previewing.value = null; toast("Lecture impossible.") }
         }
     }
 

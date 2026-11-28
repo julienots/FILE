@@ -23,5 +23,23 @@ class ProjectStore(private val root: File) {
         tmp.renameTo(File(d, "project.json"))
     }
 
+    /**
+     * Après modification du script : chaque prise suit sa réplique (même personnage + même texte),
+     * les prises sans réplique correspondante sont supprimées.
+     */
+    fun remapRecordings(old: Project, new: Project) {
+        val d = dir(old.id)
+        val staging = File(d, "rec_remap").apply { deleteRecursively(); mkdirs() }
+        for (l in old.lines) recFile(old, l.index).takeIf { it.exists() }?.renameTo(File(staging, "%03d.wav".format(l.index)))
+        val used = HashSet<Int>()
+        for (nl in new.lines) {
+            val match = old.lines.firstOrNull { it.index !in used && it.character == nl.character && it.text == nl.text } ?: continue
+            used += match.index
+            val src = File(staging, "%03d.wav".format(match.index))
+            if (src.exists()) { recFile(new, nl.index).parentFile?.mkdirs(); src.renameTo(recFile(new, nl.index)) }
+        }
+        staging.deleteRecursively()
+    }
+
     fun delete(p: Project) { dir(p.id).deleteRecursively() }
 }
