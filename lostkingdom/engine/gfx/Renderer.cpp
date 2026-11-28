@@ -626,7 +626,7 @@ void Renderer::postProcess() {
     composite.set("uFade", vec4(env.fadeColor, env.fade));
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
-    composite.set("uFx0", vec4(env.heat, env.sandVeil, env.scorch, 0.f));
+    composite.set("uFx0", vec4(env.heat, env.sandVeil, env.scorch, env.paint));   // 3.10.1 w: painterly grade
     composite.set("uUnder", vec4(env.underwater, env.underDepth, env.sunIntensity * (1.f - env.night), 0.f));   // 3.5.0
     composite.set("uUnderC", env.waterTint);
     {   // 3.0.2 sharpen more when the internal resolution is lower

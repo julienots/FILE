@@ -1565,6 +1565,25 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "village") {
+        // 3.10.1 villages seen from the gameplay camera (dev aid: compare with the art reference)
+        struct V { const char* poi; float dx, dz, yaw, pitch, dist; const char* f; };
+        static const V views[] = {
+            {"brindlemere", 6, 14, 0.4f, 0.32f, 9.f, "V0_brindlemere"},
+            {"brindlemere", -12, -4, 2.2f, 0.25f, 11.f, "V1_brindlemere_b"},
+            {"aldrenbourg", 4, 10, 0.3f, 0.3f, 10.f, "V2_aldrenbourg"},
+            {"aldrenbourg", -15, 6, 1.9f, 0.22f, 12.f, "V3_aldrenbourg_b"},
+        };
+        for (const V& v : views) {
+            s.push_back({3.5f, [v](Game& g) {
+                const Poi* p = g.world.poiById(v.poi); if (!p) { AGR_LOG("VILLAGE no poi %s", v.poi); return; }
+                teleport(g, p->pos.x + v.dx, p->pos.y + v.dz, v.yaw);
+                g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.regionBannerT = 0;
+                g.camPitch = v.pitch; g.camDist = g.camDistTarget = v.dist; }, [v](Game& g, float) { g.camIdleT = 0; g.camYaw = v.yaw; g.regionBannerT = 0; }, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "amber") {
         // 3.10.0 the Amber: walk to the first rift, cross it with a real interaction, look around, free a memory, meet a
         // Figé, leave with the button, check the world is back (pictures + AMBER TEST line)

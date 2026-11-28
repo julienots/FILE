@@ -91,7 +91,7 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                     float n1 = tileFbm(u * 6, v * 6, 6, 5, 201) * 0.5f + 0.5f;
                     float sd; uint32_t id; float w = tileWorley(u * 24, v * 24, 24, 203, &sd, &id);
                     float peb = smoothstepf(0.32f, 0.18f, w) * (hashf(id) > 0.55f ? 1.f : 0.f);
-                    c = lerp(hexColor(0x6b4e33), hexColor(0x8f6d47), n1);
+                    c = lerp(hexColor(0x5e4530), hexColor(0x84633f), n1);   // 3.10.1 a little deeper (it read as pale beige in the sun)
                     c = lerp(c, lerp(hexColor(0x8a8478), hexColor(0xa9a194), hashf(id >> 3)), peb);
                     h = 0.3f + n1 * 0.3f + peb * 0.5f;
                     break;
@@ -132,14 +132,26 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                     h = 0.25f + n1 * 0.4f + w * 0.2f;
                     break;
                 }
-                case 6: {  // cobblestone: rounded stones with mortar
-                    float sd; uint32_t id; float w = tileWorley(u * 10, v * 10, 10, 701, &sd, &id);
+                case 6: {  // 3.10.1 flagstones: irregular slabs of different sizes (domain-warped cells, some split in two),
+                           // flat tops with a soft bevel, cool lavender-grey stone with warm and mossy ones, dark joints with moss
+                    float wu = tileFbm(u * 4, v * 4, 4, 3, 709) * 0.11f, wv = tileFbm(u * 4 + 7.3f, v * 4 + 2.1f, 4, 3, 711) * 0.11f;
+                    float sd; uint32_t id; float w = tileWorley(u * 6 + wu * 6, v * 6 + wv * 6, 6, 701, &sd, &id);
                     float edge = sd - w;
-                    float stone = smoothstepf(0.02f, 0.14f, edge);
-                    float n1 = tileFbm(u * 20, v * 20, 20, 3, 703) * 0.5f + 0.5f;
-                    vec3 sc = lerp(hexColor(0x6e6a64), hexColor(0x9a948a), hashf(id));
-                    c = lerp(hexColor(0x3e3a33), sc * (0.9f + n1 * 0.2f), stone);
-                    h = stone * (0.6f + 0.4f * smoothstepf(0.0f, 0.3f, edge)) * 0.9f + n1 * 0.1f;
+                    // a second, finer set of joints cuts about one slab in three into smaller stones
+                    float sd2; uint32_t id2; float w2 = tileWorley(u * 12 + wv * 9, v * 12 + wu * 9, 12, 713, &sd2, &id2);
+                    if (hashf(id * 3u + 1u) > 0.62f) { edge = std::min(edge, (sd2 - w2) * 0.75f); id = id * 31u + id2; }
+                    float stone = smoothstepf(0.022f, 0.075f, edge);
+                    float bevel = smoothstepf(0.012f, 0.16f, edge);
+                    float n1 = tileFbm(u * 24, v * 24, 24, 3, 703) * 0.5f + 0.5f;
+                    float n2 = tileFbm(u * 9, v * 9, 9, 3, 715) * 0.5f + 0.5f;
+                    float hv = hashf(id), hk = hashf(id >> 5);
+                    vec3 sc = lerp(hexColor(0x55535f), hexColor(0x878390), hv);           // lavender grey
+                    if (hk > 0.78f) sc = lerp(sc, hexColor(0x9a8a74), 0.55f);             // a warm sandstone slab now and then
+                    else if (hk < 0.12f) sc = lerp(sc, hexColor(0x6f7a5a), 0.4f);         // a mossy one
+                    sc = sc * (0.82f + n1 * 0.22f) * (0.92f + bevel * 0.12f);
+                    vec3 joint = lerp(hexColor(0x221e1c), hexColor(0x34461f), smoothstepf(0.45f, 0.7f, n2));   // earth or moss in the joints
+                    c = lerp(joint, sc, stone);
+                    h = stone * (0.55f + 0.35f * bevel) + n1 * 0.08f;
                     break;
                 }
                 default: {  // ash / volcanic soil with cinders

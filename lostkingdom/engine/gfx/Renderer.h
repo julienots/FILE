@@ -71,6 +71,7 @@ struct Environment {
     // the colour of that water and how deep the camera is
     float waterLevel = -1e9f, caustics = 0.f, underwater = 0.f, underDepth = 0.f;
     vec3 waterTint{0.1f, 0.35f, 0.42f};   // 3.4.0 the blazing midday sun: bleached highlights, ground heat haze, a starburst sun
+    float paint = 1.f;      // 3.10.1 painterly grade: cool shadows, warm highlights, vibrance on muted colours (0 = off)
     float rift = 1.f, riftFlash = 0.f;   // 3.9.5 the sky breach: 0 closed .. 1 wide open; extra glow while it tears
     float space = 0.f;      // 3.2.0 outer space: starfield, nebulae, the planet below, a ringed giant (sky shader)
     float shafts = 0.35f;   // 1.11.1 sunlight scattering in the air (0 = off): light shafts through trees, eaves, smoke

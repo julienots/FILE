@@ -1574,7 +1574,7 @@ uniform mediump sampler2DShadow uShadowMap;   // 1.11.1 light shafts
 uniform mat4 uInvVP, uShadowM;
 uniform vec3 uEye, uSunC;
 uniform vec4 uSunS;   // xyz direction towards the sun, w amount (0 = off)
-uniform vec4 uFx0;    // 2.0.0 x heat shimmer (mirage), y sand veil (sandstorm)
+uniform vec4 uFx0;    // 2.0.0 x heat shimmer (mirage), y sand veil (sandstorm); 3.10.1 w painterly grade
 uniform vec4 uSunScr; // 2.0.0 lens flare: xy sun position on screen (uv), z aspect, w amount
 uniform vec4 uSharp;  // 3.0.2 x sharpening amount, yz scene texel size
 uniform vec4 uUnder;  // 3.5.0 x camera under water (0..1), y depth below the surface (m), z daylight
@@ -1691,6 +1691,19 @@ void main() {
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(l), col, uPost1.x);
     col = (col - 0.5) * uPost1.y + 0.5;
+    // 3.10.1 painterly grade (the stylised look of hand-painted fantasy games): the shade leans to a soft blue-violet,
+    // the light to a warm cream, and the muted colours (dull greens, grey stone, pale earth) gain saturation while
+    // what is already vivid stays as it is (vibrance, not saturation)
+    if (uFx0.w > 0.0) {
+        vec3 c0 = clamp(col, 0.0, 1.0);
+        float lp = dot(c0, vec3(0.2126, 0.7152, 0.0722));
+        vec3 shade = mix(vec3(0.86, 0.92, 1.14), vec3(1.0), smoothstep(0.04, 0.55, lp));
+        vec3 light = mix(vec3(1.0), vec3(1.035, 1.0, 0.94), smoothstep(0.55, 1.0, lp));
+        float mx = max(c0.r, max(c0.g, c0.b)), mn = min(c0.r, min(c0.g, c0.b));
+        float vib = 1.0 + 0.55 * (1.0 - smoothstep(0.0, 0.5, mx - mn)) * smoothstep(0.05, 0.3, lp);
+        vec3 g = mix(vec3(lp), c0, vib) * shade * light;
+        col = mix(col, g, uFx0.w);
+    }
     // 3.4.0 the blazing sun: highlights burn to a warm white, the shade stays cool and deep
     if (uFx0.z > 0.0) {
         float lb = dot(clamp(col, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));

@@ -1897,8 +1897,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             // roads & plazas
             bool cob = false;
             float road = roadInfluence(x, z, &cob);
-            if (road > 0) { if (cob) wCob += road; else wDirt += road * 1.4f; }
-            float plaza = 0;
+            float plaza = 0, villageK = 0;
             {
                 int ci = chunkIndex(k.x, k.z);
                 if (ci >= 0)
@@ -1908,10 +1907,13 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                         float d = length(vec2(x, z) - p.pos);
                         float pr = p.type == PoiType::Castle ? p.radius * 0.7f : (p.type == PoiType::BossArena ? p.radius * 0.8f : 13.f);
                         plaza = std::max(plaza, 1.f - smoothstepf(pr - 3.f, pr + 2.f, d + 2.f * fbm2(x * 0.2f, z * 0.2f, 2, 5)));
+                        if (p.type == PoiType::Village) villageK = std::max(villageK, 1.f - smoothstepf(p.radius * 0.6f, p.radius * 0.95f, d));   // 3.10.1
                         // packed dirt around houses
-                        if (p.type != PoiType::BossArena) wDirt += (1.f - smoothstepf(p.radius * 0.45f, p.radius * 0.85f, d)) * 0.45f * smoothstepf(0.35f, 0.65f, n1);
+                        if (p.type != PoiType::BossArena) wDirt += (1.f - smoothstepf(p.radius * 0.45f, p.radius * 0.85f, d)) * 0.2f * smoothstepf(0.45f, 0.7f, n1);   // 3.10.1 less bare earth: the grass comes up to the paths
                     }
             }
+            // roads: beaten earth in the country, flagstones inside the villages (3.10.1), cobbles in the cities
+            if (road > 0) { if (cob) wCob += road; else { wCob += road * villageK; wDirt += road * 1.4f * (1.f - villageK); } }
             wCob = std::max(wCob, plaza);
             if (wheatChunk) {   // 2.9.1 golden stubble and soil under the wheat: the fields read from far away
                 float wa = wheatAmount(x, z);
@@ -2422,6 +2424,22 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // 3.0.0 cities: inside the ramparts the ground is trodden (yards, gardens): a third of the grass
     const Poi* cityHere = nullptr;
     for (const Poi& p : pois) if (p.city && length(p.pos - vec2(x0 + CHUNK / 2, z0 + CHUNK / 2)) < p.radius + CHUNK) { cityHere = &p; break; }
+    // 3.10.1 flower beds in and around villages (cottage gardens, borders along the paths), as in hand-painted fantasy villages
+    std::vector<const Poi*> nearVillages;
+    {
+        int ci = chunkIndex(k.x, k.z);
+        if (ci >= 0) for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (p.type == PoiType::Village || p.type == PoiType::Farm || p.type == PoiType::Mill) nearVillages.push_back(&p); }
+    }
+    auto bedAt = [&](float x, float z) {
+        float b = 0;
+        for (const Poi* p : nearVillages) {
+            float d = length(p->pos - vec2(x, z));
+            float ring = smoothstepf(10.f, 16.f, d) * (1.f - smoothstepf(p->radius * 0.9f, p->radius * 1.15f, d));   // not on the central square
+            b = std::max(b, ring);
+        }
+        if (b <= 0) return 0.f;
+        return b * smoothstepf(0.56f, 0.7f, fbm2(x * 0.14f, z * 0.14f, 2, 4242) * 0.5f + 0.5f);   // patches a few metres wide
+    };
     auto scatter = [&](uint32_t seed, float spacing, std::vector<InstanceData>& dst, std::vector<InstanceData>* flowersOut, float sMin, float sMax) {
         Rng g(hash2i(k.x, k.z, seed));
         int GN = (int)(CHUNK / spacing);
@@ -2454,7 +2472,8 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 d.x = x; d.y = y - 0.03f; d.z = z; d.rotY = g.range(0, TAU); d.scale = g.range(sMin, sMax) * (0.7f + hn * 0.6f);
                 Color8 c = toColor8(col * 0.5f, 1);
                 d.r = c.r; d.g = c.g; d.b = c.b; d.a = 255;
-                bool flower = flowersOut && g.f() < (r == R_GREENHAVEN ? 0.04f : (r == R_ELDERWOOD ? 0.05f : 0.012f)) * (0.5f + hn);
+                float bed = flowersOut && !nearVillages.empty() ? bedAt(x, z) : 0.f;
+                bool flower = flowersOut && g.f() < (r == R_GREENHAVEN ? 0.04f : (r == R_ELDERWOOD ? 0.05f : 0.012f)) * (0.5f + hn) + bed * 0.42f;
                 if (flower) {
                     static const uint32_t fc[] = {0xe8d24a, 0xd94b5f, 0xf2f0e6, 0x8f6fd8, 0xf28a3a, 0x6fb8f2};
                     Color8 f = toColor8(hexColor(fc[g.irange(0, 5)]) * 0.5f, 1);
