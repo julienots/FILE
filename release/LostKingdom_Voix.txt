@@ -1,0 +1,446 @@
+Voix homme : Avant la Chute, il y eut un roi.
+Voix homme : Le Haut-Roi Aldric unit les six royaumes sous une seule couronne : la Couronne-Mère. Six joyaux, six peuples, une seule paix.
+Voix homme : Les champs étaient lourds de blé. Les routes, sûres. On disait que la couronne chantait, la nuit.
+Voix homme : Au nord, les mammouths de Frostheim marchaient vers le sud, comme chaque printemps depuis l'aube du monde.
+Voix homme : Mais Malgrath, son propre mage, voulut ce qu'aucun homme ne doit posséder : l'éternité.
+Voix homme : Sous Morneval, il ouvrit l'Abîme. Ce qui en sortit n'avait pas de nom. Seulement une faim.
+Voix homme : Pour sceller l'Abîme, Aldric brisa la Couronne en six fragments, confiés à six Gardiens. Puis il lia sa propre âme au sceau.
+Voix homme : Trois cents ans ont passé. Le sceau s'est fissuré… et cette nuit-là, le ciel lui-même se déchira.
+Voix homme : Par la brèche, d'autres mondes regardaient le nôtre. Des éclats d'univers inconnus tombaient comme des étoiles.
+Voix homme : Le multivers s'était ouvert. Les Gardiens murmuraient dans leur sommeil. Et sur la grève, la mer rejeta un naufragé.
+Voix homme : Tu es revenu…
+Voix homme : …trop tard.
+Voix homme : Sans nom. Sans souvenirs. Seulement une marque en forme de couronne, qui brûle au poignet.
+Voix femme : Doucement… Assieds-toi, tu tiens à peine debout. Les pêcheurs t'ont trouvé à l'aube, couché dans le varech.
+Voix homme : Je ne me souviens de rien. Ni de mon nom, ni de la mer.
+Voix femme : La mer rend parfois ce qu'elle a pris il y a longtemps. Montre-moi ton poignet.
+Voix femme : Cette marque… Une couronne fendue en six. Je l'ai vue une seule fois : brodée sur les tapisseries du Haut-Roi.
+Voix homme : Le Haut-Roi ? Celui des chansons ?
+Voix femme : Aldric. Il a brisé la Couronne-Mère pour sceller l'Abîme, il y a trois siècles. On dit qu'il a lié son âme au sceau.
+Voix femme : Je suis Maëlle, la doyenne de Brindlemere. Repose-toi. Ensuite, nous chercherons ensemble qui tu es.
+Voix femme : J'ai fouillé les vieux registres toute la nuit. Il existe un moyen d'écouter le passé.
+Voix femme : Au sud du village, la Grotte des Murmures garde une Pierre d'écho. Elle répète les voix de ceux qui l'ont touchée.
+Voix homme : Si Aldric l'a touchée… je pourrais entendre sa voix ?
+Voix femme : Peut-être même la tienne. Mais les gobelins ont fait de la grotte leur terrier. Prends ce qu'il te faut, et sois prudent.
+Voix homme : La voici. Elle vibre dans ma main, comme si elle respirait.
+Voix femme : Pose-la sur la table… Écoute.
+Voix femme : Six gardiens. Six fragments. Quand le sceau faiblira, je reviendrai par la mer.
+Voix homme : Cette voix… c'est la mienne.
+Voix femme : C'est la voix d'Aldric, Errant. Une âme liée au sceau ne meurt pas : elle attend. Et le sceau a cédé.
+Voix femme : Tu n'es pas un naufragé. Tu es un roi qui revient.
+Voix femme : Les six fragments sont entre les mains de gardiens corrompus. Mais pour reforger la Couronne, il faut le savoir de l'Ordre.
+Voix femme : Va à Highspire, au nord-est. Demande Frère Alaric, l'archiviste. Il ne quitte jamais ses livres.
+Voix homme : Et s'il ne me croit pas ?
+Voix femme : Il te croira. Donne-lui cette lettre. Je l'ai scellée de la cire de ma mère, il la reconnaîtra.
+Voix homme : Un pèlerin ? Les archives ferment au crépuscule, mais… attendez.
+Voix homme : Ce visage. Les portraits de la grande galerie…
+Voix homme : Maëlle de Brindlemere m'envoie. Vous êtes Frère Alaric ?
+Voix homme : Je le suis. Pardonnez-moi, sire , pardonne-moi, voyageur. Les vieux mots me reviennent. Que veux-tu à l'Ordre ?
+Voix femme : La cire de Brindlemere… Elle dit que la marque brûle encore.
+Voix homme : Elle brûle quand je pense à l'Abîme.
+Voix femme : Alors c'est vrai. Les archives ont attendu ce jour pendant trois siècles. Moi aussi, en un sens.
+Voix homme : Écoute bien. Six gardiens ont reçu un fragment de la Couronne, et six ont été corrompus par ce qui remonte de l'Abîme.
+Voix homme : Le Gardien des Racines à Elderwood. Le Roi Squelette sous Gravemoor. Le Colosse de Glace à Frostheim.
+Voix homme : Le Dragon Cendré dans les terres brûlées. La Reine des Araignées dans son Antre. Et le Titan de Pierre, ici, dans nos cimes.
+Voix homme : Six combats. Par lequel commencer ?
+Voix homme : Par celui que tu choisiras. Un roi choisit son chemin. Rapporte-moi les fragments : la forge de l'Ordre t'attendra.
+Voix homme : Six. Tu les as tous. Je n'aurais jamais cru vivre ce jour.
+Voix homme : Ils sont lourds. Plus lourds que de l'or.
+Voix homme : C'est le poids de trois siècles. Donne-les-moi. La forge de l'Ordre attend depuis trop longtemps.
+Voix homme : Voilà. La Couronne-Mère. Elle est à vous, sire. Elle l'a toujours été.
+Voix homme : Cette cicatrice, sur votre menton… je l'ai déjà vue. La nuit de la Brisure. Un novice tenait les tenailles.
+Voix homme : Les vieux souvenirs reviennent vite, quand la Couronne est proche.
+Voix homme : Il n'y a plus de temps pour les questions. Sire Corwin garde l'entrée de l'Abîme, à Morneval.
+Voix homme : Il était votre champion. Il ne laissera passer que son roi… s'il le reconnaît. Sinon, il faudra qu'il tombe.
+Voix homme : Et vous, Alaric ? Vous venez ?
+Voix homme : J'ai mes propres comptes à régler. Nous nous reverrons au fond, sire. Je vous le promets.
+Voix femme : Errant ! Un pêcheur de la côte sud a remonté ceci dans ses filets. Approche-le de ton oreille.
+Voix femme : Le septième ne dort pas à Aelindor.
+Voix femme : Retrouve-moi à Port-Azur, avant que la marée tourne. C'est Kaede, n'est-ce pas ?
+Voix homme : Un septième joyau ? La Couronne n'en avait que six.
+Voix femme : Les chansons mentent souvent par omission. Port-Azur est tout au sud, après Gravemoor. Va.
+Voix femme : Encore un étranger. Le vent a tourné ce matin, il tourne toujours quand l'un d'eux arrive.
+Voix homme : Je cherche une femme. Kaede. Elle m'a donné rendez-vous ici.
+Voix femme : La ninja ? Elle n'a pas attendu. Elle ne attend jamais personne, celle-là. Je suis Orla, la maîtresse du port.
+Voix femme : Kaede est partie vers Shirokawa il y a trois jours. Elle m'a laissé un mot : Ne la cherche pas, Orla. Fais tomber Mareval.
+Voix femme : Mareval, c'est le capitaine des Corsaires du Pont du Tonnerre. Il étrangle mon port, et il tient la carte d'un temple oublié.
+Voix homme : Une carte vers le septième joyau ?
+Voix femme : Vers un passage sous le temple de Shirokawa. Dégage la crique, abats Mareval, et rapporte-moi cette carte.
+Voix femme : La carte… et du sang de corsaire sur le coin. Tu n'as pas fait les choses à moitié.
+Voix femme : Regarde : Shirokawa, et là, sous le sanctuaire, une porte dessinée à l'encre noire.
+Voix homme : Kaede est déjà là-bas.
+Voix femme : Alors ne la fais pas attendre. Port-Azur te doit sa mer, voyageur. Je ne l'oublierai pas.
+Voix homme : Tu es celui dont Kaede m'a parlé. Elle parle peu, alors je l'ai écoutée.
+Voix homme : Où est-elle ?
+Voix homme : Là où elle veut être : devant la mer, à attendre. Je suis Hanzo. Le silence de ce temple est ma charge.
+Voix homme : Sous ce temple dort le Silence, le septième joyau. Il prend la voix de ceux qui l'approchent.
+Voix homme : La porte du sanctuaire demande l'eau et le feu. L'eau, ce sont trois perles de marée : des souvenirs de la mer.
+Voix homme : Où les trouver ?
+Voix homme : Dans la Grotte des Marées, à l'ouest de Port-Azur. Les noyés et les sirènes en portent parfois. Va.
+Voix homme : Trois perles, claires comme des yeux. Écoute-les… elles se souviennent de la houle.
+Voix homme : L'eau est prête. Reste le feu, et c'est le plus dur.
+Voix homme : Le feu, c'est le Sceau du Soleil. Le Roi-Soleil Sekhmar le garde dans son temple, au cœur des Sables d'Ambre.
+Voix homme : Un roi ? Encore un ?
+Voix homme : Un roi qui a marchandé avec le soleil pour ne jamais mourir. Son royaume est devenu du sable. Lui est resté.
+Voix homme : Seul, tu n'y arriveras pas. Va à Solmar, demande l'émira Zahra. Elle a vu mourir assez de caravanes pour savoir où ne pas aller.
+Voix femme : Assieds-toi, voyageur. Le thé refroidit plus vite que la patience.
+Voix homme : Hanzo de Shirokawa m'envoie. Je cherche le temple de Sekhmar.
+Voix femme : Hanzo… Le vieux sage du lagon. Bois d'abord. Ensuite, je te dirai pourquoi personne n'en revient.
+Voix femme : Le temple est scellé par une clé d'ambre. Une Reine Scorpion la porte dans ses pinces.
+Voix femme : Mes caravanes sont tombées en essayant de lui échapper. Des pilleurs de dunes la servent, et ses enfants couvrent les crêtes.
+Voix homme : Alors je commence par eux.
+Voix femme : Voilà une réponse que j'aime. Le Nid est à l'est de Solmar. Rapporte-moi la clé, et les caravanes passeront de nouveau.
+Voix femme : La clé d'ambre… Il y a trente ans qu'on la cherche. Mon père est mort avec ce nom à la bouche.
+Voix homme : Il peut reposer, maintenant.
+Voix femme : Oui. Merci, voyageur. Solmar te doit plus que du thé.
+Voix femme : Le temple s'ouvre. Je dois te dire une chose avant que tu y entres.
+Voix femme : Sekhmar était mon ancêtre. Il était bon, avant. Il voulait seulement que son peuple ne meure jamais de soif.
+Voix homme : Que dois-je lui dire ?
+Voix femme : Que Solmar lui a pardonné. Puis rapporte-moi le Sceau, ou rien.
+Voix femme : Le Sceau… Il est encore chaud.
+Voix homme : Il a souri, à la fin. Je crois qu'il a entendu.
+Voix femme : Alors il dort enfin. Va dire à Hanzo que le feu est prêt.
+Voix homme : Le Sceau du Soleil, et trois perles de marée. L'eau et le feu côte à côte, comme on me l'a enseigné.
+Voix homme : Donne-les-moi, que j'ouvre la porte.
+Voix homme : La porte est ouverte. Descends, et ne laisse rien parler à ta place.
+Voix homme : Tu l'entendras avant de le voir. Ou plutôt, tu n'entendras plus rien du tout.
+Voix homme : Si une voix te parle, ne réponds pas. Si ton nom résonne, ne le reconnais pas.
+Voix homme : Et si c'est la voix d'Aldric ?
+Voix homme : Surtout si c'est la sienne. Prends le joyau, et refermons cette porte pour de bon.
+Voix homme : Écoute… les vagues. Les oiseaux. Le monde reprend sa voix.
+Voix homme : Là-dessous, il parlait avec la mienne.
+Voix homme : Et tu ne lui as pas répondu. Va montrer le joyau à Kaede. Elle attend depuis quinze ans.
+Voix homme : Un étranger qui regarde la fontaine au lieu des étals ! Ça ne m'arrive pas souvent.
+Voix homme : La statue… ce chevalier, l'épée levée. Qui est-ce ?
+Voix homme : Le Haut-Roi Aldric, voyons ! Le sculpteur ne l'a jamais vu, remarque. Il l'a fait d'après les chansons.
+Voix homme : Gaspard de Vaux, bourgmestre d'Aldrenbourg. La plus grande ville libre de Greenhaven : quatre portes, vingt tours et un marché tous les jours.
+Voix homme : Et dans trois jours, la Grande Foire. Si elle a lieu. Entre les voleurs et le four de Colette, je ne dors plus.
+Voix homme : Je peux peut-être aider.
+Voix homme : Ah ! Voilà une phrase que j'aime entendre. Va voir Colette à la boulangerie, et le Sergent Garin au guet. Ensuite, reviens me voir.
+Voix homme : Colette m'a raconté. Le four ronfle, la fournée sera prête !
+Voix homme : Mais une Foire sans confiseries, c'est un enterrement avec des étals. Il me faut du miel, trois pots.
+Voix homme : Et la musique ?
+Voix homme : Mélisande cherche encore la chanson d'ouverture. Elle dit qu'il lui manque une histoire neuve . Toi, peut-être ?
+Voix homme : C'est… mon histoire.
+Voix homme : Les meilleures chansons parlent toujours de quelqu'un qui ne se souvient pas de son nom. C'est elle qui le dit.
+Voix homme : La Grande Foire est ouverte ! Aldrenbourg te doit sa fête. Prends ceci, et reviens quand tu veux : ici, tu es chez toi.
+Voix femme : Chut… écoute la fontaine. Elle a un rythme, tu l'entends ? Trois temps, comme une valse.
+Voix homme : Je n'entends que de l'eau.
+Voix femme : C'est bien le problème des héros : ils n'écoutent jamais. Je suis Mélisande. Je chante ce que les autres oublient.
+Voix femme : Tu as fini par venir. La mer te l'avait dit.
+Voix homme : Tu es partie sans m'attendre, à Port-Azur.
+Voix femme : Je ne reviens jamais sur mes pas. Mais pour toi, je suis revenue jusqu'ici. C'est déjà beaucoup.
+Voix femme : Il est là. Je le sens, même sans le toucher.
+Voix femme : Donne-le-moi. Pas pour le garder : pour l'enterrer là où personne n'ira. La mer est assez grande pour ça.
+Voix homme : Tu es sûre ? Ce joyau pourrait rendre un roi invincible.
+Voix femme : C'est bien pour ça. Les rois invincibles finissent toujours par se taire. Comme Sekhmar.
+Voix femme : Voilà. C'est fini. Pour la première fois depuis quinze ans, je n'entends plus que la marée.
+Voix homme : Et maintenant ?
+Voix femme : Maintenant, on regarde la mer. Ça, tu peux le garder.
+Voix homme : Malgrath voulait l'éternité. Dans un reflet du royaume, il l'a eue. Là-bas, Aldric n'a jamais brisé la Couronne : il a hésité une seconde de trop, et le mage a posé la main sur les six joyaux en disant Que rien ne finisse . Depuis, rien ne finit. Le soleil reste bas sur l'horizon, la poussière ne retombe pas, l'eau a la couleur du miel. Les gens marchent encore, faits d'ambre, sans savoir vers où. La brèche du ciel ouvre sur ce monde-là. Les failles du sol aussi.
+Voix homme : La forge de Highspire, la même nuit, la même enclume. Aldric lève le marteau au-dessus de la Couronne. Ici, dans ce monde, il l'a abattu. Là-bas, il a pensé à sa fille, à ses six peuples, à tout ce qu'une couronne brisée allait coûter. Une seconde. Malgrath n'en demandait pas plus.
+Voix homme : Une boulangère de Brindlemere pétrit la même pâte depuis trois cents ans. Elle ne sait plus pourquoi. Quand quelqu'un passe, elle lève les yeux et oublie aussitôt. Les Figés ne sont pas méchants. Ils défendent la seule chose qui leur reste : que rien ne change. Un étranger qui marche, c'est déjà un changement.
+Voix homme : Le mage de l'Ambre n'a pas d'ombre, le temps ne le touche plus. Il a trouvé la première faille bien avant la brèche, et il est passé de notre côté. Un novice aux cheveux noirs, une cicatrice au menton, debout dans la forge la nuit où notre Couronne fut brisée. Il n'a pas pris une ride. Il ne venait pas empêcher Aldric. Il venait voir où partiraient les fragments.
+Voix homme : Dans l'Ambre, une seule chose peut finir : ce qui touche le Silence, le septième joyau, celui qui retire au lieu de donner. Le mage le sait. C'est pour cela qu'un temple a brûlé au-delà de la mer la nuit où le sceau a craqué. Kaede croit qu'on a volé le Silence pour s'en servir. On l'a volé pour que personne ne s'en serve.
+Voix homme : Tu es revenu… trop tard. Tu as cru entendre un dieu, ou la mer. C'était lui : l'Aldric de l'Ambre, figé au milieu de son geste, le marteau toujours levé. Par la brèche, il voit ce que tu aurais pu être. Il ne t'en veut pas. Il t'envie.
+Voix homme : La brèche n'est pas une blessure, c'est une porte que l'Ambre pousse de l'autre côté. Quand les deux mondes se toucheront tout à fait, l'éternité coulera chez nous comme du miel sur une table. Six fragments tiennent encore la porte fermée. Le mage les cherche depuis trois siècles. Toi, tu en portes la marque au poignet.
+Voix femme : Les vagues t'ont rendu à nous, Errant.
+Voix femme : Le vent tourne. Je le sens dans mes os.
+Voix femme : L'acier ne ment jamais. Les hommes, si.
+Voix femme : Besoin d'une lame ? D'une réparation ?
+Voix femme : Les plantes savent soigner. Il suffit de les écouter.
+Voix femme : Une potion ? J'en ai toujours une qui mijote.
+Voix homme : Bienvenue au Chaudron Doré ! Un lit, un ragoût ?
+Voix homme : Les voyageurs racontent des choses étranges sur Morneval.
+Voix homme : Chut… tu entends ? Les loups sont nerveux ces temps-ci.
+Voix homme : Un bon chasseur sait quand ne pas tirer.
+Voix homme : Halte, voyageur. Ah, c'est toi.
+Voix homme : Brindlemere est sous ma protection.
+Voix femme : Tout s'achète, tout se vend !
+Voix femme : J'ai des choses de Frostheim, et même d'Elderwood.
+Voix autre : T'es un vrai chevalier ?!
+Voix autre : Je parie que je cours plus vite que toi !
+Voix homme : Un cheval, c'est un ami qui porte tes bagages.
+Voix homme : Mes bêtes sont les plus rapides de Greenhaven.
+Voix homme : Que la Lumière guide tes pas.
+Voix homme : Les morts méritent le repos, eux aussi.
+Voix homme : La farine ne se moud pas toute seule !
+Voix homme : Si les bandits continuent, Brindlemere aura faim cet hiver.
+Voix femme : Fais attention aux sangliers, ils piétinent tout.
+Voix femme : Les citrouilles seront belles cette année.
+Voix homme : Un sudiste ! Approche du feu avant de geler.
+Voix homme : Les clans honorent ceux qui se battent.
+Voix femme : Le froid durcit l'acier. Et les hommes.
+Voix femme : Apporte-moi du cristal de givre et je te forgerai une merveille.
+Voix femme : Fenra n'aime pas les étrangers. Elle t'observe.
+Voix femme : Les loups géants ne se domptent pas. Ils choisissent.
+Voix homme : Assieds-toi, je vais te chanter la saga du premier Jarl.
+Voix homme : Chaque cicatrice est un vers.
+Voix femme : La forêt t'a laissé entrer. C'est rare.
+Voix femme : Écoute les arbres. Ils souffrent.
+Voix homme : Les arcs elfiques sont les meilleurs. Je ne fais que dire la vérité.
+Voix homme : Que cherches-tu, enfant des hommes ?
+Voix femme : Les champignons lumineux chantent la nuit.
+Voix femme : Ne mange pas tout ce qui brille.
+Voix homme : Si tu n'es pas là pour creuser, tu es là pour te battre.
+Voix homme : Mes gars ont disparu dans la mine. Personne ne m'aide.
+Voix femme : Ici, on forge à la chaleur du volcan.
+Voix femme : Ramène-moi des noyaux de braise, je te ferai une lame qui brûle.
+Voix homme : Chaleur, poussière, profit.
+Voix homme : Je t'achète tout ton minerai d'étoile. À bon prix. Presque.
+Voix femme : Garde ta lanterne allumée, enfant.
+Voix femme : Les morts sont agités. Ils sentent le sceau faiblir.
+Voix homme : Je creuse, ils ressortent. Un métier sans fin.
+Voix homme : Tu veux une pelle ? Non ? Dommage.
+Voix femme : Mes potions sentent mauvais. Elles marchent d'autant mieux.
+Voix femme : L'essence d'ombre… apporte-m'en.
+Voix homme : Les archives ont attendu ce jour pendant trois siècles.
+Voix homme : Le savoir est une lumière qui ne s'éteint pas.
+Voix femme : Viens, que je soigne ces blessures.
+Voix femme : La Lumière n'abandonne personne.
+Voix homme : Highspire accueille les pèlerins. Et leur argent.
+Voix homme : Tout ce qu'il faut pour les cols.
+Voix homme : Les étoiles ont bougé le jour de la Chute.
+Voix homme : Regarde là-haut. Tu vois cette constellation ? La Couronne.
+Voix femme : Le vent a tourné ce matin. Il tourne toujours quand un étranger arrive.
+Voix femme : Port-Azur ne dort jamais. Les corsaires non plus.
+Voix homme : Sel, goudron, cordages : tout ce qu'il faut pour tenir la mer.
+Voix homme : Une bouillabaisse avant de partir ? C'est la maison qui offre l'odeur.
+Voix femme : Une chambre, une soupe, une histoire. Les trois sont comprises.
+Voix femme : Les marins boivent pour oublier. Moi, je retiens tout.
+Voix femme : Les filets sont vides. Depuis des semaines. Les crabes ont pris la baie.
+Voix femme : On vit sur l'eau, mais l'eau commence à nous faire peur.
+Voix autre : Tu viens de la terre ? Il paraît que le sol ne bouge jamais !
+Voix autre : J'ai trouvé une cloche dans le sable. Elle sonne toute seule !
+Voix homme : Le silence n'est pas l'absence de bruit. C'est ce qui reste quand on a tout entendu.
+Voix homme : Kaede parlait de toi. Elle parle peu, donc je l'ai écoutée.
+Voix femme : Tu as fini par venir. La mer te l'avait dit.
+Voix femme : Je ne reviens pas sur mes pas. Mais pour toi, je suis revenue.
+Voix femme : Assieds-toi, voyageur. Le thé refroidit plus vite que la patience.
+Voix femme : Solmar a vu passer cent rois. Elle est toujours là, eux non.
+Voix homme : Tout s'achète à Solmar, même le temps. Le temps coûte plus cher.
+Voix homme : Une datte ? Je ne vends jamais à crédit, mais j'offre beaucoup de dattes.
+Voix homme : L'ambre et le fer, c'est comme le thé et le sucre.
+Voix homme : Trouve-moi de l'ambre pur, je te forge quelque chose de chaud.
+Voix homme : Un destrier d'ambre ne s'enfonce jamais dans le sable. Les chevaux de la plaine, si.
+Voix homme : Le désert se traverse à cheval, ou à genoux.
+Voix homme : Ici, on mesure un homme à son cheval, et un cheval au vent.
+Voix homme : La steppe n'a pas de murs. Elle n'a que l'horizon, et les Cavaliers Noirs.
+Voix femme : Chut… Écoute. La jungle te parle, si tu sais te taire.
+Voix femme : Les racines de braise soignent, si on les cueille au bon moment.
+Voix femme : Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.
+Voix femme : Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter.
+Voix homme : Bienvenue à Aldrenbourg ! Le plus grand marché de Greenhaven, et le plus honnête… presque.
+Voix homme : La Foire approche, et rien n'est prêt. Rien !
+Voix femme : Pain chaud ! Sortie du four, la croûte qui chante !
+Voix femme : Goûte-moi ce gâteau au miel, et dis-moi qu'il y a mieux à Brindlemere.
+Voix homme : Du lin de Millbrook, des teintures de Solmar, du cuir de Frostheim. Touche, ça ne mord pas.
+Voix homme : Une couleur pour ta cape ? Le pourpre royal est revenu à la mode.
+Voix femme : Approche, mais garde les mains derrière le dos.
+Voix femme : Un saphir de Frostheim, taillé ici même. Il porte chance aux voyageurs.
+Voix homme : Le guet veille. Garde ta bourse près du cœur, voyageur : le marché grouille de tire-laine.
+Voix homme : Si tu cherches les ennuis, cherche-les hors des remparts.
+Voix femme : Une chanson, voyageur ? Celle du Roi qui revint par la mer, peut-être ?
+Voix femme : Je cherche une histoire neuve pour la Foire. Tu en as une, toi, ça se voit.
+Voix femme : Hautebrume tient depuis mille ans. La Légion de Fer veut que ça s'arrête cette année.
+Voix femme : Vous avez l'air de savoir tenir une épée. J'ai trois forteresses à reprendre.
+Voix homme : Les montagnes portent le nom des géants. Personne ne se souvient pourquoi, sauf moi.
+Voix homme : Le Gouffre, le Tombeau, les Mines… Trois portes sous la montagne. Aucune ne s'ouvre pour rien.
+Voix homme : L'acier-titan ne se forge qu'ici. Le reste du monde tape sur du fer mou.
+Voix homme : Rapporte-moi du minerai noir, je te fais une lame qui coupe la montagne.
+Voix homme : Les loups des Titans descendent quand la neige monte.
+Voix homme : Un troll des cimes, ça ressemble à un rocher. Jusqu'au moment où ça n'en est plus un.
+Voix femme : Le dernier lit chaud avant les Titans. Après, c'est la pierre et le vent.
+Voix femme : Les caravanes de Valdor passent ici pour monter à Hautebrume.
+Voix femme : L'eau est un remède avant d'être un luxe.
+Voix femme : Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers.
+Voix femme : Chaque grain de sable est une phrase que personne n'a lue.
+Voix femme : Karun, Tamrak, Solmar : trois noms pour la même soif.
+Voix homme : Chaque piste raconte quelque chose. La plupart du temps : fuis .
+Voix homme : Les chacals ne sont pas méchants. Ils sont juste affamés, et nombreux.
+Voix homme : La lumière est la seule chose que je sais dire aux navires.
+Voix homme : Le phare est éteint. La mer le sait. Elle attend.
+Voix femme : Mon four est froid, et la Foire est dans trois jours ! Il me faut du bois, beaucoup de bois. Douze bûches, et je te nourris tout l'hiver.
+Voix femme : Le four attend toujours son bois…
+Voix femme : Ah ! Entends-tu ? Il ronfle déjà. Tiens, prends ça, c'est encore chaud.
+Voix homme : Les voleurs du marché viennent du Camp des Écorcheurs, à l'est. Mes hommes ne peuvent pas quitter les remparts. Toi, si. Six bandits, pas un de moins.
+Voix homme : Le camp des Écorcheurs tient toujours.
+Voix homme : Six ! Les étals dormiront tranquilles cette nuit. Le guet te doit une fière chandelle.
+Voix femme : Le convoi d'or de Solmar a été pillé. Une mariée m'attend, et je n'ai rien à fondre. Un lingot d'or suffirait. Tu sauras en trouver, j'en suis sûre.
+Voix femme : Toujours pas d'or ?
+Voix femme : Il chante sous le marteau. La mariée aura son anneau, et toi le mien : un saphir, pour la route.
+Voix homme : Le four de Colette chauffe, le guet tient les rues… Il manque le miel des confiseurs, et Mélisande cherche encore sa chanson. Aide-moi, et la Foire aura lieu !
+Voix homme : La Foire ne se fera pas sans miel ni chanson.
+Voix homme : Écoute ! Les tambours, les rires… La Grande Foire est ouverte, grâce à toi. Aldrenbourg ne l'oubliera pas.
+Voix homme : Les loups gris s'approchent trop du village. Abats-en cinq et je te paierai en cuir et en or.
+Voix homme : Encore des loups dans les bois…
+Voix homme : Bon travail. Les enfants pourront de nouveau jouer près de la lisière.
+Voix homme : Les Écorcheurs volent ma farine ! Leur camp est à l'est. Chasse-les, je t'en prie.
+Voix homme : Ils sont toujours là-bas, à l'est du moulin.
+Voix homme : Le moulin tourne de nouveau sans crainte. Merci !
+Voix homme : Il y a quelqu'un dans les bois, voyageur. Rapide. Silencieux. Elle chasse les Écorcheurs à l'est, seule. Aide-la, ou elle finira comme les autres naufragés.
+Voix homme : Elle t'attend près des Ruines de Vael. Elle n'attend jamais longtemps.
+Voix homme : Elle s'appelle Kaede. Elle dit qu'elle vient d'un archipel que personne ne connaît, et que la mer l'a rejetée comme toi. Elle marchera à tes côtés.
+Voix homme : Une étoile est tombée près de la Mine des Cimes. Les étoiles ne tombent pas, voyageur. Elles descendent. Va voir ce qui est descendu.
+Voix homme : Les dragonnets tournent autour du cratère. Quelque chose les attire.
+Voix homme : Elle s'appelle Astra. Elle dit qu'elle gardait le ciel au-dessus de la Couronne, et que le sceau l'a appelée, comme il t'a appelé. Elle vole. Je l'ai vue. Elle vole !
+Voix homme : Ta ninja est passée cette nuit. Elle n'a rien dit, elle a juste laissé ça : Le septième dort là où les elfes ont prié. Le Sanctuaire d'Aelindor, à l'ouest. Les araignées y ont fait leur nid.
+Voix homme : Aelith, la druidesse de Sylvarin, connaît les vieilles prières du sanctuaire. Elle saura lire ce que Kaede cherche.
+Voix homme : Un septième fragment… Aelith dit que les elfes l'appelaient le Silence : le seul joyau que la Couronne n'a jamais porté. Kaede ne l'a pas trouvé. Mais maintenant, toi aussi, tu le cherches.
+Voix homme : Elle regarde Highspire comme on regarde une tombe. Les archives de l'Ordre gardent les nuits de la Chute. Va les lire, et parle à l'archiviste, Frère Alaric. Mais garde l'œil ouvert : les chevaliers corrompus rôdent près des murs.
+Voix homme : Frère Alaric est aux archives. Il sait tout. Il sait peut-être trop.
+Voix homme : Astra avait conseillé au roi de ne pas briser la Couronne. Il l'a brisée quand même, et un novice à la cicatrice tenait les tenailles. Alaric m'a souri en me le racontant. Il n'a pas une ride, voyageur. Pas une seule.
+Voix autre : Regarde ma carte ! Une croix à la ferme des Aulnes, une croix à la grande pierre, et le trésor au bout ! Tu vas le chercher ? Moi j'ai pas le droit de sortir du village.
+Voix autre : La ferme d'abord, puis la pierre ! C'est écrit sur la carte !
+Voix autre : Tu l'as trouvé ? C'était… une pomme de pin ? Bon. C'est un trésor quand même. Tiens, pour la peine, je te donne ma pièce porte-bonheur.
+Voix homme : Mes gardes ne sont pas assez nombreux pour tenir les champs la nuit. Les gobelins de la Grotte des Murmures volent les poules et mettent le feu aux meules. Fais-leur passer l'envie de revenir.
+Voix homme : Leur chaman les rend hardis. Commence par lui.
+Voix homme : Les meules ne brûleront pas cette nuit. Brindlemere te doit une nuit de sommeil, voyageur.
+Voix femme : Mon stock de fer est vide. Rapporte-moi cinq minerais de fer, et je t'apprendrai à forger.
+Voix femme : Cinq minerais, pas un de moins.
+Voix femme : Parfait ! Voilà de quoi te défendre. La forge t'est ouverte.
+Voix femme : Mes réserves d'herbes s'épuisent. Cueilles-en six dans les prairies, veux-tu ?
+Voix femme : Six herbes, mon enfant.
+Voix femme : Merci ! Prends ces potions. La table d'alchimie t'est ouverte.
+Voix homme : Tu veux l'aide des clans ? Prouve ta valeur. Abats deux trolls des glaces et rapporte leur peau.
+Voix homme : Les trolls rôdent au nord du village.
+Voix homme : Ha ! Les clans te saluent, frère d'armes.
+Voix femme : Six cristaux d'aurore, et je pourrai rallumer la grande lanterne de Lumenhaven. Ils poussent dans les prairies, et parfois sur les îles du ciel. Un coup de pioche, et ils se détachent.
+Voix femme : Les cristaux d'aurore brillent dans les prairies autour de Lumenhaven.
+Voix femme : Regarde : la lanterne se rallume. Garde ce cœur de cristal, il bat pour toi maintenant.
+Voix femme : Fenra est inquiète : les loups des neiges menacent sa meute. Chasse-en cinq. Si elle t'accepte, elle te portera.
+Voix femme : Fenra t'observe encore.
+Voix femme : Fenra pose sa tête contre ta main. Elle t'a choisi.
+Voix femme : Les feux follets sont des âmes perdues. Libères-en six, puis visite le Sanctuaire d'Aelindor.
+Voix femme : Les esprits pleurent encore.
+Voix femme : Le chant de la forêt est redevenu clair. Merci, Errant.
+Voix femme : Cinq champignons lumineux. Ils poussent au pied des arbres-mères.
+Voix femme : Ils brillent la nuit, c'est plus facile.
+Voix femme : Merci. Tiens, cet élixir t'aidera.
+Voix homme : Mes gars sont descendus il y a trois jours. Personne n'est remonté. Trouve-les. Ou ce qu'il en reste.
+Voix homme : Les mines sont à l'est.
+Voix homme : Tu as trouvé l'insigne de Harg… Au moins, on sait. La Guilde te doit une dette.
+Voix femme : Les élémentaires de braise ont un cœur qui ne s'éteint pas. Apporte-m'en trois.
+Voix femme : Trois noyaux, et je te forge quelque chose d'unique.
+Voix femme : Ha, regarde-les briller ! Prends ça.
+Voix femme : Les morts se lèvent chaque nuit. Rends à huit d'entre eux le repos.
+Voix femme : La nuit, ils sont plus nombreux.
+Voix femme : Gravemoor dormira mieux. Que la lumière te garde.
+Voix femme : Trois essences d'ombre. Les spectres en sont faits.
+Voix femme : Les spectres rôdent la nuit, près du cimetière.
+Voix femme : Hé hé. Excellente cueillette. Tiens, une babiole qui te plaira.
+Voix homme : Trois cristaux sont tombés sur les cimes. Rapporte-les et je te montrerai la carte d'Aldric.
+Voix homme : Les cristaux brillent sur les hauteurs.
+Voix homme : La carte céleste… elle montre l'Abîme sous Morneval. Prends cette larme d'étoile.
+Voix femme : Trois golems de cristal se sont levés près du Cratère Cristallin. Ils écrasent tout ce qui bouge. Le feu les fait craquer.
+Voix femme : Au sud-est de Lumenhaven, vers le Cratère Cristallin.
+Voix femme : Les cueilleurs peuvent retourner aux prairies. Merci.
+Voix homme : La corne du premier Jarl dort dans les Cavernes de Hrimgard. Rapporte-la et ta saga sera chantée.
+Voix homme : Les cavernes sont à l'ouest du village.
+Voix homme : La corne… Elle sonne encore ! Ton nom sera dans la saga.
+Voix femme : Il est énorme. Ses défenses sont comme des faux. Tue-le.
+Voix femme : Il vient la nuit, près des champs.
+Voix femme : Enfin ! Les champs sont saufs.
+Voix homme : Quatre araignées. Brûle leurs toiles si tu peux.
+Voix homme : Elles se cachent dans les branches.
+Voix homme : La route est libre. Bien joué.
+Voix homme : Deux ours. Leur fourrure vaut de l'or.
+Voix homme : Ils fument, tu ne peux pas les rater.
+Voix homme : Voilà ta prime.
+Voix homme : Deux dragonnets. Méfie-toi de leur souffle.
+Voix homme : Ils nichent sur les hauteurs.
+Voix homme : Les bergers te bénissent.
+Voix femme : Cette carte vient d'un vieux marin. Le X est sur les Ruines de Vael, à l'est.
+Voix homme : La solde du Bastion n'a jamais été retrouvée. Elle est à toi si tu oses.
+Voix homme : Les Gardiens ont besoin de toi. Nettoie la Grotte des Murmures et chasse six gobelins.
+Voix homme : Les gobelins sont au sud.
+Voix homme : Bienvenue chez les Gardiens. Porte ces couleurs avec honneur.
+Voix femme : Les crabes ont pris la baie. Je n'ose plus lancer un filet. Débarrasse-nous de six d'entre eux, et on mangera ce soir.
+Voix femme : Ils sortent des récifs au pied des pilotis.
+Voix femme : Le filet est plein ! Six crabes de moins, et une bouillabaisse de plus.
+Voix femme : Les équipages que Mareval a vendus remontent, quand la lune est basse. Qu'ils se reposent, voyageur. Six d'entre eux, ça suffira pour ce mois-ci.
+Voix femme : Surtout la nuit, près de la crique.
+Voix femme : Que la mer les garde, cette fois.
+Voix femme : Trois barques de pêcheurs ont disparu, en entendant un chant. Les sirènes des récifs. Fais-les taire, pour que la mer redevienne une route.
+Voix femme : Elles chantent sur les récifs du sud.
+Voix femme : Les barques sont de retour, en silence. Merci.
+Voix homme : La lentille est fendue depuis la dernière tempête. Il n'y a que le verre du désert pour la remplacer. Les spectres des sables en portent, dit-on, dans leur drap de poussière.
+Voix homme : Deux morceaux de verre, du désert d'Ambre.
+Voix homme : La lumière est rallumée ! Les marins te bénissent.
+Voix autre : Y a une cloche à l'épave ! Elle sonne quand la marée monte ! Tu peux aller voir ? Moi j'ai pas le droit… enfin, j'ai le droit mais Maman dit non.
+Voix autre : L'épave est à l'ouest de Port-Azur, sur la plage.
+Voix autre : Tu l'as trouvée ! Elle sonne beaucoup trop fort. J'adore.
+Voix homme : Cinq Cavaliers Noirs, et les pâturages respireront. Ils campent au sud, près des collines de pierre. Méfie-toi de leurs lances.
+Voix homme : Leur camp est au sud de Valdor.
+Voix homme : Les poulains galopent de nouveau. Valdor ne l'oubliera pas.
+Voix homme : Quelqu'un a ouvert le Tertre du Roi Cavalier. Va voir ce qu'il en reste, et reviens me le dire. Les morts de la steppe n'aiment pas qu'on les dérange.
+Voix homme : Le tertre est à l'est, sur la plus haute colline.
+Voix homme : Alors le roi dort encore. Bien. Prends ceci, il l'aurait voulu.
+Voix femme : Sur chaque île du ciel, il y a un coffre et, dedans, un éclat du ciel. Rapporte-m'en trois. Pour monter, marche dans la source jaillissante au pied de l'île : elle te lancera là-haut.
+Voix femme : Les îles flottent au-dessus des prairies. Cherche la source lumineuse à leur pied.
+Voix femme : Trois éclats du ciel… Avec eux, je peux tailler une lame comme on n'en a pas vu depuis mille ans. Elle est à toi.
+Voix femme : La Citadelle de Fer-Noir, à l'est de Hautebrume, au bout de la vallée. Dix légionnaires, des arbalétriers sur les remparts, et un seigneur de guerre devant le donjon. Tuez-le, et la citadelle est à vous. Emmenez des soldats si vous en avez.
+Voix femme : La citadelle est à l'est de la porte est de Hautebrume.
+Voix femme : La citadelle est à vous. Ce soir, Hautebrume dormira tranquille. Prenez ceci : vous l'avez mérité.
+Voix femme : Fort Corbeau garde la route des mines. Sa garnison est plus petite, mais elle est bien placée. Même méthode : le seigneur de guerre d'abord.
+Voix femme : Fort Corbeau est au sud-est de Rochebrune, après les Mines de Fer-Noir.
+Voix femme : Deux forteresses. La Légion va devoir compter avec vous.
+Voix femme : La Légion a une forteresse dans les steppes, Khar-Vos, sur la route entre Valdor et la jungle. Elle pille les caravanes. Reprenez-la et les routes du sud seront libres.
+Voix femme : Khar-Vos est au sud de Valdor, sur la route d'Émeraude.
+Voix femme : Plus une seule forteresse de la Légion debout. Les bardes vont avoir du travail.
+Voix homme : Fonds-moi trois lingots d'acier-titan à la forge : du minerai de fer, du charbon et un peu d'or. Les montagnes en sont pleines. Rapporte-les-moi, je t'apprends ce qu'on en fait.
+Voix homme : Le minerai de fer, le charbon et l'or se trouvent partout dans les Monts Titans. Forge l'acier-titan à une forge.
+Voix homme : Bel acier. Tiens, voilà ce qu'on en fait quand on sait s'y prendre.
+Voix homme : Le Maître-Forge fabrique les armures de la Légion au fond des Mines de Fer-Noir. Tant qu'il travaille, la Légion aura de l'acier. Éteins sa forge.
+Voix homme : Les Mines de Fer-Noir sont à l'est de Rochebrune.
+Voix homme : Plus une étincelle là-dessous. Les forges de Rochebrune vont pouvoir respirer.
+Voix homme : Au nord du Col-des-Aigles, une gorge mène au Gouffre des Titans. Le ver qui l'a creusé dort au fond. Ses écailles valent plus que tout ce que j'ai lu.
+Voix homme : Le Gouffre est au nord du Col-des-Aigles, au bout de la gorge.
+Voix homme : Tu l'as vu de près… Raconte-moi tout. Non, attends, je prends des notes.
+Voix homme : Le Tombeau du Roi-Géant est au sud de Rochebrune. Ceux qui y sont entrés ne sont pas ressortis. Si quelqu'un peut voir le trône d'Ymrir et revenir, c'est toi.
+Voix homme : Le Tombeau est au sud de Rochebrune, au bout de la route.
+Voix homme : Il s'est rendormi… Pour de bon, cette fois. Les montagnes te doivent quelque chose.
+Voix homme : Cinq loups des Titans et trois trolls des cimes. Après ça, les bergers pourront remonter aux alpages.
+Voix homme : Partout dans les vallées des Monts Titans, surtout la nuit pour les loups.
+Voix homme : Les alpages sont à nouveau à nous. Tiens, c'est la paye.
+Voix femme : Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.
+Voix femme : Le temple est au sud-est d'Émeraude, sous les grands arbres.
+Voix femme : Le temple dort de nouveau. Merci, voyageur.
+Voix femme : Quatre mygales, pas plus, pas moins : la jungle a besoin d'elles, mais pas si près du village.
+Voix femme : Elles tissent entre les arbres, autour d'Émeraude.
+Voix femme : Les sentiers sont libres. La soie servira aux enfants.
+Voix femme : Un venin bien dosé soigne ce qu'il aurait tué. Rapporte-m'en trois fioles : les scorpions des dunes en ont plein, et ils n'aiment pas qu'on leur en prenne.
+Voix femme : Les scorpions couvrent les crêtes à l'est de Kheft.
+Voix femme : Merci. Ce soir, trois caravaniers seront en vie, grâce à toi.
+Voix homme : L'ambre se travaille à chaud, et le fer à froid. Je veux les deux. Rapporte-moi quatre morceaux d'ambre brut, golems de grès, scorpions, momies, tous en ont.
+Voix homme : Quatre morceaux, pas un de moins.
+Voix homme : Regarde comme il chante ! Cette lame s'appellera comme toi.
+Voix homme : Six chacals. Ils ne sont pas méchants, juste affamés et nombreux. Mais Zafir ne vit que de ses caravanes.
+Voix homme : Ils rôdent sur les dunes autour du caravansérail.
+Voix homme : La route est libre, et les chamelles dorment.
+Voix homme : Deux dragonnets des sables. Leur souffle fond le verre, et il en reste. Je préfère les voir de loin.
+Voix homme : Ils couvent dans les dunes du sud-est.
+Voix homme : Deux de moins. Les caravanes te doivent une soirée de thé.
+Voix femme : Va voir Karun, puis la Gardienne des Sables. Reviens me dire ce qu'elle t'a demandé. Elle pose une question à chaque passant, il paraît. Personne ne se souvient de la réponse.
+Voix femme : Karun est au sud de Solmar, et la Gardienne au nord-ouest.
+Voix femme : Une question sans réponse… Elle me plaît encore plus.
+Voix femme : Le registre est tombé aux mains des pilleurs. Il contient les noms de tous mes marchands disparus. Je veux les noms, pas la vengeance.
+Voix femme : Les pilleurs campent près du temple.
+Voix femme : Les noms… tous. Je les graverai sur le mur de Solmar. Merci.
+Voix femme : Les statues du temple marchent. Brise-en quatre, avant qu'elles atteignent la route.
+Voix femme : Elles gardent le voisinage du temple.
+Voix femme : Le désert est de nouveau silencieux.
+Voix homme : Un doublon corsaire, ça se fond, ça se refrappe, ça se rachète. Apporte-m'en douze, je te les paie plus cher que le port.
+Voix homme : Douze doublons, frappés d'un crâne.
+Voix homme : Douze ! Voilà de l'or propre, pour de l'or sale.
+Voix femme : Cinq serpents des récifs. Turquoise et jaune, tu ne les rateras pas. Ils mordent.
+Voix femme : Dans les herbes, près des lagons.
+Voix femme : Les récifs sont sûrs. Pour combien de temps ?
+Voix homme : Cette moitié de carte mène à Karun. L'autre moitié… dans ma poche, mais je préfère que tu fouilles.
+Voix femme : L'équipage du Léviathan avait trois mois de solde dans la cale. Personne ne l'a retrouvée. La marée, peut-être.
+Voix femme : Les Marins ont besoin de bras. Huit écumeurs, et tu portes notre pavillon.
+Voix femme : Les corsaires sont à l'ouest.
+Voix femme : Bienvenue chez les Marins de Port-Azur. Porte ce pavillon avec honneur.
+Voix femme : Les caravanes ont besoin de gardes. Cinq pilleurs, cinq chacals, et ton nom est dans mon registre.
+Voix femme : Les dunes sont à l'est et au sud.
+Voix femme : Bienvenue parmi les Caravaniers de Solmar.
