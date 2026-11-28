@@ -1,0 +1,791 @@
+LOST KINGDOM, script des voix (Super Essence Studio, jeu 3.10.3)
+Format de chaque ligne : identifiant | personnage | intention | texte
+L'identifiant est le nom du fichier son a enregistrer (exemple : pro_01.wav).
+462 repliques.
+
+
+=== Partie 1  ·  Le prologue (narration) ===
+pro_01 | Le Narrateur | conteur, posé | Avant la Chute, il y eut un roi.
+pro_02 | Le Narrateur | conteur, posé | Le Haut-Roi Aldric unit les six royaumes sous une seule couronne : la Couronne-Mère. Six joyaux, six peuples, une seule paix.
+pro_03 | Le Narrateur | conteur, posé | Les champs étaient lourds de blé. Les routes, sûres. On disait que la couronne chantait, la nuit.
+pro_04 | Le Narrateur | conteur, posé | Au nord, les mammouths de Frostheim marchaient vers le sud, comme chaque printemps depuis l'aube du monde.
+pro_05 | Le Narrateur | conteur, posé | Mais Malgrath, son propre mage, voulut ce qu'aucun homme ne doit posséder : l'éternité.
+pro_06 | Le Narrateur | conteur, posé | Sous Morneval, il ouvrit l'Abîme. Ce qui en sortit n'avait pas de nom. Seulement une faim.
+pro_07 | Le Narrateur | conteur, posé | Pour sceller l'Abîme, Aldric brisa la Couronne en six fragments, confiés à six Gardiens. Puis il lia sa propre âme au sceau.
+pro_08 | Le Narrateur | grave, le ciel se déchire | Trois cents ans ont passé. Le sceau s'est fissuré… et cette nuit-là, le ciel lui-même se déchira.
+pro_09 | Le Narrateur | émerveillé, à voix basse | Par la brèche, d'autres mondes regardaient le nôtre. Des éclats d'univers inconnus tombaient comme des étoiles.
+pro_10 | Le Narrateur | conteur, posé | Le multivers s'était ouvert. Les Gardiens murmuraient dans leur sommeil. Et sur la grève, la mer rejeta un naufragé.
+pro_11 | Une voix | murmuré, lointain | « Tu es revenu… »
+pro_12 | Une voix | murmuré, lointain | « …trop tard. »
+pro_13 | Le Narrateur | conteur, posé | Sans nom. Sans souvenirs. Seulement une marque en forme de couronne, qui brûle au poignet.
+
+=== Partie 1 bis  ·  Les grandes scènes de l'histoire ===
+
+--- Première rencontre : Maëlle ---
+meet_maelle_01 | Maëlle | accueillant | Doucement… Assieds-toi, tu tiens à peine debout. Les pêcheurs t'ont trouvé à l'aube, couché dans le varech.
+meet_maelle_02 | Le Naufragé | grave, posé | Je ne me souviens de rien. Ni de mon nom, ni de la mer.
+meet_maelle_03 | Maëlle | parlé, naturel | La mer rend parfois ce qu'elle a pris il y a longtemps. Montre-moi ton poignet.
+meet_maelle_04 | Maëlle | surpris, émerveillé | Cette marque… Une couronne fendue en six. Je l'ai vue une seule fois : brodée sur les tapisseries du Haut-Roi.
+meet_maelle_05 | Le Naufragé | surpris, émerveillé | Le Haut-Roi ? Celui des chansons ?
+meet_maelle_06 | Maëlle | grave, posé | Aldric. Il a brisé la Couronne-Mère pour sceller l'Abîme, il y a trois siècles. On dit qu'il a lié son âme au sceau.
+meet_maelle_07 | Maëlle | chaleureux | Je suis Maëlle, la doyenne de Brindlemere. Repose-toi. Ensuite, nous chercherons ensemble qui tu es.
+
+--- La quête est proposée : Maëlle  ·  « Les Murmures » ---
+offer_m2_01 | Maëlle | parlé, naturel | J'ai fouillé les vieux registres toute la nuit. Il existe un moyen d'écouter le passé.
+offer_m2_02 | Maëlle | grave, posé | Au sud du village, la Grotte des Murmures garde une Pierre d'écho. Elle répète les voix de ceux qui l'ont touchée.
+offer_m2_03 | Le Naufragé | surpris, émerveillé | Si Aldric l'a touchée… je pourrais entendre sa voix ?
+offer_m2_04 | Maëlle | ferme, tendu | Peut-être même la tienne. Mais les gobelins ont fait de la grotte leur terrier. Prends ce qu'il te faut, et sois prudent.
+
+--- La quête est rendue : Maëlle  ·  « Les Murmures » ---
+done_m2_01 | Le Naufragé | surpris, émerveillé | La voici. Elle vibre dans ma main, comme si elle respirait.
+done_m2_02 | Maëlle | grave, posé | Pose-la sur la table… Écoute.
+done_m2_03 | Maëlle | grave, posé | « Six gardiens. Six fragments. Quand le sceau faiblira, je reviendrai par la mer. »
+done_m2_04 | Le Naufragé | surpris, émerveillé | Cette voix… c'est la mienne.
+done_m2_05 | Maëlle | grave, posé | C'est la voix d'Aldric, Errant. Une âme liée au sceau ne meurt pas : elle attend. Et le sceau a cédé.
+done_m2_06 | Maëlle | chaleureux | Tu n'es pas un naufragé. Tu es un roi qui revient.
+
+--- La quête est proposée : Maëlle  ·  « La Couronne brisée » ---
+offer_m3_01 | Maëlle | parlé, naturel | Les six fragments sont entre les mains de gardiens corrompus. Mais pour reforger la Couronne, il faut le savoir de l'Ordre.
+offer_m3_02 | Maëlle | parlé, naturel | Va à Highspire, au nord-est. Demande Frère Alaric, l'archiviste. Il ne quitte jamais ses livres.
+offer_m3_03 | Le Naufragé | grave, posé | Et s'il ne me croit pas ?
+offer_m3_04 | Maëlle | chaleureux | Il te croira. Donne-lui cette lettre. Je l'ai scellée de la cire de ma mère, il la reconnaîtra.
+
+--- Première rencontre : Frère Alaric ---
+meet_alaric_01 | Frère Alaric | accueillant | Un pèlerin ? Les archives ferment au crépuscule, mais… attendez.
+meet_alaric_02 | Frère Alaric | surpris, émerveillé | (Il pose sa plume et vous regarde longtemps.) Ce visage. Les portraits de la grande galerie…
+meet_alaric_03 | Le Naufragé | parlé, naturel | Maëlle de Brindlemere m'envoie. Vous êtes Frère Alaric ?
+meet_alaric_04 | Frère Alaric | grave, posé | Je le suis. Pardonnez-moi, sire — pardonne-moi, voyageur. Les vieux mots me reviennent. Que veux-tu à l'Ordre ?
+
+--- La quête est rendue : Maëlle  ·  « La Couronne brisée » ---
+done_m3_01 | Maëlle | surpris, émerveillé | La cire de Brindlemere… (Il lit, et ses mains tremblent.) Elle dit que la marque brûle encore.
+done_m3_02 | Le Naufragé | grave, posé | Elle brûle quand je pense à l'Abîme.
+done_m3_03 | Maëlle | chaleureux | Alors c'est vrai. Les archives ont attendu ce jour pendant trois siècles. Moi aussi, en un sens.
+
+--- La quête est proposée : Frère Alaric  ·  « Les Gardiens corrompus » ---
+offer_m4_01 | Frère Alaric | grave, posé | Écoute bien. Six gardiens ont reçu un fragment de la Couronne, et six ont été corrompus par ce qui remonte de l'Abîme.
+offer_m4_02 | Frère Alaric | parlé, naturel | Le Gardien des Racines à Elderwood. Le Roi Squelette sous Gravemoor. Le Colosse de Glace à Frostheim.
+offer_m4_03 | Frère Alaric | parlé, naturel | Le Dragon Cendré dans les terres brûlées. La Reine des Araignées dans son Antre. Et le Titan de Pierre, ici, dans nos cimes.
+offer_m4_04 | Le Naufragé | ferme, tendu | Six combats. Par lequel commencer ?
+offer_m4_05 | Frère Alaric | chaleureux | Par celui que tu choisiras. Un roi choisit son chemin. Rapporte-moi les fragments : la forge de l'Ordre t'attendra.
+
+--- La quête est proposée : Frère Alaric  ·  « La Couronne-Mère » ---
+offer_m5_01 | Frère Alaric | surpris, émerveillé | Six. Tu les as tous. Je n'aurais jamais cru vivre ce jour.
+offer_m5_02 | Le Naufragé | grave, posé | Ils sont lourds. Plus lourds que de l'or.
+offer_m5_03 | Frère Alaric | chaleureux | C'est le poids de trois siècles. Donne-les-moi. La forge de l'Ordre attend depuis trop longtemps.
+
+--- La quête est rendue : Frère Alaric  ·  « La Couronne-Mère » ---
+done_m5_01 | Frère Alaric | surpris, émerveillé | (Le métal chante sous le marteau. Les six éclats se fondent en un seul anneau de lumière.)
+done_m5_02 | Frère Alaric | chaleureux | Voilà. La Couronne-Mère. Elle est à vous, sire. Elle l'a toujours été.
+done_m5_03 | Le Naufragé | surpris, émerveillé | Cette cicatrice, sur votre menton… je l'ai déjà vue. La nuit de la Brisure. Un novice tenait les tenailles.
+done_m5_04 | Frère Alaric | grave, posé | (Il sourit, sans répondre. Puis il éteint la forge.) Les vieux souvenirs reviennent vite, quand la Couronne est proche.
+
+--- La quête est proposée : Frère Alaric  ·  « Le Chevalier Déchu » ---
+offer_m6_01 | Frère Alaric | grave, posé | Il n'y a plus de temps pour les questions. Sire Corwin garde l'entrée de l'Abîme, à Morneval.
+offer_m6_02 | Frère Alaric | ferme, tendu | Il était votre champion. Il ne laissera passer que son roi… s'il le reconnaît. Sinon, il faudra qu'il tombe.
+offer_m6_03 | Le Naufragé | parlé, naturel | Et vous, Alaric ? Vous venez ?
+offer_m6_04 | Frère Alaric | grave, posé | J'ai mes propres comptes à régler. Nous nous reverrons au fond, sire. Je vous le promets.
+
+--- La quête est proposée : Maëlle  ·  « Le message de la marée » ---
+offer_n1_01 | Maëlle | accueillant | Errant ! Un pêcheur de la côte sud a remonté ceci dans ses filets. Approche-le de ton oreille.
+offer_n1_02 | Maëlle | grave, posé | (Dans le coquillage, une voix de femme, à peine un souffle.) « Le septième ne dort pas à Aelindor. »
+offer_n1_03 | Maëlle | surpris, émerveillé | « Retrouve-moi à Port-Azur, avant que la marée tourne. » C'est Kaede, n'est-ce pas ?
+offer_n1_04 | Le Naufragé | surpris, émerveillé | Un septième joyau ? La Couronne n'en avait que six.
+offer_n1_05 | Maëlle | ferme, tendu | Les chansons mentent souvent par omission. Port-Azur est tout au sud, après Gravemoor. Va.
+
+--- Première rencontre : Capitaine Orla ---
+meet_orla_01 | Capitaine Orla | accueillant | Encore un étranger. Le vent a tourné ce matin, il tourne toujours quand l'un d'eux arrive.
+meet_orla_02 | Le Naufragé | parlé, naturel | Je cherche une femme. Kaede. Elle m'a donné rendez-vous ici.
+meet_orla_03 | Capitaine Orla | ferme, tendu | La ninja ? Elle n'a pas attendu. Elle ne attend jamais personne, celle-là. Je suis Orla, la maîtresse du port.
+
+--- La quête est proposée : Capitaine Orla  ·  « Les voiles du Tonnerre » ---
+offer_n2_01 | Capitaine Orla | parlé, naturel | Kaede est partie vers Shirokawa il y a trois jours. Elle m'a laissé un mot : « Ne la cherche pas, Orla. Fais tomber Mareval. »
+offer_n2_02 | Capitaine Orla | ferme, tendu | Mareval, c'est le capitaine des Corsaires du Pont du Tonnerre. Il étrangle mon port, et il tient la carte d'un temple oublié.
+offer_n2_03 | Le Naufragé | surpris, émerveillé | Une carte vers le septième joyau ?
+offer_n2_04 | Capitaine Orla | ferme, tendu | Vers un passage sous le temple de Shirokawa. Dégage la crique, abats Mareval, et rapporte-moi cette carte.
+
+--- La quête est rendue : Capitaine Orla  ·  « Les voiles du Tonnerre » ---
+done_n2_01 | Capitaine Orla | chaleureux | La carte… et du sang de corsaire sur le coin. Tu n'as pas fait les choses à moitié.
+done_n2_02 | Capitaine Orla | surpris, émerveillé | Regarde : Shirokawa, et là, sous le sanctuaire, une porte dessinée à l'encre noire.
+done_n2_03 | Le Naufragé | grave, posé | Kaede est déjà là-bas.
+done_n2_04 | Capitaine Orla | chaleureux | Alors ne la fais pas attendre. Port-Azur te doit sa mer, voyageur. Je ne l'oublierai pas.
+
+--- Première rencontre : Maître Hanzo ---
+meet_hanzo_01 | Maître Hanzo | accueillant | Tu es celui dont Kaede m'a parlé. Elle parle peu, alors je l'ai écoutée.
+meet_hanzo_02 | Le Naufragé | ferme, tendu | Où est-elle ?
+meet_hanzo_03 | Maître Hanzo | grave, posé | Là où elle veut être : devant la mer, à attendre. Je suis Hanzo. Le silence de ce temple est ma charge.
+
+--- La quête est proposée : Maître Hanzo  ·  « Les trois perles » ---
+offer_n3_01 | Maître Hanzo | grave, posé | Sous ce temple dort le Silence, le septième joyau. Il prend la voix de ceux qui l'approchent.
+offer_n3_02 | Maître Hanzo | parlé, naturel | La porte du sanctuaire demande l'eau et le feu. L'eau, ce sont trois perles de marée : des souvenirs de la mer.
+offer_n3_03 | Le Naufragé | parlé, naturel | Où les trouver ?
+offer_n3_04 | Maître Hanzo | parlé, naturel | Dans la Grotte des Marées, à l'ouest de Port-Azur. Les noyés et les sirènes en portent parfois. Va.
+
+--- La quête est rendue : Maître Hanzo  ·  « Les trois perles » ---
+done_n3_01 | Maître Hanzo | surpris, émerveillé | Trois perles, claires comme des yeux. Écoute-les… elles se souviennent de la houle.
+done_n3_02 | Maître Hanzo | grave, posé | L'eau est prête. Reste le feu, et c'est le plus dur.
+
+--- La quête est proposée : Maître Hanzo  ·  « La voie des sables » ---
+offer_n4_01 | Maître Hanzo | grave, posé | Le feu, c'est le Sceau du Soleil. Le Roi-Soleil Sekhmar le garde dans son temple, au cœur des Sables d'Ambre.
+offer_n4_02 | Le Naufragé | surpris, émerveillé | Un roi ? Encore un ?
+offer_n4_03 | Maître Hanzo | grave, posé | Un roi qui a marchandé avec le soleil pour ne jamais mourir. Son royaume est devenu du sable. Lui est resté.
+offer_n4_04 | Maître Hanzo | parlé, naturel | Seul, tu n'y arriveras pas. Va à Solmar, demande l'émira Zahra. Elle a vu mourir assez de caravanes pour savoir où ne pas aller.
+
+--- Première rencontre : Émira Zahra ---
+meet_zahra_01 | Émira Zahra | accueillant | Assieds-toi, voyageur. Le thé refroidit plus vite que la patience.
+meet_zahra_02 | Le Naufragé | parlé, naturel | Hanzo de Shirokawa m'envoie. Je cherche le temple de Sekhmar.
+meet_zahra_03 | Émira Zahra | chaleureux | Hanzo… Le vieux sage du lagon. Bois d'abord. Ensuite, je te dirai pourquoi personne n'en revient.
+
+--- La quête est proposée : Émira Zahra  ·  « La clé d'ambre » ---
+offer_n5_01 | Émira Zahra | grave, posé | Le temple est scellé par une clé d'ambre. Une Reine Scorpion la porte dans ses pinces.
+offer_n5_02 | Émira Zahra | ferme, tendu | Mes caravanes sont tombées en essayant de lui échapper. Des pilleurs de dunes la servent, et ses enfants couvrent les crêtes.
+offer_n5_03 | Le Naufragé | ferme, tendu | Alors je commence par eux.
+offer_n5_04 | Émira Zahra | chaleureux | Voilà une réponse que j'aime. Le Nid est à l'est de Solmar. Rapporte-moi la clé, et les caravanes passeront de nouveau.
+
+--- La quête est rendue : Émira Zahra  ·  « La clé d'ambre » ---
+done_n5_01 | Émira Zahra | grave, posé | La clé d'ambre… Il y a trente ans qu'on la cherche. Mon père est mort avec ce nom à la bouche.
+done_n5_02 | Le Naufragé | chaleureux | Il peut reposer, maintenant.
+done_n5_03 | Émira Zahra | chaleureux | Oui. Merci, voyageur. Solmar te doit plus que du thé.
+
+--- La quête est proposée : Émira Zahra  ·  « Le Temple du Soleil Mort » ---
+offer_n6_01 | Émira Zahra | grave, posé | Le temple s'ouvre. Je dois te dire une chose avant que tu y entres.
+offer_n6_02 | Émira Zahra | grave, posé | Sekhmar était mon ancêtre. Il était bon, avant. Il voulait seulement que son peuple ne meure jamais de soif.
+offer_n6_03 | Le Naufragé | parlé, naturel | Que dois-je lui dire ?
+offer_n6_04 | Émira Zahra | ferme, tendu | Que Solmar lui a pardonné. Puis rapporte-moi le Sceau, ou rien.
+
+--- La quête est rendue : Émira Zahra  ·  « Le Temple du Soleil Mort » ---
+done_n6_01 | Émira Zahra | surpris, émerveillé | Le Sceau… Il est encore chaud. (Elle le tient longtemps contre son cœur.)
+done_n6_02 | Le Naufragé | chaleureux | Il a souri, à la fin. Je crois qu'il a entendu.
+done_n6_03 | Émira Zahra | chaleureux | Alors il dort enfin. Va dire à Hanzo que le feu est prêt.
+
+--- La quête est proposée : Maître Hanzo  ·  « Retour à Shirokawa » ---
+offer_n7_01 | Maître Hanzo | surpris, émerveillé | Le Sceau du Soleil, et trois perles de marée. L'eau et le feu côte à côte, comme on me l'a enseigné.
+offer_n7_02 | Maître Hanzo | parlé, naturel | Donne-les-moi, que j'ouvre la porte.
+
+--- La quête est rendue : Maître Hanzo  ·  « Retour à Shirokawa » ---
+done_n7_01 | Maître Hanzo | grave, posé | (La pierre glisse. Un souffle froid monte du sanctuaire, et toutes les cloches du temple se taisent.)
+done_n7_02 | Maître Hanzo | ferme, tendu | La porte est ouverte. Descends, et ne laisse rien parler à ta place.
+
+--- La quête est proposée : Maître Hanzo  ·  « Le Silence » ---
+offer_n8_01 | Maître Hanzo | grave, posé | Tu l'entendras avant de le voir. Ou plutôt, tu n'entendras plus rien du tout.
+offer_n8_02 | Maître Hanzo | ferme, tendu | Si une voix te parle, ne réponds pas. Si ton nom résonne, ne le reconnais pas.
+offer_n8_03 | Le Naufragé | grave, posé | Et si c'est la voix d'Aldric ?
+offer_n8_04 | Maître Hanzo | ferme, tendu | Surtout si c'est la sienne. Prends le joyau, et refermons cette porte pour de bon.
+
+--- La quête est rendue : Maître Hanzo  ·  « Le Silence » ---
+done_n8_01 | Maître Hanzo | surpris, émerveillé | Écoute… les vagues. Les oiseaux. Le monde reprend sa voix.
+done_n8_02 | Le Naufragé | grave, posé | Là-dessous, il parlait avec la mienne.
+done_n8_03 | Maître Hanzo | chaleureux | Et tu ne lui as pas répondu. Va montrer le joyau à Kaede. Elle attend depuis quinze ans.
+
+--- Première rencontre : Gaspard de Vaux ---
+meet_gaspard_01 | Gaspard de Vaux | accueillant | Un étranger qui regarde la fontaine au lieu des étals ! Ça ne m'arrive pas souvent.
+meet_gaspard_02 | Le Naufragé | surpris, émerveillé | La statue… ce chevalier, l'épée levée. Qui est-ce ?
+meet_gaspard_03 | Gaspard de Vaux | chaleureux | Le Haut-Roi Aldric, voyons ! Le sculpteur ne l'a jamais vu, remarque. Il l'a fait d'après les chansons.
+meet_gaspard_04 | Gaspard de Vaux | parlé, naturel | Gaspard de Vaux, bourgmestre d'Aldrenbourg. La plus grande ville libre de Greenhaven : quatre portes, vingt tours et un marché tous les jours.
+meet_gaspard_05 | Gaspard de Vaux | grave, posé | Et dans trois jours, la Grande Foire. Si elle a lieu. Entre les voleurs et le four de Colette, je ne dors plus.
+meet_gaspard_06 | Le Naufragé | parlé, naturel | Je peux peut-être aider.
+meet_gaspard_07 | Gaspard de Vaux | chaleureux | Ah ! Voilà une phrase que j'aime entendre. Va voir Colette à la boulangerie, et le Sergent Garin au guet. Ensuite, reviens me voir.
+
+--- La quête est proposée : Gaspard de Vaux  ·  « La Grande Foire » ---
+offer_al_fair_01 | Gaspard de Vaux | chaleureux | Colette m'a raconté. Le four ronfle, la fournée sera prête !
+offer_al_fair_02 | Gaspard de Vaux | ferme, tendu | Mais une Foire sans confiseries, c'est un enterrement avec des étals. Il me faut du miel, trois pots.
+offer_al_fair_03 | Le Naufragé | parlé, naturel | Et la musique ?
+offer_al_fair_04 | Gaspard de Vaux | surpris, émerveillé | Mélisande cherche encore la chanson d'ouverture. Elle dit qu'il lui manque « une histoire neuve ». Toi, peut-être ?
+
+--- La quête est rendue : Gaspard de Vaux  ·  « La Grande Foire » ---
+done_al_fair_01 | Gaspard de Vaux | surpris, émerveillé | (Les tambours roulent sur la place. Mélisande chante l'histoire d'un naufragé sans nom, et toute la ville reprend le refrain.)
+done_al_fair_02 | Le Naufragé | surpris, émerveillé | C'est… mon histoire.
+done_al_fair_03 | Gaspard de Vaux | chaleureux | Les meilleures chansons parlent toujours de quelqu'un qui ne se souvient pas de son nom. C'est elle qui le dit.
+done_al_fair_04 | Gaspard de Vaux | chaleureux | La Grande Foire est ouverte ! Aldrenbourg te doit sa fête. Prends ceci, et reviens quand tu veux : ici, tu es chez toi.
+
+--- Première rencontre : Mélisande ---
+meet_melisande_01 | Mélisande | accueillant | Chut… écoute la fontaine. Elle a un rythme, tu l'entends ? Trois temps, comme une valse.
+meet_melisande_02 | Le Naufragé | parlé, naturel | Je n'entends que de l'eau.
+meet_melisande_03 | Mélisande | chaleureux | C'est bien le problème des héros : ils n'écoutent jamais. Je suis Mélisande. Je chante ce que les autres oublient.
+
+--- Première rencontre : Kaede ---
+meet_kaede_s_01 | Kaede | accueillant | Tu as fini par venir. La mer te l'avait dit.
+meet_kaede_s_02 | Le Naufragé | ferme, tendu | Tu es partie sans m'attendre, à Port-Azur.
+meet_kaede_s_03 | Kaede | chaleureux | Je ne reviens jamais sur mes pas. Mais pour toi, je suis revenue jusqu'ici. C'est déjà beaucoup.
+
+--- La quête est proposée : Kaede  ·  « L'héritage » ---
+offer_n9_01 | Kaede | grave, posé | Il est là. Je le sens, même sans le toucher.
+offer_n9_02 | Kaede | grave, posé | Donne-le-moi. Pas pour le garder : pour l'enterrer là où personne n'ira. La mer est assez grande pour ça.
+offer_n9_03 | Le Naufragé | surpris, émerveillé | Tu es sûre ? Ce joyau pourrait rendre un roi invincible.
+offer_n9_04 | Kaede | ferme, tendu | C'est bien pour ça. Les rois invincibles finissent toujours par se taire. Comme Sekhmar.
+
+--- La quête est rendue : Kaede  ·  « L'héritage » ---
+done_n9_01 | Kaede | grave, posé | (Le joyau s'enfonce dans l'eau sombre, sans un bruit.)
+done_n9_02 | Kaede | chaleureux | Voilà. C'est fini. Pour la première fois depuis quinze ans, je n'entends plus que la marée.
+done_n9_03 | Le Naufragé | parlé, naturel | Et maintenant ?
+done_n9_04 | Kaede | chaleureux | Maintenant, on regarde la mer. Ça, tu peux le garder.
+
+=== Partie 2  ·  Les souvenirs de l'Ambre (narration) ===
+ambre_0 | Le Narrateur | L'Ambre | Malgrath voulait l'éternité. Dans un reflet du royaume, il l'a eue. Là-bas, Aldric n'a jamais brisé la Couronne : il a hésité une seconde de trop, et le mage a posé la main sur les six joyaux en disant « Que rien ne finisse ». Depuis, rien ne finit. Le soleil reste bas sur l'horizon, la poussière ne retombe pas, l'eau a la couleur du miel. Les gens marchent encore, faits d'ambre, sans savoir vers où. La brèche du ciel ouvre sur ce monde-là. Les failles du sol aussi.
+ambre_1 | Le Narrateur | Souvenir d'ambre I : la seconde de trop | La forge de Highspire, la même nuit, la même enclume. Aldric lève le marteau au-dessus de la Couronne. Ici, dans ce monde, il l'a abattu. Là-bas, il a pensé à sa fille, à ses six peuples, à tout ce qu'une couronne brisée allait coûter. Une seconde. Malgrath n'en demandait pas plus.
+ambre_2 | Le Narrateur | Souvenir d'ambre II : les Figés | Une boulangère de Brindlemere pétrit la même pâte depuis trois cents ans. Elle ne sait plus pourquoi. Quand quelqu'un passe, elle lève les yeux et oublie aussitôt. Les Figés ne sont pas méchants. Ils défendent la seule chose qui leur reste : que rien ne change. Un étranger qui marche, c'est déjà un changement.
+ambre_3 | Le Narrateur | Souvenir d'ambre III : le novice à la cicatrice | Le mage de l'Ambre n'a pas d'ombre, le temps ne le touche plus. Il a trouvé la première faille bien avant la brèche, et il est passé de notre côté. Un novice aux cheveux noirs, une cicatrice au menton, debout dans la forge la nuit où notre Couronne fut brisée. Il n'a pas pris une ride. Il ne venait pas empêcher Aldric. Il venait voir où partiraient les fragments.
+ambre_4 | Le Narrateur | Souvenir d'ambre IV : ce que craint l'éternité | Dans l'Ambre, une seule chose peut finir : ce qui touche le Silence, le septième joyau, celui qui retire au lieu de donner. Le mage le sait. C'est pour cela qu'un temple a brûlé au-delà de la mer la nuit où le sceau a craqué. Kaede croit qu'on a volé le Silence pour s'en servir. On l'a volé pour que personne ne s'en serve.
+ambre_5 | Le Narrateur | Souvenir d'ambre V : la voix sur la grève | « Tu es revenu… trop tard. » Tu as cru entendre un dieu, ou la mer. C'était lui : l'Aldric de l'Ambre, figé au milieu de son geste, le marteau toujours levé. Par la brèche, il voit ce que tu aurais pu être. Il ne t'en veut pas. Il t'envie.
+ambre_6 | Le Narrateur | Souvenir d'ambre VI : ce que veut la faille | La brèche n'est pas une blessure, c'est une porte que l'Ambre pousse de l'autre côté. Quand les deux mondes se toucheront tout à fait, l'éternité coulera chez nous comme du miel sur une table. Six fragments tiennent encore la porte fermée. Le mage les cherche depuis trois siècles. Toi, tu en portes la marque au poignet.
+
+=== Partie 3  ·  Ce que disent les habitants ===
+
+--- Maëlle  ·  Doyenne de Brindlemere ---
+npc_maelle_01 | Maëlle | - | Les vagues t'ont rendu à nous, Errant.
+npc_maelle_02 | Maëlle | - | Le vent tourne. Je le sens dans mes os.
+
+--- Hilda  ·  Forgeronne ---
+npc_hilda_01 | Hilda | - | L'acier ne ment jamais. Les hommes, si.
+npc_hilda_02 | Hilda | - | Besoin d'une lame ? D'une réparation ?
+
+--- Mère Ysolde  ·  Alchimiste ---
+npc_ysolde_01 | Mère Ysolde | - | Les plantes savent soigner. Il suffit de les écouter.
+npc_ysolde_02 | Mère Ysolde | - | Une potion ? J'en ai toujours une qui mijote.
+
+--- Bram  ·  Aubergiste du Chaudron Doré ---
+npc_bram_01 | Bram | - | Bienvenue au Chaudron Doré ! Un lit, un ragoût ?
+npc_bram_02 | Bram | - | Les voyageurs racontent des choses étranges sur Morneval.
+
+--- Tomas  ·  Chasseur ---
+npc_tomas_01 | Tomas | - | Chut… tu entends ? Les loups sont nerveux ces temps-ci.
+npc_tomas_02 | Tomas | - | Un bon chasseur sait quand ne pas tirer.
+
+--- Capitaine Aubert  ·  Gardien de Greenhaven ---
+npc_aubert_01 | Capitaine Aubert | - | Halte, voyageur. Ah, c'est toi.
+npc_aubert_02 | Capitaine Aubert | - | Brindlemere est sous ma protection.
+
+--- Lise  ·  Marchande ---
+npc_lise_01 | Lise | - | Tout s'achète, tout se vend !
+npc_lise_02 | Lise | - | J'ai des choses de Frostheim, et même d'Elderwood.
+
+--- Pip  ·  Garnement ---
+npc_pip_01 | Pip | - | T'es un vrai chevalier ?!
+npc_pip_02 | Pip | - | Je parie que je cours plus vite que toi !
+
+--- Odo  ·  Maître des écuries ---
+npc_odo_01 | Odo | - | Un cheval, c'est un ami qui porte tes bagages.
+npc_odo_02 | Odo | - | Mes bêtes sont les plus rapides de Greenhaven.
+
+--- Frère Anselme  ·  Prêtre ---
+npc_anselme_01 | Frère Anselme | - | Que la Lumière guide tes pas.
+npc_anselme_02 | Frère Anselme | - | Les morts méritent le repos, eux aussi.
+
+--- Gareth  ·  Meunier de Millbrook ---
+npc_gareth_01 | Gareth | - | La farine ne se moud pas toute seule !
+npc_gareth_02 | Gareth | - | Si les bandits continuent, Brindlemere aura faim cet hiver.
+
+--- Margot  ·  Fermière ---
+npc_margot_01 | Margot | - | Fais attention aux sangliers, ils piétinent tout.
+npc_margot_02 | Margot | - | Les citrouilles seront belles cette année.
+
+--- Jarl Bjorn  ·  Chef des clans ---
+npc_bjorn_01 | Jarl Bjorn | - | Un sudiste ! Approche du feu avant de geler.
+npc_bjorn_02 | Jarl Bjorn | - | Les clans honorent ceux qui se battent.
+
+--- Sigrun  ·  Forgeronne des clans ---
+npc_sigrun_01 | Sigrun | - | Le froid durcit l'acier. Et les hommes.
+npc_sigrun_02 | Sigrun | - | Apporte-moi du cristal de givre et je te forgerai une merveille.
+
+--- Eira  ·  Dompteuse de loups ---
+npc_eira_01 | Eira | - | Fenra n'aime pas les étrangers. Elle t'observe.
+npc_eira_02 | Eira | - | Les loups géants ne se domptent pas. Ils choisissent.
+
+--- Vieux Hakon  ·  Scalde ---
+npc_hakon_01 | Vieux Hakon | - | Assieds-toi, je vais te chanter la saga du premier Jarl.
+npc_hakon_02 | Vieux Hakon | - | Chaque cicatrice est un vers.
+
+--- Aelith  ·  Druidesse du Cercle ---
+npc_aelith_01 | Aelith | - | La forêt t'a laissé entrer. C'est rare.
+npc_aelith_02 | Aelith | - | Écoute les arbres. Ils souffrent.
+
+--- Thalion  ·  Marchand sylvain ---
+npc_thalion_01 | Thalion | - | Les arcs elfiques sont les meilleurs. Je ne fais que dire la vérité.
+npc_thalion_02 | Thalion | - | Que cherches-tu, enfant des hommes ?
+
+--- Nyssa  ·  Herboriste ---
+npc_nyssa_01 | Nyssa | - | Les champignons lumineux chantent la nuit.
+npc_nyssa_02 | Nyssa | - | Ne mange pas tout ce qui brille.
+
+--- Contremaître Dorn  ·  Guilde des Mineurs ---
+npc_dorn_01 | Contremaître Dorn | - | Si tu n'es pas là pour creuser, tu es là pour te battre.
+npc_dorn_02 | Contremaître Dorn | - | Mes gars ont disparu dans la mine. Personne ne m'aide.
+
+--- Kara  ·  Forgeronne de lave ---
+npc_kara_01 | Kara | - | Ici, on forge à la chaleur du volcan.
+npc_kara_02 | Kara | - | Ramène-moi des noyaux de braise, je te ferai une lame qui brûle.
+
+--- Vesk  ·  Négociant ---
+npc_vesk_01 | Vesk | - | Chaleur, poussière, profit.
+npc_vesk_02 | Vesk | - | Je t'achète tout ton minerai d'étoile. À bon prix. Presque.
+
+--- Mère Agathe  ·  Veilleuse de Gravemoor ---
+npc_agathe_01 | Mère Agathe | - | Garde ta lanterne allumée, enfant.
+npc_agathe_02 | Mère Agathe | - | Les morts sont agités. Ils sentent le sceau faiblir.
+
+--- Silas  ·  Fossoyeur ---
+npc_silas_01 | Silas | - | Je creuse, ils ressortent. Un métier sans fin.
+npc_silas_02 | Silas | - | Tu veux une pelle ? Non ? Dommage.
+
+--- Morwen  ·  Sorcière des marais ---
+npc_morwen_01 | Morwen | - | Mes potions sentent mauvais. Elles marchent d'autant mieux.
+npc_morwen_02 | Morwen | - | L'essence d'ombre… apporte-m'en.
+
+--- Frère Alaric  ·  Archiviste de l'Ordre ---
+npc_alaric_01 | Frère Alaric | - | Les archives ont attendu ce jour pendant trois siècles.
+npc_alaric_02 | Frère Alaric | - | Le savoir est une lumière qui ne s'éteint pas.
+
+--- Sœur Odile  ·  Guérisseuse ---
+npc_odile_01 | Sœur Odile | - | Viens, que je soigne ces blessures.
+npc_odile_02 | Sœur Odile | - | La Lumière n'abandonne personne.
+
+--- Maître Corvin  ·  Intendant ---
+npc_corvin_01 | Maître Corvin | - | Highspire accueille les pèlerins. Et leur argent.
+npc_corvin_02 | Maître Corvin | - | Tout ce qu'il faut pour les cols.
+
+--- Ilian  ·  Astronome ---
+npc_ilian_01 | Ilian | - | Les étoiles ont bougé le jour de la Chute.
+npc_ilian_02 | Ilian | - | Regarde là-haut. Tu vois cette constellation ? La Couronne.
+
+--- Capitaine Orla  ·  Maîtresse du port ---
+npc_orla_01 | Capitaine Orla | - | Le vent a tourné ce matin. Il tourne toujours quand un étranger arrive.
+npc_orla_02 | Capitaine Orla | - | Port-Azur ne dort jamais. Les corsaires non plus.
+
+--- Brann le Calfat  ·  Marchand du port ---
+npc_brann_01 | Brann le Calfat | - | Sel, goudron, cordages : tout ce qu'il faut pour tenir la mer.
+npc_brann_02 | Brann le Calfat | - | Une bouillabaisse avant de partir ? C'est la maison qui offre l'odeur.
+
+--- Noa la Taverne  ·  Aubergiste ---
+npc_noa_01 | Noa la Taverne | - | Une chambre, une soupe, une histoire. Les trois sont comprises.
+npc_noa_02 | Noa la Taverne | - | Les marins boivent pour oublier. Moi, je retiens tout.
+
+--- Mina la Pêcheuse  ·  Cheffe des pilotis ---
+npc_mina_01 | Mina la Pêcheuse | - | Les filets sont vides. Depuis des semaines. Les crabes ont pris la baie.
+npc_mina_02 | Mina la Pêcheuse | - | On vit sur l'eau, mais l'eau commence à nous faire peur.
+
+--- Lotte  ·  Enfant des pilotis ---
+npc_lotte_01 | Lotte | - | Tu viens de la terre ? Il paraît que le sol ne bouge jamais !
+npc_lotte_02 | Lotte | - | J'ai trouvé une cloche dans le sable. Elle sonne toute seule !
+
+--- Maître Hanzo  ·  Gardien de Shirokawa ---
+npc_hanzo_01 | Maître Hanzo | - | Le silence n'est pas l'absence de bruit. C'est ce qui reste quand on a tout entendu.
+npc_hanzo_02 | Maître Hanzo | - | Kaede parlait de toi. Elle parle peu, donc je l'ai écoutée.
+
+--- Kaede  ·  Ombre de Shirokawa ---
+npc_kaede_s_01 | Kaede | - | Tu as fini par venir. La mer te l'avait dit.
+npc_kaede_s_02 | Kaede | - | Je ne reviens pas sur mes pas. Mais pour toi, je suis revenue.
+
+--- Émira Zahra  ·  Reine des caravanes ---
+npc_zahra_01 | Émira Zahra | - | Assieds-toi, voyageur. Le thé refroidit plus vite que la patience.
+npc_zahra_02 | Émira Zahra | - | Solmar a vu passer cent rois. Elle est toujours là, eux non.
+
+--- Idris le Marchand  ·  Épices et merveilles ---
+npc_idris_01 | Idris le Marchand | - | Tout s'achète à Solmar, même le temps. Le temps coûte plus cher.
+npc_idris_02 | Idris le Marchand | - | Une datte ? Je ne vends jamais à crédit, mais j'offre beaucoup de dattes.
+
+--- Hakim le Forgeron  ·  Maître d'ambre ---
+npc_hakim_01 | Hakim le Forgeron | - | L'ambre et le fer, c'est comme le thé et le sucre.
+npc_hakim_02 | Hakim le Forgeron | - | Trouve-moi de l'ambre pur, je te forge quelque chose de chaud.
+
+--- Samir  ·  Maître des montures ---
+npc_samir_01 | Samir | - | Un destrier d'ambre ne s'enfonce jamais dans le sable. Les chevaux de la plaine, si.
+npc_samir_02 | Samir | - | Le désert se traverse à cheval, ou à genoux.
+
+--- Borya  ·  Maître des hordes de Valdor ---
+npc_borya_01 | Borya | - | Ici, on mesure un homme à son cheval, et un cheval au vent.
+npc_borya_02 | Borya | - | La steppe n'a pas de murs. Elle n'a que l'horizon, et les Cavaliers Noirs.
+
+--- Itzel  ·  Gardienne des lianes ---
+npc_itzel_01 | Itzel | - | Chut… Écoute. La jungle te parle, si tu sais te taire.
+npc_itzel_02 | Itzel | - | Les racines de braise soignent, si on les cueille au bon moment.
+
+--- Aïla  ·  Cristallière de Lumenhaven ---
+npc_aila_01 | Aïla | - | Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.
+npc_aila_02 | Aïla | - | Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter.
+
+--- Gaspard de Vaux  ·  Bourgmestre d'Aldrenbourg ---
+npc_gaspard_01 | Gaspard de Vaux | - | Bienvenue à Aldrenbourg ! Le plus grand marché de Greenhaven, et le plus honnête… presque.
+npc_gaspard_02 | Gaspard de Vaux | - | La Foire approche, et rien n'est prêt. Rien !
+
+--- Colette  ·  Boulangère ---
+npc_colette_01 | Colette | - | Pain chaud ! Sortie du four, la croûte qui chante !
+npc_colette_02 | Colette | - | Goûte-moi ce gâteau au miel, et dis-moi qu'il y a mieux à Brindlemere.
+
+--- Fabien  ·  Drapier ---
+npc_fabien_01 | Fabien | - | Du lin de Millbrook, des teintures de Solmar, du cuir de Frostheim. Touche, ça ne mord pas.
+npc_fabien_02 | Fabien | - | Une couleur pour ta cape ? Le pourpre royal est revenu à la mode.
+
+--- Orane  ·  Joaillière ---
+npc_orane_01 | Orane | - | Approche, mais garde les mains derrière le dos.
+npc_orane_02 | Orane | - | Un saphir de Frostheim, taillé ici même. Il porte chance aux voyageurs.
+
+--- Sergent Garin  ·  Guet d'Aldrenbourg ---
+npc_garin_01 | Sergent Garin | - | Le guet veille. Garde ta bourse près du cœur, voyageur : le marché grouille de tire-laine.
+npc_garin_02 | Sergent Garin | - | Si tu cherches les ennuis, cherche-les hors des remparts.
+
+--- Mélisande  ·  Ménestrelle ---
+npc_melisande_01 | Mélisande | - | Une chanson, voyageur ? Celle du Roi qui revint par la mer, peut-être ?
+npc_melisande_02 | Mélisande | - | Je cherche une histoire neuve pour la Foire. Tu en as une, toi, ça se voit.
+
+--- Capitaine Héloïse  ·  Commandante de Hautebrume ---
+npc_heloise_01 | Capitaine Héloïse | - | Hautebrume tient depuis mille ans. La Légion de Fer veut que ça s'arrête cette année.
+npc_heloise_02 | Capitaine Héloïse | - | Vous avez l'air de savoir tenir une épée. J'ai trois forteresses à reprendre.
+
+--- Sibylle  ·  Archiviste des Titans ---
+npc_sibylle_01 | Sibylle | - | Les montagnes portent le nom des géants. Personne ne se souvient pourquoi, sauf moi.
+npc_sibylle_02 | Sibylle | - | Le Gouffre, le Tombeau, les Mines… Trois portes sous la montagne. Aucune ne s'ouvre pour rien.
+
+--- Bjorn Ferrecœur  ·  Maître-forgeron de Rochebrune ---
+npc_bjorn_forge_01 | Bjorn Ferrecœur | - | L'acier-titan ne se forge qu'ici. Le reste du monde tape sur du fer mou.
+npc_bjorn_forge_02 | Bjorn Ferrecœur | - | Rapporte-moi du minerai noir, je te fais une lame qui coupe la montagne.
+
+--- Arno  ·  Chasseur des cols ---
+npc_arno_01 | Arno | - | Les loups des Titans descendent quand la neige monte.
+npc_arno_02 | Arno | - | Un troll des cimes, ça ressemble à un rocher. Jusqu'au moment où ça n'en est plus un.
+
+--- Maud  ·  Aubergiste du Col ---
+npc_maud_01 | Maud | - | Le dernier lit chaud avant les Titans. Après, c'est la pierre et le vent.
+npc_maud_02 | Maud | - | Les caravanes de Valdor passent ici pour monter à Hautebrume.
+
+--- Nadira  ·  Guérisseuse de l'oasis ---
+npc_nadira_01 | Nadira | - | L'eau est un remède avant d'être un luxe.
+npc_nadira_02 | Nadira | - | Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers.
+
+--- Yara  ·  Archiviste de Tamrak ---
+npc_yara_01 | Yara | - | Chaque grain de sable est une phrase que personne n'a lue.
+npc_yara_02 | Yara | - | Karun, Tamrak, Solmar : trois noms pour la même soif.
+
+--- Karim  ·  Éclaireur de Zafir ---
+npc_karim_01 | Karim | - | Chaque piste raconte quelque chose. La plupart du temps : « fuis ».
+npc_karim_02 | Karim | - | Les chacals ne sont pas méchants. Ils sont juste affamés, et nombreux.
+
+--- Ilmar  ·  Gardien du phare ---
+npc_ilmar_01 | Ilmar | - | La lumière est la seule chose que je sais dire aux navires.
+npc_ilmar_02 | Ilmar | - | Le phare est éteint. La mer le sait. Elle attend.
+
+=== Partie 4  ·  Les quêtes secondaires (bonus) ===
+
+--- « Le four froid »  ·  Colette ---
+q_al_oven_a | Colette | propose | Mon four est froid, et la Foire est dans trois jours ! Il me faut du bois, beaucoup de bois. Douze bûches, et je te nourris tout l'hiver.
+q_al_oven_b | Colette | attend, un peu impatient | Le four attend toujours son bois…
+q_al_oven_c | Colette | satisfait | Ah ! Entends-tu ? Il ronfle déjà. Tiens, prends ça, c'est encore chaud.
+
+--- « Les tire-laine du marché »  ·  Sergent Garin ---
+q_al_cutpurses_a | Sergent Garin | propose | Les voleurs du marché viennent du Camp des Écorcheurs, à l'est. Mes hommes ne peuvent pas quitter les remparts. Toi, si. Six bandits, pas un de moins.
+q_al_cutpurses_b | Sergent Garin | attend, un peu impatient | Le camp des Écorcheurs tient toujours.
+q_al_cutpurses_c | Sergent Garin | satisfait | Six ! Les étals dormiront tranquilles cette nuit. Le guet te doit une fière chandelle.
+
+--- « L'anneau de la mariée »  ·  Orane ---
+q_al_ring_a | Orane | propose | Le convoi d'or de Solmar a été pillé. Une mariée m'attend, et je n'ai rien à fondre. Un lingot d'or suffirait. Tu sauras en trouver, j'en suis sûre.
+q_al_ring_b | Orane | attend, un peu impatient | Toujours pas d'or ?
+q_al_ring_c | Orane | satisfait | Il chante sous le marteau. La mariée aura son anneau, et toi le mien : un saphir, pour la route.
+
+--- « La Grande Foire »  ·  Gaspard de Vaux ---
+q_al_fair_a | Gaspard de Vaux | propose | Le four de Colette chauffe, le guet tient les rues… Il manque le miel des confiseurs, et Mélisande cherche encore sa chanson. Aide-moi, et la Foire aura lieu !
+q_al_fair_b | Gaspard de Vaux | attend, un peu impatient | La Foire ne se fera pas sans miel ni chanson.
+q_al_fair_c | Gaspard de Vaux | satisfait | Écoute ! Les tambours, les rires… La Grande Foire est ouverte, grâce à toi. Aldrenbourg ne l'oubliera pas.
+
+--- « Le loup de la lisière »  ·  Tomas ---
+q_s_wolves_a | Tomas | propose | Les loups gris s'approchent trop du village. Abats-en cinq et je te paierai en cuir et en or.
+q_s_wolves_b | Tomas | attend, un peu impatient | Encore des loups dans les bois…
+q_s_wolves_c | Tomas | satisfait | Bon travail. Les enfants pourront de nouveau jouer près de la lisière.
+
+--- « Farine et fléaux »  ·  Gareth ---
+q_s_bandits_a | Gareth | propose | Les Écorcheurs volent ma farine ! Leur camp est à l'est. Chasse-les, je t'en prie.
+q_s_bandits_b | Gareth | attend, un peu impatient | Ils sont toujours là-bas, à l'est du moulin.
+q_s_bandits_c | Gareth | satisfait | Le moulin tourne de nouveau sans crainte. Merci !
+
+--- « La lame des brumes »  ·  Tomas ---
+q_h_kaede_a | Tomas | propose | Il y a quelqu'un dans les bois, voyageur. Rapide. Silencieux. Elle chasse les Écorcheurs à l'est, seule. Aide-la, ou elle finira comme les autres naufragés.
+q_h_kaede_b | Tomas | attend, un peu impatient | Elle t'attend près des Ruines de Vael. Elle n'attend jamais longtemps.
+q_h_kaede_c | Tomas | satisfait | Elle s'appelle Kaede. Elle dit qu'elle vient d'un archipel que personne ne connaît, et que la mer l'a rejetée comme toi. Elle marchera à tes côtés.
+
+--- « L'étoile tombée »  ·  Ilian ---
+q_h_astra_a | Ilian | propose | Une étoile est tombée près de la Mine des Cimes. Les étoiles ne tombent pas, voyageur. Elles descendent. Va voir ce qui est descendu.
+q_h_astra_b | Ilian | attend, un peu impatient | Les dragonnets tournent autour du cratère. Quelque chose les attire.
+q_h_astra_c | Ilian | satisfait | Elle s'appelle Astra. Elle dit qu'elle gardait le ciel au-dessus de la Couronne, et que le sceau l'a appelée, comme il t'a appelé. Elle vole. Je l'ai vue. Elle vole !
+
+--- « Le septième fragment »  ·  Tomas ---
+q_h_kaede2_a | Tomas | propose | Ta ninja est passée cette nuit. Elle n'a rien dit, elle a juste laissé ça : « Le septième dort là où les elfes ont prié. » Le Sanctuaire d'Aelindor, à l'ouest. Les araignées y ont fait leur nid.
+q_h_kaede2_b | Tomas | attend, un peu impatient | Aelith, la druidesse de Sylvarin, connaît les vieilles prières du sanctuaire. Elle saura lire ce que Kaede cherche.
+q_h_kaede2_c | Tomas | satisfait | Un septième fragment… Aelith dit que les elfes l'appelaient le Silence : le seul joyau que la Couronne n'a jamais porté. Kaede ne l'a pas trouvé. Mais maintenant, toi aussi, tu le cherches.
+
+--- « Ce que l'étoile n'a pas pardonné »  ·  Ilian ---
+q_h_astra2_a | Ilian | propose | Elle regarde Highspire comme on regarde une tombe. Les archives de l'Ordre gardent les nuits de la Chute. Va les lire, et parle à l'archiviste, Frère Alaric. Mais garde l'œil ouvert : les chevaliers corrompus rôdent près des murs.
+q_h_astra2_b | Ilian | attend, un peu impatient | Frère Alaric est aux archives. Il sait tout. Il sait peut-être trop.
+q_h_astra2_c | Ilian | satisfait | Astra avait conseillé au roi de ne pas briser la Couronne. Il l'a brisée quand même, et un novice à la cicatrice tenait les tenailles. Alaric m'a souri en me le racontant. Il n'a pas une ride, voyageur. Pas une seule.
+
+--- « La carte au trésor de Pip »  ·  Pip ---
+q_s_pip_a | Pip | propose | Regarde ma carte ! Une croix à la ferme des Aulnes, une croix à la grande pierre, et le trésor au bout ! Tu vas le chercher ? Moi j'ai pas le droit de sortir du village.
+q_s_pip_b | Pip | attend, un peu impatient | La ferme d'abord, puis la pierre ! C'est écrit sur la carte !
+q_s_pip_c | Pip | satisfait | Tu l'as trouvé ? C'était… une pomme de pin ? Bon. C'est un trésor quand même. Tiens, pour la peine, je te donne ma pièce porte-bonheur.
+
+--- « Ronde de nuit »  ·  Capitaine Aubert ---
+q_s_night_watch_a | Capitaine Aubert | propose | Mes gardes ne sont pas assez nombreux pour tenir les champs la nuit. Les gobelins de la Grotte des Murmures volent les poules et mettent le feu aux meules. Fais-leur passer l'envie de revenir.
+q_s_night_watch_b | Capitaine Aubert | attend, un peu impatient | Leur chaman les rend hardis. Commence par lui.
+q_s_night_watch_c | Capitaine Aubert | satisfait | Les meules ne brûleront pas cette nuit. Brindlemere te doit une nuit de sommeil, voyageur.
+
+--- « Le fer de Hilda »  ·  Hilda ---
+q_s_iron_a | Hilda | propose | Mon stock de fer est vide. Rapporte-moi cinq minerais de fer, et je t'apprendrai à forger.
+q_s_iron_b | Hilda | attend, un peu impatient | Cinq minerais, pas un de moins.
+q_s_iron_c | Hilda | satisfait | Parfait ! Voilà de quoi te défendre. La forge t'est ouverte.
+
+--- « Les herbes de Mère Ysolde »  ·  Mère Ysolde ---
+q_s_herbs_a | Mère Ysolde | propose | Mes réserves d'herbes s'épuisent. Cueilles-en six dans les prairies, veux-tu ?
+q_s_herbs_b | Mère Ysolde | attend, un peu impatient | Six herbes, mon enfant.
+q_s_herbs_c | Mère Ysolde | satisfait | Merci ! Prends ces potions. La table d'alchimie t'est ouverte.
+
+--- « Le Jarl et la tempête »  ·  Jarl Bjorn ---
+q_s_jarl_a | Jarl Bjorn | propose | Tu veux l'aide des clans ? Prouve ta valeur. Abats deux trolls des glaces et rapporte leur peau.
+q_s_jarl_b | Jarl Bjorn | attend, un peu impatient | Les trolls rôdent au nord du village.
+q_s_jarl_c | Jarl Bjorn | satisfait | Ha ! Les clans te saluent, frère d'armes.
+
+--- « Lumière captive »  ·  Aïla ---
+q_s_crystals_a | Aïla | propose | Six cristaux d'aurore, et je pourrai rallumer la grande lanterne de Lumenhaven. Ils poussent dans les prairies, et parfois sur les îles du ciel. Un coup de pioche, et ils se détachent.
+q_s_crystals_b | Aïla | attend, un peu impatient | Les cristaux d'aurore brillent dans les prairies autour de Lumenhaven.
+q_s_crystals_c | Aïla | satisfait | Regarde : la lanterne se rallume. Garde ce cœur de cristal, il bat pour toi maintenant.
+
+--- « Le choix de Fenra »  ·  Eira ---
+q_s_fenra_a | Eira | propose | Fenra est inquiète : les loups des neiges menacent sa meute. Chasse-en cinq. Si elle t'accepte, elle te portera.
+q_s_fenra_b | Eira | attend, un peu impatient | Fenra t'observe encore.
+q_s_fenra_c | Eira | satisfait | Fenra pose sa tête contre ta main. Elle t'a choisi.
+
+--- « Le chant des esprits »  ·  Aelith ---
+q_s_spirits_a | Aelith | propose | Les feux follets sont des âmes perdues. Libères-en six, puis visite le Sanctuaire d'Aelindor.
+q_s_spirits_b | Aelith | attend, un peu impatient | Les esprits pleurent encore.
+q_s_spirits_c | Aelith | satisfait | Le chant de la forêt est redevenu clair. Merci, Errant.
+
+--- « Graines de lumière »  ·  Nyssa ---
+q_s_glowcaps_a | Nyssa | propose | Cinq champignons lumineux. Ils poussent au pied des arbres-mères.
+q_s_glowcaps_b | Nyssa | attend, un peu impatient | Ils brillent la nuit, c'est plus facile.
+q_s_glowcaps_c | Nyssa | satisfait | Merci. Tiens, cet élixir t'aidera.
+
+--- « Les mineurs disparus »  ·  Contremaître Dorn ---
+q_s_miners_a | Contremaître Dorn | propose | Mes gars sont descendus il y a trois jours. Personne n'est remonté. Trouve-les. Ou ce qu'il en reste.
+q_s_miners_b | Contremaître Dorn | attend, un peu impatient | Les mines sont à l'est.
+q_s_miners_c | Contremaître Dorn | satisfait | Tu as trouvé l'insigne de Harg… Au moins, on sait. La Guilde te doit une dette.
+
+--- « Le cœur de braise »  ·  Kara ---
+q_s_embers_a | Kara | propose | Les élémentaires de braise ont un cœur qui ne s'éteint pas. Apporte-m'en trois.
+q_s_embers_b | Kara | attend, un peu impatient | Trois noyaux, et je te forge quelque chose d'unique.
+q_s_embers_c | Kara | satisfait | Ha, regarde-les briller ! Prends ça.
+
+--- « Les morts sans repos »  ·  Mère Agathe ---
+q_s_restless_a | Mère Agathe | propose | Les morts se lèvent chaque nuit. Rends à huit d'entre eux le repos.
+q_s_restless_b | Mère Agathe | attend, un peu impatient | La nuit, ils sont plus nombreux.
+q_s_restless_c | Mère Agathe | satisfait | Gravemoor dormira mieux. Que la lumière te garde.
+
+--- « Essence d'ombre »  ·  Morwen ---
+q_s_shadow_a | Morwen | propose | Trois essences d'ombre. Les spectres en sont faits.
+q_s_shadow_b | Morwen | attend, un peu impatient | Les spectres rôdent la nuit, près du cimetière.
+q_s_shadow_c | Morwen | satisfait | Hé hé. Excellente cueillette. Tiens, une babiole qui te plaira.
+
+--- « Les étoiles de l'astronome »  ·  Ilian ---
+q_s_stars_a | Ilian | propose | Trois cristaux sont tombés sur les cimes. Rapporte-les et je te montrerai la carte d'Aldric.
+q_s_stars_b | Ilian | attend, un peu impatient | Les cristaux brillent sur les hauteurs.
+q_s_stars_c | Ilian | satisfait | La carte céleste… elle montre l'Abîme sous Morneval. Prends cette larme d'étoile.
+
+--- « Contrat : golems de cristal »  ·  Aïla ---
+q_s_golems_a | Aïla | propose | Trois golems de cristal se sont levés près du Cratère Cristallin. Ils écrasent tout ce qui bouge. Le feu les fait craquer.
+q_s_golems_b | Aïla | attend, un peu impatient | Au sud-est de Lumenhaven, vers le Cratère Cristallin.
+q_s_golems_c | Aïla | satisfait | Les cueilleurs peuvent retourner aux prairies. Merci.
+
+--- « La corne du premier Jarl »  ·  Vieux Hakon ---
+q_s_ice_a | Vieux Hakon | propose | La corne du premier Jarl dort dans les Cavernes de Hrimgard. Rapporte-la et ta saga sera chantée.
+q_s_ice_b | Vieux Hakon | attend, un peu impatient | Les cavernes sont à l'ouest du village.
+q_s_ice_c | Vieux Hakon | satisfait | La corne… Elle sonne encore ! Ton nom sera dans la saga.
+
+--- « Contrat : la Bête de Millbrook »  ·  Margot ---
+q_h_beast_a | Margot | propose | Il est énorme. Ses défenses sont comme des faux. Tue-le.
+q_h_beast_b | Margot | attend, un peu impatient | Il vient la nuit, près des champs.
+q_h_beast_c | Margot | satisfait | Enfin ! Les champs sont saufs.
+
+--- « Contrat : la toile d'Elderwood »  ·  Thalion ---
+q_h_spiders_a | Thalion | propose | Quatre araignées. Brûle leurs toiles si tu peux.
+q_h_spiders_b | Thalion | attend, un peu impatient | Elles se cachent dans les branches.
+q_h_spiders_c | Thalion | satisfait | La route est libre. Bien joué.
+
+--- « Contrat : les ours de cendre »  ·  Vesk ---
+q_h_bears_a | Vesk | propose | Deux ours. Leur fourrure vaut de l'or.
+q_h_bears_b | Vesk | attend, un peu impatient | Ils fument, tu ne peux pas les rater.
+q_h_bears_c | Vesk | satisfait | Voilà ta prime.
+
+--- « Contrat : dragonnets des cimes »  ·  Maître Corvin ---
+q_h_drakes_a | Maître Corvin | propose | Deux dragonnets. Méfie-toi de leur souffle.
+q_h_drakes_b | Maître Corvin | attend, un peu impatient | Ils nichent sur les hauteurs.
+q_h_drakes_c | Maître Corvin | satisfait | Les bergers te bénissent.
+
+--- « Le trésor de Vael »  ·  Lise ---
+q_t_vael_a | Lise | propose | Cette carte vient d'un vieux marin. Le X est sur les Ruines de Vael, à l'est.
+
+--- « Les coffres du Bastion »  ·  Vesk ---
+q_t_bastion_a | Vesk | propose | La solde du Bastion n'a jamais été retrouvée. Elle est à toi si tu oses.
+
+--- « Le serment des Gardiens »  ·  Capitaine Aubert ---
+q_f_guard_a | Capitaine Aubert | propose | Les Gardiens ont besoin de toi. Nettoie la Grotte des Murmures et chasse six gobelins.
+q_f_guard_b | Capitaine Aubert | attend, un peu impatient | Les gobelins sont au sud.
+q_f_guard_c | Capitaine Aubert | satisfait | Bienvenue chez les Gardiens. Porte ces couleurs avec honneur.
+
+--- « Les filets vides »  ·  Mina la Pêcheuse ---
+q_s_crabs_a | Mina la Pêcheuse | propose | Les crabes ont pris la baie. Je n'ose plus lancer un filet. Débarrasse-nous de six d'entre eux, et on mangera ce soir.
+q_s_crabs_b | Mina la Pêcheuse | attend, un peu impatient | Ils sortent des récifs au pied des pilotis.
+q_s_crabs_c | Mina la Pêcheuse | satisfait | Le filet est plein ! Six crabes de moins, et une bouillabaisse de plus.
+
+--- « Les noyés de la crique »  ·  Capitaine Orla ---
+q_s_drowned_a | Capitaine Orla | propose | Les équipages que Mareval a vendus remontent, quand la lune est basse. Qu'ils se reposent, voyageur. Six d'entre eux, ça suffira pour ce mois-ci.
+q_s_drowned_b | Capitaine Orla | attend, un peu impatient | Surtout la nuit, près de la crique.
+q_s_drowned_c | Capitaine Orla | satisfait | Que la mer les garde, cette fois.
+
+--- « Le chant de la baie »  ·  Capitaine Orla ---
+q_s_sirens_a | Capitaine Orla | propose | Trois barques de pêcheurs ont disparu, en entendant un chant. Les sirènes des récifs. Fais-les taire, pour que la mer redevienne une route.
+q_s_sirens_b | Capitaine Orla | attend, un peu impatient | Elles chantent sur les récifs du sud.
+q_s_sirens_c | Capitaine Orla | satisfait | Les barques sont de retour, en silence. Merci.
+
+--- « La lentille fendue »  ·  Ilmar ---
+q_s_lens_a | Ilmar | propose | La lentille est fendue depuis la dernière tempête. Il n'y a que le verre du désert pour la remplacer. Les spectres des sables en portent, dit-on, dans leur drap de poussière.
+q_s_lens_b | Ilmar | attend, un peu impatient | Deux morceaux de verre, du désert d'Ambre.
+q_s_lens_c | Ilmar | satisfait | La lumière est rallumée ! Les marins te bénissent.
+
+--- « La cloche de l'épave »  ·  Lotte ---
+q_s_bell_a | Lotte | propose | Y a une cloche à l'épave ! Elle sonne quand la marée monte ! Tu peux aller voir ? Moi j'ai pas le droit… enfin, j'ai le droit mais Maman dit non.
+q_s_bell_b | Lotte | attend, un peu impatient | L'épave est à l'ouest de Port-Azur, sur la plage.
+q_s_bell_c | Lotte | satisfait | Tu l'as trouvée ! Elle sonne beaucoup trop fort. J'adore.
+
+--- « Contrat : les Cavaliers Noirs »  ·  Borya ---
+q_s_riders_a | Borya | propose | Cinq Cavaliers Noirs, et les pâturages respireront. Ils campent au sud, près des collines de pierre. Méfie-toi de leurs lances.
+q_s_riders_b | Borya | attend, un peu impatient | Leur camp est au sud de Valdor.
+q_s_riders_c | Borya | satisfait | Les poulains galopent de nouveau. Valdor ne l'oubliera pas.
+
+--- « Le Roi Cavalier »  ·  Borya ---
+q_s_kurgan_a | Borya | propose | Quelqu'un a ouvert le Tertre du Roi Cavalier. Va voir ce qu'il en reste, et reviens me le dire. Les morts de la steppe n'aiment pas qu'on les dérange.
+q_s_kurgan_b | Borya | attend, un peu impatient | Le tertre est à l'est, sur la plus haute colline.
+q_s_kurgan_c | Borya | satisfait | Alors le roi dort encore. Bien. Prends ceci, il l'aurait voulu.
+
+--- « Les îles du ciel »  ·  Aïla ---
+q_s_skyisles_a | Aïla | propose | Sur chaque île du ciel, il y a un coffre et, dedans, un éclat du ciel. Rapporte-m'en trois. Pour monter, marche dans la source jaillissante au pied de l'île : elle te lancera là-haut.
+q_s_skyisles_b | Aïla | attend, un peu impatient | Les îles flottent au-dessus des prairies. Cherche la source lumineuse à leur pied.
+q_s_skyisles_c | Aïla | satisfait | Trois éclats du ciel… Avec eux, je peux tailler une lame comme on n'en a pas vu depuis mille ans. Elle est à toi.
+
+--- « Le Poing de Fer »  ·  Capitaine Héloïse ---
+q_t_citadel_a | Capitaine Héloïse | propose | La Citadelle de Fer-Noir, à l'est de Hautebrume, au bout de la vallée. Dix légionnaires, des arbalétriers sur les remparts, et un seigneur de guerre devant le donjon. Tuez-le, et la citadelle est à vous. Emmenez des soldats si vous en avez.
+q_t_citadel_b | Capitaine Héloïse | attend, un peu impatient | La citadelle est à l'est de la porte est de Hautebrume.
+q_t_citadel_c | Capitaine Héloïse | satisfait | La citadelle est à vous. Ce soir, Hautebrume dormira tranquille. Prenez ceci : vous l'avez mérité.
+
+--- « Le Fort aux Corbeaux »  ·  Capitaine Héloïse ---
+q_t_corbeau_a | Capitaine Héloïse | propose | Fort Corbeau garde la route des mines. Sa garnison est plus petite, mais elle est bien placée. Même méthode : le seigneur de guerre d'abord.
+q_t_corbeau_b | Capitaine Héloïse | attend, un peu impatient | Fort Corbeau est au sud-est de Rochebrune, après les Mines de Fer-Noir.
+q_t_corbeau_c | Capitaine Héloïse | satisfait | Deux forteresses. La Légion va devoir compter avec vous.
+
+--- « La forteresse des steppes »  ·  Capitaine Héloïse ---
+q_t_kharvos_a | Capitaine Héloïse | propose | La Légion a une forteresse dans les steppes, Khar-Vos, sur la route entre Valdor et la jungle. Elle pille les caravanes. Reprenez-la et les routes du sud seront libres.
+q_t_kharvos_b | Capitaine Héloïse | attend, un peu impatient | Khar-Vos est au sud de Valdor, sur la route d'Émeraude.
+q_t_kharvos_c | Capitaine Héloïse | satisfait | Plus une seule forteresse de la Légion debout. Les bardes vont avoir du travail.
+
+--- « L'acier des Titans »  ·  Bjorn Ferrecœur ---
+q_t_steel_a | Bjorn Ferrecœur | propose | Fonds-moi trois lingots d'acier-titan à la forge : du minerai de fer, du charbon et un peu d'or. Les montagnes en sont pleines. Rapporte-les-moi, je t'apprends ce qu'on en fait.
+q_t_steel_b | Bjorn Ferrecœur | attend, un peu impatient | Le minerai de fer, le charbon et l'or se trouvent partout dans les Monts Titans. Forge l'acier-titan à une forge.
+q_t_steel_c | Bjorn Ferrecœur | satisfait | Bel acier. Tiens, voilà ce qu'on en fait quand on sait s'y prendre.
+
+--- « Les forges éteintes »  ·  Bjorn Ferrecœur ---
+q_t_forge_a | Bjorn Ferrecœur | propose | Le Maître-Forge fabrique les armures de la Légion au fond des Mines de Fer-Noir. Tant qu'il travaille, la Légion aura de l'acier. Éteins sa forge.
+q_t_forge_b | Bjorn Ferrecœur | attend, un peu impatient | Les Mines de Fer-Noir sont à l'est de Rochebrune.
+q_t_forge_c | Bjorn Ferrecœur | satisfait | Plus une étincelle là-dessous. Les forges de Rochebrune vont pouvoir respirer.
+
+--- « Le Gouffre des Titans »  ·  Sibylle ---
+q_t_wyrm_a | Sibylle | propose | Au nord du Col-des-Aigles, une gorge mène au Gouffre des Titans. Le ver qui l'a creusé dort au fond. Ses écailles valent plus que tout ce que j'ai lu.
+q_t_wyrm_b | Sibylle | attend, un peu impatient | Le Gouffre est au nord du Col-des-Aigles, au bout de la gorge.
+q_t_wyrm_c | Sibylle | satisfait | Tu l'as vu de près… Raconte-moi tout. Non, attends, je prends des notes.
+
+--- « Le Roi sous la montagne »  ·  Sibylle ---
+q_t_giant_a | Sibylle | propose | Le Tombeau du Roi-Géant est au sud de Rochebrune. Ceux qui y sont entrés ne sont pas ressortis. Si quelqu'un peut voir le trône d'Ymrir et revenir, c'est toi.
+q_t_giant_b | Sibylle | attend, un peu impatient | Le Tombeau est au sud de Rochebrune, au bout de la route.
+q_t_giant_c | Sibylle | satisfait | Il s'est rendormi… Pour de bon, cette fois. Les montagnes te doivent quelque chose.
+
+--- « Contrat : les bêtes des cols »  ·  Arno ---
+q_t_hunt_a | Arno | propose | Cinq loups des Titans et trois trolls des cimes. Après ça, les bergers pourront remonter aux alpages.
+q_t_hunt_b | Arno | attend, un peu impatient | Partout dans les vallées des Monts Titans, surtout la nuit pour les loups.
+q_t_hunt_c | Arno | satisfait | Les alpages sont à nouveau à nous. Tiens, c'est la paye.
+
+--- « Le réveil du Jaguar »  ·  Itzel ---
+q_s_jaguar_a | Itzel | propose | Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.
+q_s_jaguar_b | Itzel | attend, un peu impatient | Le temple est au sud-est d'Émeraude, sous les grands arbres.
+q_s_jaguar_c | Itzel | satisfait | Le temple dort de nouveau. Merci, voyageur.
+
+--- « Contrat : mygales de jade »  ·  Itzel ---
+q_s_spiders_a | Itzel | propose | Quatre mygales, pas plus, pas moins : la jungle a besoin d'elles, mais pas si près du village.
+q_s_spiders_b | Itzel | attend, un peu impatient | Elles tissent entre les arbres, autour d'Émeraude.
+q_s_spiders_c | Itzel | satisfait | Les sentiers sont libres. La soie servira aux enfants.
+
+--- « Venin d'oasis »  ·  Nadira ---
+q_s_venom_a | Nadira | propose | Un venin bien dosé soigne ce qu'il aurait tué. Rapporte-m'en trois fioles : les scorpions des dunes en ont plein, et ils n'aiment pas qu'on leur en prenne.
+q_s_venom_b | Nadira | attend, un peu impatient | Les scorpions couvrent les crêtes à l'est de Kheft.
+q_s_venom_c | Nadira | satisfait | Merci. Ce soir, trois caravaniers seront en vie, grâce à toi.
+
+--- « Ambre de forge »  ·  Hakim le Forgeron ---
+q_s_amber_a | Hakim le Forgeron | propose | L'ambre se travaille à chaud, et le fer à froid. Je veux les deux. Rapporte-moi quatre morceaux d'ambre brut, golems de grès, scorpions, momies, tous en ont.
+q_s_amber_b | Hakim le Forgeron | attend, un peu impatient | Quatre morceaux, pas un de moins.
+q_s_amber_c | Hakim le Forgeron | satisfait | Regarde comme il chante ! Cette lame s'appellera comme toi.
+
+--- « Contrat : les chacals de Zafir »  ·  Karim ---
+q_s_jackals_a | Karim | propose | Six chacals. Ils ne sont pas méchants, juste affamés et nombreux. Mais Zafir ne vit que de ses caravanes.
+q_s_jackals_b | Karim | attend, un peu impatient | Ils rôdent sur les dunes autour du caravansérail.
+q_s_jackals_c | Karim | satisfait | La route est libre, et les chamelles dorment.
+
+--- « Contrat : dragonnets des sables »  ·  Karim ---
+q_s_drakes_a | Karim | propose | Deux dragonnets des sables. Leur souffle fond le verre, et il en reste. Je préfère les voir de loin.
+q_s_drakes_b | Karim | attend, un peu impatient | Ils couvent dans les dunes du sud-est.
+q_s_drakes_c | Karim | satisfait | Deux de moins. Les caravanes te doivent une soirée de thé.
+
+--- « Les colonnades de Karun »  ·  Yara ---
+q_s_ruins_a | Yara | propose | Va voir Karun, puis la Gardienne des Sables. Reviens me dire ce qu'elle t'a demandé. Elle pose une question à chaque passant, il paraît. Personne ne se souvient de la réponse.
+q_s_ruins_b | Yara | attend, un peu impatient | Karun est au sud de Solmar, et la Gardienne au nord-ouest.
+q_s_ruins_c | Yara | satisfait | Une question sans réponse… Elle me plaît encore plus.
+
+--- « Le registre de la caravane »  ·  Émira Zahra ---
+q_s_ledger_a | Émira Zahra | propose | Le registre est tombé aux mains des pilleurs. Il contient les noms de tous mes marchands disparus. Je veux les noms, pas la vengeance.
+q_s_ledger_b | Émira Zahra | attend, un peu impatient | Les pilleurs campent près du temple.
+q_s_ledger_c | Émira Zahra | satisfait | Les noms… tous. Je les graverai sur le mur de Solmar. Merci.
+
+--- « Les statues qui marchent »  ·  Émira Zahra ---
+q_s_golems2_a | Émira Zahra | propose | Les statues du temple marchent. Brise-en quatre, avant qu'elles atteignent la route.
+q_s_golems2_b | Émira Zahra | attend, un peu impatient | Elles gardent le voisinage du temple.
+q_s_golems2_c | Émira Zahra | satisfait | Le désert est de nouveau silencieux.
+
+--- « Doublons »  ·  Brann le Calfat ---
+q_s_coins_a | Brann le Calfat | propose | Un doublon corsaire, ça se fond, ça se refrappe, ça se rachète. Apporte-m'en douze, je te les paie plus cher que le port.
+q_s_coins_b | Brann le Calfat | attend, un peu impatient | Douze doublons, frappés d'un crâne.
+q_s_coins_c | Brann le Calfat | satisfait | Douze ! Voilà de l'or propre, pour de l'or sale.
+
+--- « Contrat : serpents des récifs »  ·  Mina la Pêcheuse ---
+q_s_serpents_a | Mina la Pêcheuse | propose | Cinq serpents des récifs. Turquoise et jaune, tu ne les rateras pas. Ils mordent.
+q_s_serpents_b | Mina la Pêcheuse | attend, un peu impatient | Dans les herbes, près des lagons.
+q_s_serpents_c | Mina la Pêcheuse | satisfait | Les récifs sont sûrs. Pour combien de temps ?
+
+--- « Le butin de Karun »  ·  Idris le Marchand ---
+q_t_karun_a | Idris le Marchand | propose | Cette moitié de carte mène à Karun. L'autre moitié… dans ma poche, mais je préfère que tu fouilles.
+
+--- « L'or du Léviathan »  ·  Noa la Taverne ---
+q_t_wreck_a | Noa la Taverne | propose | L'équipage du Léviathan avait trois mois de solde dans la cale. Personne ne l'a retrouvée. La marée, peut-être.
+
+--- « Le serment de Port-Azur »  ·  Capitaine Orla ---
+q_f_azur_a | Capitaine Orla | propose | Les Marins ont besoin de bras. Huit écumeurs, et tu portes notre pavillon.
+q_f_azur_b | Capitaine Orla | attend, un peu impatient | Les corsaires sont à l'ouest.
+q_f_azur_c | Capitaine Orla | satisfait | Bienvenue chez les Marins de Port-Azur. Porte ce pavillon avec honneur.
+
+--- « Le serment des Caravanes »  ·  Émira Zahra ---
+q_f_solmar_a | Émira Zahra | propose | Les caravanes ont besoin de gardes. Cinq pilleurs, cinq chacals, et ton nom est dans mon registre.
+q_f_solmar_b | Émira Zahra | attend, un peu impatient | Les dunes sont à l'est et au sud.
+q_f_solmar_c | Émira Zahra | satisfait | Bienvenue parmi les Caravaniers de Solmar.
+
+=== Partie 5  ·  Les cris et souffles du héros (bonus) ===
+hero_attaque | Le Naufragé | effort court | « Ha ! » / « Hah ! »
+hero_attaque_forte | Le Naufragé | gros effort | « Haaa ! »
+hero_saut | Le Naufragé | petit effort | « Hup ! »
+hero_roulade | Le Naufragé | souffle | « Hff ! »
+hero_touche | Le Naufragé | douleur brève | « Argh ! » / « Ngh ! »
+hero_chute | Le Naufragé | douleur, réception lourde | « Oumf ! »
+hero_mort | Le Naufragé | dernier souffle | « Non… »
+hero_niveau | Le Naufragé | satisfait, souffle | « Plus fort. »
+hero_soin | Le Naufragé | soulagé | un long soupir
+hero_torche | Le Naufragé | calme | un souffle sur la flamme, puis « Voilà. »
+hero_faille | Le Naufragé | impressionné, à voix basse | « Qu'est-ce que… »
+hero_ambre | Le Naufragé | murmuré | « Tout est… figé. »
