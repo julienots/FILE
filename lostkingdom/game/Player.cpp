@@ -260,6 +260,32 @@ void Game::playerDodge() {
     dodgeCD = 0.35f;
     play("roll", 0.7f);
     particles.dust(c.pos, 1.2f);
+    // 3.10.5 perfect dodge: a creature close by was about to strike -> the time freezes around the hero
+    if (perfectDodgeCheck()) {
+        frozenTimeT = 2.2f;
+        c.invuln = std::max(c.invuln, 0.6f);
+        stamina = std::min(maxStamina, stamina + cost);   // the dodge is free
+        floatText(c.pos + vec3(0, 2.4f, 0), "Esquive parfaite !", vec3(1.f, 0.78f, 0.32f), 26);
+        particles.shockwave(c.pos, vec3(1.f, 0.72f, 0.28f), 5.f);
+        play("ice", 0.7f, 0.6f); play("magic_burst", 0.5f, 0.7f);
+        haptic(60, 180); hitStop = std::max(hitStop, 0.06f);
+    }
+}
+
+bool Game::perfectDodgeCheck() {
+    if (player == NullEntity || frozenTimeT > 0.f) return false;
+    Character& p = pc();
+    bool hit = false;
+    reg.each<AIBrain, Character>([&](Entity, AIBrain& ai, Character& o) {
+        if (hit || o.dead || o.team != Team::Enemy || ai.target != player) return;
+        float d = distXZ(o.pos, p.pos);
+        if (d > 5.f + o.radius) return;
+        // the last instants of the wind-up (red outline), or a swing before its hit window ends
+        bool windup = ai.state == AIState::Attack && ai.telegraphT > 0.f && ai.telegraphT < 0.4f;
+        bool swing = o.attackClip && o.vis.anim.action() == o.attackClip && o.attackClip->hitStart >= 0 && o.vis.anim.actionTime() < o.attackClip->hitEnd;
+        if (windup || swing) hit = true;
+    });
+    return hit;
 }
 
 bool Game::playerJump(bool buffered) {

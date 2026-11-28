@@ -323,6 +323,10 @@ void Game::updatePlaying(float dt) {
     updateDialogScene(dt); // 3.8.0
     updateVfx(dt);       // 3.0.1
     updateAmber(dt);     // 3.10.0 the Amber (multiverse)
+    // 3.10.5 combo counter and frozen time
+    frozenTimeT = std::max(0.f, frozenTimeT - dt);
+    comboHitT -= dt; if (comboHitT <= 0.f) comboHits = 0;
+    comboPop = std::max(0.f, comboPop - dt * 4.f);
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
@@ -639,6 +643,11 @@ void Game::updateEnvironment(float dt) {
     audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));
     {   float fl = 0; env.rift = cinematicRift(&fl); env.riftFlash = fl; }   // 3.9.5 the sky breach (opens during the prologue)
     if (!dungeon.active) applyAmberEnvironment();   // 3.10.0
+    if (frozenTimeT > 0.f) {   // 3.10.5 frozen time: the world drains to a warm sepia, the edges darken
+        float k = std::min(1.f, frozenTimeT * 2.5f) * std::min(1.f, (2.2f - frozenTimeT) * 10.f);
+        env.saturation *= 1.f - 0.5f * k; env.temperature += 0.4f * k; env.vignette = std::max(env.vignette, 0.35f + 0.4f * k);
+        env.contrast *= 1.f + 0.08f * k; env.chromatic = std::max(env.chromatic, 0.25f * k);
+    }
     applyCinematicEnvironment();
 }
 

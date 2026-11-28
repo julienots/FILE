@@ -478,6 +478,9 @@ public:
     std::vector<std::string> ownedMounts;
     int activeMount = -1;
     int comboStep = 0;
+    int comboHits = 0; float comboHitT = 0, comboPop = 0;   // 3.10.5 hit counter: +1 % damage per hit (max +30 %), lost after 2.5 s or a blow taken
+    float frozenTimeT = 0;   // 3.10.5 perfect dodge: enemies slowed to 25 % for this long (real seconds), the hero's blows +25 %
+    bool perfectDodgeCheck();
     float comboTimer = 0, chargeT = 0;
     // input buffering: a tap during an animation is kept for a short time and executed as soon as possible
     float attackBuf = 0, dodgeBuf = 0; bool attackBufHeavy = false, attackBufCharged = false;

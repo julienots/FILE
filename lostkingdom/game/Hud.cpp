@@ -615,6 +615,28 @@ void Game::drawHud(float dt) {
         }
     }
     drawAmberHud();   // 3.10.0
+    // 3.10.5 combo counter (right, above the action buttons) and the frozen-time gauge
+    if (comboHits >= 3 || frozenTimeT > 0.f) {
+        float cx = W_ - 285, cy = 96;   // left of the minimap, under the top bar
+        if (comboHits >= 3) {
+            float a = saturate(comboHitT * 1.5f);
+            float sz = 46.f * (1.f + 0.25f * easeOutBack(comboPop));
+            vec4 col = comboHits >= 30 ? rgba(0xffd060, a) : comboHits >= 15 ? rgba(0xffb050, a) : rgba(0xf4e7c4, a);
+            u.text("x" + std::to_string(comboHits), cx + 2, cy + 2, sz, vec4(0, 0, 0, 0.5f * a), F_TITLE, A_RIGHT);
+            u.text("x" + std::to_string(comboHits), cx, cy, sz, col, F_TITLE, A_RIGHT, 0, true);
+            u.text("COMBO", cx + 8, cy + sz * 0.42f, 18, rgba(0xe8dcc0, a), F_BOLD, A_LEFT, 0, true);
+            u.text("+" + std::to_string(std::min(comboHits, 30)) + " %", cx + 8, cy + sz * 0.42f + 20, 15, rgba(0xc8bca0, a), F_BOLD, A_LEFT, 0, true);
+            u.rect({cx - 120, cy + sz + 6, 190, 3}, vec4(0, 0, 0, 0.4f * a));
+            u.rect({cx - 120, cy + sz + 6, 190 * saturate(comboHitT / 2.5f), 3}, vec4(col.x, col.y, col.z, 0.8f * a));
+        }
+        if (frozenTimeT > 0.f) {
+            float fa = std::min(1.f, frozenTimeT * 3.f);
+            float fy = cy + (comboHits >= 3 ? 82.f : 0.f);
+            u.text("TEMPS FIGÉ", cx, fy, 22, rgba(0xffc860, fa), F_TITLE, A_RIGHT, 0, true);
+            u.rect({cx - 160, fy + 28, 160, 4}, vec4(0, 0, 0, 0.45f * fa));
+            u.rect({cx - 160, fy + 28, 160 * saturate(frozenTimeT / 2.2f), 4}, rgba(0xffc860, fa));
+        }
+    }
     // ---- touch controls
     float op = settings.layout.opacity;
     // joystick

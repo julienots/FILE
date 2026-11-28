@@ -1579,6 +1579,34 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "dodge") {
+        // 3.10.5 perfect dodge -> frozen time (enemies at a quarter speed), combo counter (+1 % per hit), lost on a blow
+        static int res[6]; static Entity foe; static float animT0, posT0;
+        s.push_back({1.5f, [](Game& g) { for (int& r : res) r = 0; g.toastHint.clear(); g.stamina = g.maxStamina;
+            Character& p = g.pc(); foe = g.spawnEnemy(enemyIndex("goblin"), p.pos + vec3(std::sin(p.yaw) * 2.5f, 0, std::cos(p.yaw) * 2.5f)); }, [](Game& g, float) { g.camIdleT = 0; }, "foe"});
+        s.push_back({0.1f, [](Game& g) {
+            AIBrain* ai = g.reg.get<AIBrain>(foe); Character* f = g.reg.get<Character>(foe);
+            if (ai && f) { ai->target = g.player; ai->state = AIState::Attack; ai->pendingAttack = 0; ai->telegraphT = 0.25f; }
+            g.playerDodge(); res[0] = g.frozenTimeT > 2.f;
+            if (f) { animT0 = f->vis.anim.time; }
+            AGR_LOG("DODGE frozen %.2f", g.frozenTimeT); }, idle, "dodge"});
+        s.push_back({0.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "frozen"});
+        s.push_back({0.0001f, [](Game& g) { Character* f = g.reg.get<Character>(foe); float adv = f ? f->vis.anim.time - animT0 : 0.f;
+            res[1] = adv > 0.05f && adv < 0.3f;   // a quarter of ~0.6 s
+            AGR_LOG("DODGE enemy anim advanced %.3f s in 0.6 s of frozen time", adv); }, idle, "slow?"});
+        s.push_back({0.1f, [](Game& g) {
+            float d1 = 0, d5 = 0;
+            for (int i = 0; i < 6; i++) { Character* f = g.reg.get<Character>(foe); if (!f) break; f->hp = f->maxHp = 9999; f->invuln = 0; float before = f->hp;
+                g.dealDamage(g.player, foe, 20.f, Element::Physical, vec3(0, 0, 1), 0, false, false); float dd = before - f->hp; if (i == 0) d1 = dd; if (i == 5) d5 = dd; f->invuln = 0; }
+            res[2] = g.comboHits == 6; res[3] = d5 > d1 * 1.02f;
+            g.requestScreenshot("build/shots/DG0_frozen_combo.png");
+            AGR_LOG("DODGE combo %d, first hit %.1f, sixth %.1f (frozen %.2f)", g.comboHits, d1, d5, g.frozenTimeT); }, idle, "combo"});
+        s.push_back({0.2f, [](Game& g) { Character& p = g.pc(); p.invuln = 0; g.dealDamage(foe, g.player, 5.f, Element::Physical, vec3(1, 0, 0), 0, false, false); res[4] = g.comboHits == 0; }, idle, "hit taken"});
+        s.push_back({2.5f, none, idle, "thaw"});
+        s.push_back({0.1f, [](Game& g) { res[5] = g.frozenTimeT <= 0.f;
+            AGR_LOG("DODGE TEST: frozen=%d slowed=%d combo=%d bonus=%d lostOnHit=%d thaw=%d -> %s", res[0], res[1], res[2], res[3], res[4], res[5], (res[0] && res[1] && res[2] && res[3] && res[4] && res[5]) ? "DODGE TEST PASSED" : "DODGE TEST FAILED"); }, idle, "report"});
+        return s;
+    }
     if (name == "herald") {
         // 3.10.4 the Herald of the Amber: wakes once three memories are free, drops the Amber Blade and a chronicle
         static int res[4];
