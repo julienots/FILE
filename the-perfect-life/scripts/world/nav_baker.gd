@@ -5,7 +5,7 @@ extends RefCounted
 
 static func bake(root: Node3D) -> NavigationRegion3D:
 	var nm := NavigationMesh.new()
-	nm.agent_radius = 0.3
+	nm.agent_radius = 0.32
 	nm.agent_height = 1.7
 	nm.agent_max_climb = 0.25
 	nm.agent_max_slope = 40.0
@@ -14,6 +14,10 @@ static func bake(root: Node3D) -> NavigationRegion3D:
 	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	nm.geometry_collision_mask = 1
 	nm.filter_baking_aabb = AABB(Vector3(-1.0, -0.5, -4.0), Vector3(18.0, 7.0, 17.5))
+	# la carte de navigation doit avoir la même résolution que le navmesh (sinon chemins faux)
+	var map := root.get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map, nm.cell_size)
+	NavigationServer3D.map_set_cell_height(map, nm.cell_height)
 	var region := NavigationRegion3D.new()
 	region.navigation_mesh = nm
 	root.add_child(region)

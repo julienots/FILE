@@ -9,6 +9,10 @@ enum Level { ULTRA, HIGH, MEDIUM, PERFORMANCE }
 const NAMES := ["Ultra", "Élevé", "Moyen", "Performance"]
 
 static func apply(level: int, env: Environment, sun: DirectionalLight3D, vp: Viewport) -> void:
+	# rendu Mobile (téléphones) : les effets Forward+ n'existent pas, on ne les demande pas
+	var fplus := RenderingServer.get_current_rendering_method() == "forward_plus"
+	if not fplus:
+		level = maxi(level, Level.MEDIUM)
 	var ultra := level == Level.ULTRA
 	var high := level <= Level.HIGH
 	var mid := level <= Level.MEDIUM
