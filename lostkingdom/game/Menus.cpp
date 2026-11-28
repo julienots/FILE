@@ -1,0 +1,1711 @@
+#include "Game.h"
+#include "../engine/core/Platform.h"
+#include <algorithm>
+#include "../engine/third_party/stb_image.h"
+
+namespace lk {
+
+extern const char* CTL_ICON[CTL_COUNT];
+Rect ctlRect(const Game& g, int id);
+
+static const vec4 INK = rgba(0x3a2a1a), GOLDT = rgba(0xf6dc9a), PALE = rgba(0xe8dcc0), DIM = rgba(0xb0a48c);
+
+// ============================================================================================ helpers
+static bool slider(UI& u, Rect r, const std::string& label, float& v, float lo, float hi, const char* fmt = "%.0f %%", float mul = 100.f) {
+    u.text(label, r.x, r.y, 19, PALE, F_BODY);
+    Rect bar{r.x, r.y + 30, r.w - 70, 14};
+    u.rect(bar, vec4(0, 0, 0, 0.45f));
+    float f = saturate((v - lo) / (hi - lo));
+    u.rect({bar.x, bar.y, bar.w * f, bar.h}, rgba(0xc9a45c));
+    u.circle({bar.x + bar.w * f, bar.y + 7}, 13, rgba(0xf6dc9a), 16);
+    char b[32]; snprintf(b, sizeof b, fmt, v * mul);
+    u.text(b, r.x + r.w - 60, r.y + 24, 18, GOLDT, F_BOLD);
+    bool changed = false;
+    for (auto& fg : u.fingers) {
+        if (fg.down && Rect{bar.x - 10, bar.y - 18, bar.w + 20, 50}.contains(fg.sx, fg.sy)) {
+            fg.consumed = true;
+            float nv = lo + saturate((fg.x - bar.x) / bar.w) * (hi - lo);
+            if (std::fabs(nv - v) > 1e-4f) { v = nv; changed = true; }
+        }
+    }
+    return changed;
+}
+
+static bool toggle(UI& u, Rect r, const std::string& label, bool& v) {
+    u.text(label, r.x, r.y + 8, 19, PALE, F_BODY);
+    Rect sw{r.x + r.w - 76, r.y + 4, 66, 32};
+    u.nine("bar_frame", sw, vec4(1, 1, 1, 1), 1.f);
+    u.circle({v ? sw.x + sw.w - 16 : sw.x + 16, sw.y + 16}, 12, v ? rgba(0x7ac85a) : rgba(0x8a7a6a), 16);
+    u.tag({r.x, r.y, r.w, 40}, label);
+    if (u.button({r.x, r.y, r.w, 40})) { v = !v; return true; }
+    return false;
+}
+
+static Rect journalFrame(UI& u) { return {10, 10, u.W - 20, u.H - 20}; }   // 2.3.5 the whole phone screen
+
+bool Game::itemIcon(const std::string& id, Rect r, float a) {
+    const ItemDef* d = item(id);
+    if (!d) return false;
+    auto it = iconUV.find(id);
+    if (iconsReady && it != iconUV.end()) { ui.image(iconRT.color.id, r, it->second, vec4(1, 1, 1, a)); return true; }
+    std::string ic = d->icon.empty() ? "i_star" : d->icon;
+    vec4 tint{1, 1, 1, a};
+    if (d->kind == ItemKind::Head || d->kind == ItemKind::Chest || d->kind == ItemKind::Hands || d->kind == ItemKind::Feet) tint = vec4(lerp(vec3(1), d->color * 1.4f, 0.5f), a);
+    ui.sprite(ic, r.inset(r.w * 0.06f), tint);
+    return true;
+}
+
+// 3.5.0 the 3D model of an item, built once: mesh, centre and radius (for framing and for items on the ground)
+const Game::ItemModel* Game::itemModel(const std::string& id) {
+    auto it = itemModels.find(id);
+    if (it != itemModels.end()) return it->second.mesh ? &it->second : nullptr;
+    ItemModel& m = itemModels[id];
+    const ItemDef* d = item(id);
+    if (!d) return nullptr;
+    MeshBuilder b;
+    if (!buildItemModel(b, *d) || b.v.empty()) return nullptr;
+    vec3 lo(1e9f), hi(-1e9f);
+    for (const Vertex& v : b.v) { vec3 p(v.px, v.py, v.pz); lo = vmin(lo, p); hi = vmax(hi, p); }
+    m.center = (lo + hi) * 0.5f;
+    m.radius = std::max(0.05f, length(hi - lo) * 0.5f);
+    m.longAxis = (d->kind == ItemKind::Weapon || d->kind == ItemKind::Tool) && (hi.z - lo.z) > 1.6f * std::max(hi.x - lo.x, hi.y - lo.y);   // built along +Z: shown diagonally
+    m.mesh = std::make_shared<Mesh>();
+    b.upload(*m.mesh);
+    return &m;
+}
+
+// The orientation an item is shown in: long weapons and tools diagonally, everything else in a three-quarter view
+// from slightly above.
+static quat itemPose(const Game::ItemModel& m, float spin) {
+    if (m.longAxis) return quat::axisAngle({0, 0, 1}, -PI / 4) * quat::axisAngle({1, 0, 0}, -PI / 2) * quat::axisAngle({0, 1, 0}, 0.3f + spin);
+    return quat::axisAngle({1, 0, 0}, 0.38f) * quat::axisAngle({0, 1, 0}, -0.65f + spin);
+}
+
+static Environment itemLight() {
+    Environment e; e.sunDir = normalize(vec3(-0.45f, 0.75f, 0.6f)); e.sunIntensity = 2.7f; e.sunColor = srgb(0xfff2dc);
+    e.skyAmbient = srgb(0xa0b4d8) * 0.95f; e.groundAmbient = srgb(0x6a5440) * 0.75f; e.fogDensity = 0; e.exposure = 1.0f; e.saturation = 1.15f; e.contrast = 1.06f;
+    return e;
+}
+
+// Renders an item model into a square target, framed to fill it.
+static void renderItemCell(Game& g, RenderTarget& rt, const Game::ItemModel& m, float spin) {
+    quat q = itemPose(m, spin);
+    // fit: the extent of the rotated mesh seen from +Z (bounds of the rotated bounding sphere, tightened)
+    float R = m.radius;
+    Camera c; c.fovY = 24 * DEG; c.zNear = 0.02f; c.zFar = 50.f;
+    float dist = (R * 1.02f) / std::tan(c.fovY * 0.5f);
+    c.target = vec3(0); c.pos = vec3(0, 0, dist); c.update(1.f);
+    DrawItem di; di.mesh = m.mesh.get();
+    di.model = mat4::rotate(q) * mat4::translate(-m.center);
+    di.outline = true; di.outlineColor = vec4(0.05f, 0.03f, 0.02f, 1); di.outlineWidth = 0.008f * R;
+    g.renderer.renderToTarget(rt, c, itemLight(), {di}, vec4(0, 0, 0, 0));
+}
+
+// Item icons, rendered from the items' 3D models into one atlas (every item that has a model; the others keep
+// their 2D icon).
+void Game::renderItemIcons() {
+    if (iconsReady) return;
+    const int cell = 112, cols = 20;   // 400 items
+    if (!iconRT.fbo) iconRT.create(cell * cols, cell * cols, GL_RGBA8, true);
+    RenderTarget cellRT; cellRT.create(cell, cell, GL_RGBA8, true);
+    int n = 0;
+    for (auto& d : allItems()) {
+        if (n >= cols * cols) break;
+        const ItemModel* m = itemModel(d.id);
+        if (!m) continue;
+        renderItemCell(*this, cellRT, *m, 0.f);
+        int cx = n % cols, cy = n / cols;
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, cellRT.fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, iconRT.fbo);
+        glBlitFramebuffer(0, 0, cell, cell, cx * cell, cy * cell, (cx + 1) * cell, (cy + 1) * cell, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        float s = 1.f / cols;
+        iconUV[d.id] = vec4(cx * s, (cy + 1) * s, (cx + 1) * s, cy * s);  // flipped (GL origin bottom-left)
+        n++;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    cellRT.destroy();
+    iconsReady = true;
+    AGR_LOG("item icons: %d items rendered from their 3D models", n);
+}
+
+// 3.5.0 the selected item turning slowly in a halo of its rarity (falls back to the icon)
+void Game::itemShowcase(const std::string& id, Rect r, Rarity rar) {
+    const ItemModel* m = itemModel(id);
+    vec3 rc = rarityColor(rar);
+    ui.sprite("glow", r.inset(-r.w * 0.12f), vec4(rc, 0.35f + 0.1f * std::sin(realTime * 2.5f)));
+    if (!m) { itemIcon(id, r); return; }
+    if (showcaseT != realTime) { showcaseT = realTime; showcaseUsed = 0; }
+    if (showcaseUsed >= 2) { itemIcon(id, r); return; }
+    RenderTarget& rt = showcaseRT[showcaseUsed++];
+    if (!rt.fbo) rt.create(256, 256, GL_RGBA8, true);
+    renderItemCell(*this, rt, *m, realTime * 0.9f);
+    ui.image(rt.color.id, r, vec4(0, 1, 1, 0));
+}
+
+// Close-up portrait of an NPC (rendered with the dialogue depth of field look).
+void Game::renderPortrait(int npc) {
+    if (portraitNpc == npc && portraitRT.fbo) return;
+    if (!portraitRT.fbo) portraitRT.create(256, 256, GL_RGBA8, true);
+    portraitNpc = npc;
+    Visual v;
+    HumanoidLook L;
+    if (npc >= 0) L = npcs()[npc].look;
+    else { L.c1 = hexColor(0x6a4a3a); L.seed = (uint32_t)(-npc) * 31; L.hairCol = hexColor(0x5a3a22); }
+    setupVisualHumanoid(v, L, WeaponType::None, WeaponType::None, 1.f);
+    v.anim.update(0.016f);
+    computeWorld(*v.anim.skeleton, v.anim.pose, v.pw);
+    Camera c;
+    vec3 head = v.pw.wpos[H_HEAD] + vec3(0, 0.08f * L.headSize, 0);
+    c.target = head; c.pos = head + vec3(0.18f, 0.03f, 0.62f); c.fovY = 30 * DEG; c.zNear = 0.05f; c.zFar = 10; c.update(1.f);
+    Environment e; e.sunDir = normalize(vec3(0.5f, 0.6f, 0.7f)); e.sunIntensity = 2.6f; e.sunColor = srgb(0xffe8c8);
+    e.skyAmbient = srgb(0x8a9ac0); e.groundAmbient = srgb(0x5a4030) * 0.7f; e.fogDensity = 0; e.exposure = 1.05f; e.saturation = 1.05f; e.contrast = 1.05f;
+    DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = v.pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.8f;
+    renderer.renderToTarget(portraitRT, c, e, {d}, vec4(0.16f, 0.12f, 0.1f, 1));
+}
+
+// ============================================================================================ dialogue box
+// 3.8.0 a live close-up of a character in the world (its current pose: the talking gestures show in the frame)
+bool Game::renderLivePortrait(RenderTarget& rt, Entity e) {
+    Character* ch = reg.valid(e) ? reg.get<Character>(e) : nullptr;
+    if (!ch || !ch->vis.mesh || !ch->vis.anim.skeleton || ch->vis.arch != Arch::Humanoid) return false;
+    if (!rt.fbo) rt.create(256, 256, GL_RGBA8, true);
+    Visual& v = ch->vis;
+    computeWorld(*v.anim.skeleton, v.anim.pose, v.pw);
+    vec3 head = v.pw.wpos[H_HEAD] + vec3(0, 0.1f, 0);
+    vec3 chest = v.pw.wpos[H_CHEST];
+    Camera c;
+    c.target = lerp(head, chest, 0.25f); c.pos = c.target + vec3(0.2f, 0.04f, 0.95f); c.fovY = 30 * DEG; c.zNear = 0.05f; c.zFar = 10; c.update(1.f);
+    Environment en; en.sunDir = normalize(vec3(0.5f, 0.6f, 0.7f)); en.sunIntensity = 2.6f; en.sunColor = srgb(0xffe8c8);
+    en.skyAmbient = srgb(0x8a9ac0); en.groundAmbient = srgb(0x5a4030) * 0.7f; en.fogDensity = 0; en.exposure = 1.05f; en.saturation = 1.05f; en.contrast = 1.05f;
+    std::vector<DrawItem> items;
+    DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = v.pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.8f;
+    items.push_back(d);
+    renderer.renderToTarget(rt, c, en, items, vec4(0.16f, 0.12f, 0.1f, 1));
+    return true;
+}
+
+void Game::drawDialog() {
+    UI& u = ui;
+    u.consumeAll();
+    float W_ = u.W, H_ = u.H;
+    float ot = dialog.openT;
+    auto easeO = [](float x) { x = saturate(x); return 1.f - (1.f - x) * (1.f - x) * (1.f - x); };
+    // cinematic letterbox
+    float lb = H_ * 0.085f * easeO(ot * 2.5f);
+    u.rect({0, 0, W_, lb}, vec4(0, 0, 0, 0.92f));
+    u.rect({0, H_ - lb * 0.35f, W_, lb * 0.35f}, vec4(0, 0, 0, 0.92f));
+    if (dialog.shownLine != dialog.line) dialogLineStart();
+    bool hero = dialog.whoAt(dialog.line) == 'H';
+    float slide = (1.f - easeO(ot * 3.f)) * 80.f;
+    Rect box{W_ * 0.08f, H_ - 250 + slide, W_ * 0.84f, 230};
+    u.panel(box, "", true);
+    // the speaking face: the person on the left, the hero on the right
+    Entity spkE = hero ? player : dialog.ent;
+    bool live = renderLivePortrait(portraitLiveRT[hero ? 1 : 0], spkE);
+    if (!live && !hero) renderPortrait(dialog.npc);
+    float px = hero ? box.x + box.w - 172 : box.x + 22;
+    Rect pr{px, box.y + 22, 150, 150};
+    float pop = easeO(dialog.reveal / 12.f);
+    Rect prr = pr.inset(-4.f * (1.f - pop));
+    u.nine("slot_sel", {prr.x - 6, prr.y - 6, prr.w + 12, prr.h + 12}, hero ? vec4(0.75f, 0.9f, 1.f, 1) : vec4(1, 1, 1, 1), 0.6f);
+    GLuint tex = live ? portraitLiveRT[hero ? 1 : 0].color.id : (portraitRT.fbo ? portraitRT.color.id : 0);
+    if (tex) u.image(tex, prr, vec4(0, 1, 1, 0));
+    std::string line = dialog.line < (int)dialog.lines.size() ? dialog.lines[dialog.line] : "";
+    bool narr = !line.empty() && line[0] == '(';   // stage directions: no voice, in a softer ink
+    std::string heroName = heroes()[std::max(0, std::min((int)heroes().size() - 1, activeHero))].name;
+    float tx = hero ? box.x + 30 : box.x + 196;
+    bool lastLine = dialog.line + 1 >= (int)dialog.lines.size();
+    if (hero) { u.text(heroName, tx, box.y + 18, 30, rgba(0x1e3a5a), F_SERIF, A_LEFT); u.text("Vous", tx, box.y + 54, 18, rgba(0x4a6a8a), F_BODY, A_LEFT); }
+    else { u.text(dialog.speaker, tx, box.y + 18, 30, rgba(0x5a2a14), F_SERIF, A_LEFT); u.text(dialog.title, tx, box.y + 54, 18, rgba(0x7a5a3a), F_BODY, A_LEFT); }
+    // typewriter with a breath on punctuation, and a voice blip every few letters
+    size_t before = std::min(line.size(), (size_t)dialog.reveal);
+    char prev = before > 0 && before <= line.size() ? line[before - 1] : ' ';
+    bool pause = prev == '.' || prev == '!' || prev == '?' || prev == ',' || prev == ';' || prev == ':' || (unsigned char)prev == 0xA6;   // 0xA6: end of '…'
+    dialog.reveal += u.dt * (pause ? (prev == ',' ? 14.f : 7.f) : 52.f);
+    size_t n = std::min(line.size(), (size_t)dialog.reveal);
+    while (n < line.size() && (line[n] & 0xC0) == 0x80) n++;  // keep UTF-8 intact
+    if (n > before && !narr && n < line.size()) {
+        for (size_t i = before; i < n; i++) if ((line[i] & 0xC0) != 0x80 && line[i] != ' ') dialog.blip += 1.f;
+        if (dialog.blip >= 3.f) {
+            dialog.blip = 0;
+            uint32_t hsh = 2166136261u; for (char ch : (hero ? heroName : dialog.speaker)) hsh = (hsh ^ (uint8_t)ch) * 16777619u;
+            float base = hero ? 1.0f : 0.78f + (hsh % 1000) / 1000.f * 0.55f;
+            float jit = 0.94f + ((n * 2654435761u) >> 16 & 255) / 255.f * 0.12f;
+            play("voice", 0.16f, base * jit);
+        }
+    }
+    float textW = box.w - 226 - (lastLine && !hero ? 330 : 30);
+    if (lastLine && hero) textW = box.w - 226 - 330;
+    vec4 ink = narr ? rgba(0x6a5a4a) : INK;
+    u.text(line.substr(0, n), tx, box.y + 86, narr ? 21 : 22, ink, F_BODY, A_LEFT, textW);
+    // progress: one dot per line of the scene
+    int total = (int)dialog.lines.size();
+    if (total > 1 && total <= 16) {
+        float dx = 16.f, x0 = box.x + box.w / 2 - (total - 1) * dx / 2;
+        for (int i = 0; i < total; i++) {
+            bool cur = i == dialog.line;
+            float r = cur ? 5.f : 3.5f;
+            vec4 col = i <= dialog.line ? (dialog.whoAt(i) == 'H' ? rgba(0x2a5a8a) : rgba(0x8a4a1a)) : rgba(0x7a5a3a, 0.35f);
+            u.rect({x0 + i * dx - r, box.y + box.h - 18 - r, r * 2, r * 2}, col);
+        }
+    }
+    // tap to advance / skip typewriter
+    for (auto& f : u.fingers) if (f.released && box.contains(f.x, f.y)) {
+        if (n < line.size()) dialog.reveal = 1e9f;
+        else if (!lastLine) { dialog.line++; dialog.reveal = 0; }
+    }
+    if (!lastLine) {
+        float bob = std::abs(std::sin(realTime * 4.f)) * 6.f;
+        float ax = hero ? box.x + box.w - 220 : box.x + box.w - 44;
+        if (n >= line.size()) u.text("»", ax + bob * 0.8f, box.y + box.h - 56, 34, rgba(0x7a5a3a, 0.65f + 0.35f * std::sin(realTime * 5)), F_BODY);
+        return;
+    }
+    if (n < line.size()) return;   // the choices appear once the last line is written
+    // choices
+    float cw = 310;
+    float y = box.y + 18;
+    float cx = hero ? box.x + box.w - cw - 190 : box.x + box.w - cw - 20;
+    float ch = std::min(44.f, (box.h - 30) / std::max(1, (int)dialog.choices.size()) - 6);
+    std::vector<DialogState::Choice> ch2 = dialog.choices;
+    int k = 0;
+    for (auto& c : ch2) {
+        float app = easeO((dialog.reveal - (float)line.size()) / 18.f - k * 0.12f);
+        Rect br{cx + (1.f - app) * 40.f, y, cw, ch};
+        bool special = c.action.rfind("offer:", 0) == 0 || c.action.rfind("deliver:", 0) == 0 || c.action.rfind("accept:", 0) == 0;
+        if (u.fancyButton(br, c.text, true, special ? "button" : "button_dark", std::min(19.f, ch * 0.45f)) && app > 0.6f) { dialogAction(c.action); return; }
+        y += ch + 6; k++;
+    }
+}
+
+// ============================================================================================ splash / title / credits
+// 2.2.1 SuperEssence studio logo (the studio's own artwork, assets/branding/logo_*.png): "Super" slides in, "Essence"
+// is revealed letter-wise from left to right, the yellow dot drops and bounces, a gleam sweeps across, "STUDIO".
+static GLuint loadBrandTex(const char* path, vec2* size) {
+    std::vector<uint8_t> bytes;
+    if (!platform::readAsset(path, bytes)) return 0;
+    int w = 0, h = 0, n = 0;
+    unsigned char* px = stbi_load_from_memory(bytes.data(), (int)bytes.size(), &w, &h, &n, 4);
+    if (!px) return 0;
+    GLuint t = 0;
+    glGenTextures(1, &t);
+    glBindTexture(GL_TEXTURE_2D, t);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    stbi_image_free(px);
+    *size = vec2((float)w, (float)h);
+    return t;
+}
+
+void Game::drawSplash(float dt) {
+    UI& u = ui;
+    // 3.10.0 studio skill timing: the whole sequence in ~2.7 s (word, dot drop, gleam, STUDIO, fade); the animation
+    // keeps its original choreography, played 2.3x faster
+    float t = stateT * 2.3f, W_ = u.W, H_ = u.H;
+    if (stateT < 0.05f) audio.playMusic("studio", 0.2f);
+    static GLuint texS = 0, texE = 0, texD = 0, shS = 0, shE = 0, shD = 0;
+    static vec2 sS, sE, sD, tmp;
+    static bool tried = false;
+    if (!tried) { tried = true; texS = loadBrandTex("branding/logo_super.png", &sS); texE = loadBrandTex("branding/logo_essence.png", &sE); texD = loadBrandTex("branding/logo_dot.png", &sD);
+                 shS = loadBrandTex("branding/logo_super_shine.png", &tmp); shE = loadBrandTex("branding/logo_essence_shine.png", &tmp); shD = loadBrandTex("branding/logo_dot_shine.png", &tmp); }
+    u.rect({0, 0, W_, H_}, vec4(0, 0, 0, t < 5.6f ? 1.f : saturate(1 - (t - 5.6f) * 1.6f)));
+    float out = saturate((5.6f - t) * 2.2f);   // everything fades together at the end
+    auto ease = [](float x) { x = saturate(x); return 1.f - std::pow(1.f - x, 3.f); };
+    if (texS && texE && texD) {
+        float total = sS.x + sE.x + sD.x;
+        float k = std::min(W_ * 0.8f, 920.f) / total;
+        float h = sS.y * k;
+        float x0 = W_ / 2 - total * k / 2, y0 = H_ * 0.44f - h / 2;
+        // Super: slides in from the left, settles with a little overshoot
+        float ps = ease((t - 0.3f) / 0.75f);
+        float slide = (1.f - ps) * -70.f + std::sin(saturate((t - 0.3f) / 0.75f) * PI) * 6.f;
+        float sc = 1.f + (1.f - ps) * 0.12f;
+        vec2 cs{x0 + sS.x * k / 2 + slide, y0 + h / 2};
+        u.image(texS, {cs.x - sS.x * k * sc / 2, cs.y - h * sc / 2, sS.x * k * sc, h * sc}, vec4(0, 0, 1, 1), vec4(1, 1, 1, ps * out));
+        // Essence: wiped in from left to right (texture coordinates follow the reveal), each column rising a little
+        float pe = ease((t - 0.85f) / 0.8f);
+        if (pe > 0.f) {
+            float ex = x0 + sS.x * k, ew = sE.x * k * pe;
+            float rise = (1.f - ease((t - 0.85f) / 1.1f)) * 10.f;
+            u.image(texE, {ex, y0 + rise, ew, h}, vec4(0, 0, pe, 1), vec4(1, 1, 1, out));
+            // the bright leading edge of the wipe
+            if (pe < 0.999f) u.sprite("glow", {ex + ew - h * 0.4f, y0 - h * 0.1f, h * 0.8f, h * 1.2f}, vec4(1.f, 0.85f, 0.3f, 0.55f * out));
+        }
+        // the dot: drops from above and bounces twice (squash on impact)
+        float td = t - 1.65f;
+        if (td > 0.f) {
+            float yOff = 0.f, sq = 1.f;
+            if (td < 0.35f) { float q = td / 0.35f; yOff = -(1.f - q * q) * h * 1.6f; }
+            else if (td < 0.65f) { float q = (td - 0.35f) / 0.3f; yOff = -std::sin(q * PI) * h * 0.35f; sq = q < 0.15f ? 0.78f : 1.f; }
+            else if (td < 0.85f) { float q = (td - 0.65f) / 0.2f; yOff = -std::sin(q * PI) * h * 0.1f; sq = q < 0.2f ? 0.88f : 1.f; }
+            float dx = x0 + (sS.x + sE.x) * k, dw = sD.x * k;
+            u.image(texD, {dx - dw * (1.f / sq - 1.f) * 0.5f, y0 + yOff + h * (1.f - sq), dw / sq, h * sq}, vec4(0, 0, 1, 1), vec4(1, 1, 1, out));
+            // a puff of golden sparks when it lands
+            if (td > 0.35f && td < 1.4f) {
+                float f = (td - 0.35f) / 1.05f;
+                vec2 base{dx + dw * 0.5f, y0 + h * 0.82f};
+                for (int i = 0; i < 9; i++) {
+                    float ang = -PI * (0.1f + 0.8f * i / 8.f);
+                    vec2 p = base + vec2(std::cos(ang), std::sin(ang)) * (12.f + f * 70.f) * k * 2.f + vec2(0, f * f * 40.f);
+                    u.circle(p, (1.f - f) * 4.f, vec4(1.f, 0.82f, 0.25f, (1.f - f) * out), 8);
+                }
+            }
+        }
+        // a gleam sweeping across the whole word once it is complete
+        float tg = (t - 2.55f) / 0.7f;
+        if (tg > 0.f && tg < 1.f) {
+            // the letters themselves light up inside a narrow moving band (the black around them stays black)
+            float gx = x0 - h * 0.5f + (total * k + h) * tg;
+            u.pushClip({gx - h * 0.22f, y0 - 10, h * 0.44f, h + 20});
+            float sh = 0.8f * out * std::sin(saturate(tg) * PI);
+            if (shS) u.image(shS, {x0, y0, sS.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            if (shE) u.image(shE, {x0 + sS.x * k, y0, sE.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            if (shD) u.image(shD, {x0 + (sS.x + sE.x) * k, y0, sD.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            u.popClip();
+        }
+        // STUDIO, letter-spaced, then "présente"
+        float a2 = saturate((t - 2.8f) * 1.6f) * out;
+        u.text("S T U D I O", W_ / 2, y0 + h + 24, 26, rgba(0xf2f0e8, a2), F_BOLD, A_CENTER, 0, true);
+        float a3 = saturate((t - 3.4f) * 1.6f) * out;
+        u.text("présente", W_ / 2, y0 + h + 64, 20, rgba(0xffc73a, a3), F_BODY, A_CENTER);
+    } else {
+        // fallback (asset missing): the name in text
+        float a = saturate((t - 0.3f) * 1.5f) * out;
+        u.text("SuperEssence.", W_ / 2, H_ * 0.42f, 64, rgba(0xffc73a, a), F_TITLE, A_CENTER, 0, true);
+    }
+    float a4 = saturate((t - 3.8f) * 2.f) * out;
+    u.text("Propulsé par AGR ENGINE", W_ / 2, H_ - 50, 16, rgba(0x8a8070, a4), F_BOLD, A_CENTER);
+    // a tap skips it only once it has been seen in full at least once
+    static int seen = -1;
+    if (seen < 0) seen = platform::fileExists(platform::writableDir() + "/splash_seen") ? 1 : 0;
+    bool skip = false;
+    for (auto& f : u.fingers) if (f.released) skip = true;
+    bool done = t > 6.3f;
+    if (done && !seen) { platform::writeFileAtomic(platform::writableDir() + "/splash_seen", "1"); seen = 1; }
+    if (done || (skip && seen && t > 0.8f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); }
+    (void)dt;
+}
+
+void Game::newGame() {
+    coopLeave(true);   // 1.13.0
+    reg.clear();
+    clearBase(); nightHunters.clear();
+    amber = false; amberK = 0; amberEternity = 0; amberRifts.clear(); amberMemories.clear(); amberSpots.clear(); worldTint = vec3(1);   // 3.10.0
+    vehicles.clear(); vehicleEnts.clear(); driving = -1; vehiclesUnlocked.clear();   // 3.4.0 the vehicles are earned
+    cellar = CellarState(); cellarEnt = NullEntity; cellarHits.clear();   // 3.6.0
+    raceBest.clear(); race = RaceState();
+    player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
+    riding = false;
+    level = 1; xp = 0; gold = 60; skillPoints = 1;
+    invCap = 40; shards = 0; phoenixDay = -1; itemGets.clear();   // 3.2.0 a new bag: 40 slots
+    inventory.clear(); for (auto& e : equipment) e = ItemStack();
+    skills.clear(); knownSpells.clear(); ownedMounts.clear(); activeMount = -1;
+    mapPins.clear(); tele = TeleFx(); questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
+    storyFlags.clear(); cine = CinematicState(); pendingPrologue = true;
+    unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; meteorPending = false;
+    killedUnique.clear(); openedChests.clear(); clearedSpawns.clear(); dungeonsDone.clear(); world.harvested.clear();
+    if (world.dugChunks() > 0 || !world.felled.empty()) { world.clearDigs(); world.clearFelled(); world.unloadAll(); }   // 2.4.0 a new game starts on untouched ground (3.6.0 and forests)
+    bombs.clear(); digMode = false; digsDone = 0;
+    for (auto& r : reputation) r = 0;
+    fog.assign(128 * 128, 0);
+    nodeEntities.clear(); spawnedChunks.clear(); chunkSpawns.clear(); villageNpcsSpawned.clear();
+    dungeon = DungeonState();
+    gameTime = 0; playSeconds = 0; timeOfDay = 7.5f; day = 1;
+    equippedSpells[0] = equippedSpells[1] = equippedSpells[2] = -1;
+    // washed ashore south of Brindlemere, near the river mouth
+    const Poi* b = world.poiById("brindlemere");
+    vec3 start{b->pos.x + 20.f, 0, b->pos.y + 60.f};
+    start.y = world.groundHeight(start.x, start.z);
+    spawnPlayer(start);
+    respawnPos = start;
+    equipment[SL_WEAPON] = {"sword_rusty", 1, Rarity::Common, 0, 1, false};
+    equipment[SL_CHEST] = {"leather_chest", 1, Rarity::Common, 0, 2, false};
+    addItem("potion_minor", 3, Rarity::Count, false);
+    addItem("bread", 2, Rarity::Count, false);
+    addItem("tool_pickaxe", 1, Rarity::Count, false);
+    addItem("tool_woodaxe", 1, Rarity::Count, false);
+    addItem("tool_shovel", 1, Rarity::Count, false);   // 2.5.1
+    addItem("bomb", 2, Rarity::Count, false);
+    addItem("shield_wood", 1, Rarity::Count, false);
+    {   // 3.1.1 mods 2.0: starting gifts
+        const GameTuning& gt = gameTuning();
+        for (auto& si : gt.startItems) if (item(si.first)) addItem(si.first, si.second, Rarity::Count, false);
+        if (gt.startGold >= 0) gold = gt.startGold;
+        if (!gt.startWeapon.empty() && item(gt.startWeapon)) equipment[SL_WEAPON] = {gt.startWeapon, 1, item(gt.startWeapon)->rarity, 0, 1, false};
+    }
+    learnSpell("fireball");
+    recomputeStats();
+    rebuildPlayerVisual();
+    pc().hp = pc().maxHp; mp = maxMp; stamina = maxStamina;
+    pc().yaw = PI;
+    startQuest("m1");
+    camFocus = start; camYaw = 0.6f;
+    saveSlot = 0;
+}
+
+void Game::startPlaying() {
+    state = GameState::Playing; stateT = 0; menu = Menu::None;
+    lastRegion = -1;
+    renderItemIcons();
+    toastHint = "Joystick à gauche pour marcher · Bouton épée : attaquer (maintenir pour charger) · Glisser à droite pour tourner la caméra.";
+    hintT = 0;
+    // a new game opens with the prologue (the test bot only plays it in its own scenarios)
+    if (pendingPrologue && (!autoplay || autoplayScenario == "prologue")) { toastHint.clear(); startPrologue(); }
+    if (!autoplay && !cine.active) { loadGate = true; loadGateT = 0; loadGateReady = 0; loadGateFade = 0; loadTip = (int)(realTime * 7.f) % 6; }   // 2.1.0
+    pendingPrologue = false;
+}
+
+void Game::drawTitle(float dt) {
+    // 3.10.2 the title, art direction "chronique enluminée": an illuminated chronicle page laid over the living
+    // world. Asymmetric: the title and a list of entries on the left, the world and the golden breach on the right.
+    // Gold leaf hairlines, a serif voice, no wooden plaques, no black bands (a true soft shadow on the left only).
+    UI& u = ui;
+    float W_ = u.W, H_ = u.H, t = stateT;
+    if (audio.currentMusic().empty()) audio.playMusic("title", 2.f);
+    if (t < 0.05f && player == NullEntity) { timeOfDay = 18.55f; weather = weatherNext = W_CLEAR; weatherBlend = 1; }   // dusk: the breach glows
+    if (menu == Menu::Settings || menu == Menu::Saves || menu == Menu::Mods) { u.rectGradH({0, 0, W_, H_}, vec4(0.03f, 0.025f, 0.02f, 0.75f), vec4(0.03f, 0.025f, 0.02f, 0.45f)); drawMenus(dt); return; }
+    if (menu == Menu::NewGame) { u.rectGradH({0, 0, W_, H_}, vec4(0.03f, 0.025f, 0.02f, 0.75f), vec4(0.03f, 0.025f, 0.02f, 0.45f)); drawNewGameMenu(); return; }
+    const vec4 GOLD = rgba(0xe9c46a), INK = rgba(0x1a1410);
+    auto ease = [](float x) { x = saturate(x); return 1.f - std::pow(1.f - x, 3.f); };
+    float a = ease(t * 0.9f);
+    // the soft shadow that carries the page (left), and a breath of darkness at the very bottom for the credits line
+    u.rectGradH({0, 0, W_ * 0.62f, H_}, vec4(0.02f, 0.015f, 0.01f, 0.72f * a), vec4(0.02f, 0.015f, 0.01f, 0.f));
+    u.rectGrad({0, H_ * 0.82f, W_, H_ * 0.18f}, vec4(0, 0, 0, 0), vec4(0.02f, 0.015f, 0.01f, 0.45f * a));
+    float x0 = std::max(56.f, W_ * 0.075f);
+    // overline: the studio, letter-spaced
+    float oy = H_ * 0.12f;
+    float s1 = ease((t - 0.1f) * 1.4f);
+    u.text("S U P E R E S S E N C E   S T U D I O", x0 + (1.f - s1) * -20.f, oy, 15, rgba(0xe9c46a, 0.85f * s1), F_BOLD, A_LEFT);
+    // the title on two lines, left aligned, a hairline of gold leaf running from the K
+    float s2 = ease((t - 0.25f) * 1.1f);
+    float ty = oy + 30;
+    u.text("LOST", x0 + 3, ty + 4, 92, vec4(INK.x, INK.y, INK.z, 0.55f * s2), F_TITLE, A_LEFT);
+    u.text("LOST", x0 + (1.f - s2) * -30.f, ty, 92, rgba(0xf3dfa6, s2), F_TITLE, A_LEFT, 0, true);
+    float s3 = ease((t - 0.4f) * 1.1f);
+    float ky = ty + 92;
+    u.text("KINGDOM", x0 + 3, ky + 4, 92, vec4(INK.x, INK.y, INK.z, 0.55f * s3), F_TITLE, A_LEFT);
+    u.text("KINGDOM", x0 + (1.f - s3) * -30.f, ky, 92, rgba(0xf3dfa6, s3), F_TITLE, A_LEFT, 0, true);
+    float kw = u.textWidth("KINGDOM", 92, F_TITLE);
+    float ruleY = ky + 112;
+    float rw = (kw + 40.f) * ease((t - 0.6f) * 1.2f);
+    u.rectGradH({x0, ruleY, rw, 2}, vec4(GOLD.x, GOLD.y, GOLD.z, 0.9f), vec4(GOLD.x, GOLD.y, GOLD.z, 0.f));
+    // a small gold lozenge on the rule, like an illuminated initial's mark
+    u.circle({x0 + 4, ruleY + 1}, 4.f * ease((t - 0.6f) * 2.f), GOLD, 8);
+    float s4 = ease((t - 0.75f) * 1.2f);
+    u.text("Trois siècles après la Chute, le ciel se fend.", x0, ruleY + 14, 22, rgba(0xe8dcc0, 0.92f * s4), F_SERIF, A_LEFT, 0, true);
+    // ---- entries: a list in the chronicle's voice; the first (main) one is larger and underlined in gold
+    int last = latestSlot();
+    bool hasSave = last >= 0;
+    struct E { const char* label; bool en; int id; };
+    std::vector<E> es;
+    if (hasSave) es.push_back({"Continuer", true, 0});
+    es.push_back({"Nouvelle partie", true, 1});
+    es.push_back({"Parties", hasSave, 2});
+    es.push_back({"Mods", true, 3});
+    es.push_back({"Paramètres", true, 4});
+    es.push_back({"Crédits", true, 5});
+    float ey = ruleY + 62;
+    // the list always fits above the footer, whatever the screen's proportions
+    float need = 66.f + (es.size() - 1) * 48.f, room = H_ - 70.f - ey;
+    float rowK = clampf(room / need, 0.72f, 1.f);
+    int clicked = -1;
+    for (int i = 0; i < (int)es.size(); i++) {
+        const E& e = es[i];
+        bool main = i == 0;
+        float ts = (main ? 34.f : 25.f) * std::max(0.85f, rowK), rowH = (main ? 60.f : 48.f) * rowK;
+        float si = ease((t - 0.9f - i * 0.07f) * 2.f);
+        Rect hit{x0 - 18, ey, std::max(330.f, W_ * 0.3f), rowH};
+        u.tag(hit, e.label);
+        bool h = e.en && u.held(hit);
+        float slide = (1.f - si) * -24.f + (h ? 8.f : 0.f);
+        // the highlight: a wash of gold from the left, only under the finger or for the main entry
+        if (h || main) u.rectGradH({hit.x, hit.y + 6, hit.w, rowH - 12}, vec4(GOLD.x, GOLD.y, GOLD.z, (h ? 0.28f : 0.12f) * si), vec4(GOLD.x, GOLD.y, GOLD.z, 0.f));
+        // marker: a lozenge (four small triangles' worth of circle) for the main entry, a short hairline for the others
+        float cy = ey + rowH * 0.5f;
+        if (main) { u.circle({x0 + 2 + slide, cy}, 5.f, vec4(GOLD.x, GOLD.y, GOLD.z, si), 4); }
+        else u.rect({x0 + slide - 2, cy - 1, 10, 2}, vec4(GOLD.x, GOLD.y, GOLD.z, (e.en ? 0.7f : 0.25f) * si));
+        vec4 col = !e.en ? rgba(0x8a8070, 0.6f * si) : (main || h ? rgba(0xf6e7c1, si) : rgba(0xe2d6bb, 0.92f * si));
+        u.text(e.label, x0 + 24 + slide, cy - ts * 0.62f, ts, col, main ? F_TITLE : F_SERIF, A_LEFT, 0, true);
+        if (main && hasSave) {   // what "Continuer" will open
+            std::string sum = saveSummary(last);
+            if (!sum.empty()) u.text(sum, x0 + 26 + u.textWidth(e.label, ts, F_TITLE) + 18 + slide, cy - 8, 15, rgba(0xc8bca0, 0.8f * si), F_BODY, A_LEFT, 0, true);
+        }
+        if (e.en && si > 0.6f && u.button(hit)) clicked = e.id;
+        ey += rowH + (main ? 6.f * rowK : 0.f);
+    }
+    switch (clicked) {
+    case 0: if (loadGame(last)) { play("ui_open"); startPlaying(); } break;   // the game played last
+    case 1: {   // 2.6.0 the new-game screen: slot, difficulty, options
+        newOpts = GameOpts(); newSlot = 0;
+        for (int s = 0; s < GAME_SLOTS; s++) if (saveSummary(s).empty()) { newSlot = s; break; }
+        menu = Menu::NewGame; play("ui_open"); break;
+    }
+    case 2: menu = Menu::Saves; play("ui_open"); break;
+    case 3: scanMods(); menu = Menu::Mods; play("ui_open"); break;
+    case 4: menu = Menu::Settings; play("ui_open"); break;
+    case 5: state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); break;
+    default: break;
+    }
+    // footer: quiet, right-aligned version, the studio line on the left
+    float fa = ease((t - 1.4f) * 1.5f);
+    u.text("Une goutte d'Essence, un monde.  ·  v3.10.6", W_ - 20, H_ - 30, 14, rgba(0xc8bca0, 0.7f * fa), F_SERIF, A_RIGHT, 0, true);
+    (void)dt;
+}
+
+// 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
+void Game::drawNewGameMenu() {
+    UI& u = ui;
+    float W_ = u.W, H_ = u.H;
+    u.consumeAll();
+    u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, 0.6f));
+    Rect f{14, 14, W_ - 28, H_ - 28};
+    u.nine("book", f, vec4(1, 1, 1, 1), 0.6f);
+    u.text("Nouvelle partie", f.x + f.w / 2, f.y + 34, 40, GOLDT, F_TITLE, A_CENTER, 0, true);
+    if (u.iconButton({f.x + f.w - 96, f.y + 22, 74, 74}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+    // ---- slots (left): 2 columns x 3
+    Rect L{f.x + 64, f.y + 110, f.w * 0.5f - 90, f.h - 200};
+    u.text("Emplacement", L.x, L.y - 34, 24, PALE, F_SERIF);
+    float cw = (L.w - 14) / 2, ch = std::min(130.f, (L.h - 28) / 3);
+    for (int s = 0; s < GAME_SLOTS; s++) {
+        Rect r{L.x + (s % 2) * (cw + 14), L.y + (s / 2) * (ch + 14), cw, ch};
+        bool sel = s == newSlot;
+        u.nine(sel ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.9f);
+        std::string sum = saveSummary(s);
+        u.text("Partie " + std::to_string(s + 1), r.x + 18, r.y + 14, 24, sel ? GOLDT : PALE, F_SERIF);
+        u.text(sum.empty() ? "Vide" : sum, r.x + 18, r.y + 52, 16, sum.empty() ? DIM : rgba(0xe0b090), F_BODY, A_LEFT, r.w - 30);
+        if (!sum.empty()) u.text("(sera remplacée)", r.x + 18, r.y + r.h - 30, 14, DIM, F_BODY);
+        u.tag(r, "Partie " + std::to_string(s + 1));
+        if (u.button(r)) { newSlot = s; play("ui_click", 0.4f); }
+    }
+    // ---- options (right)
+    Rect R{f.x + f.w * 0.5f + 10, f.y + 110, f.w * 0.5f - 80, f.h - 200};
+    u.text("Difficulté", R.x, R.y - 34, 24, PALE, F_SERIF);
+    static const char* dn[] = {"Facile", "Normal", "Difficile", "Héroïque"};
+    static const char* dd[] = {"Ennemis plus faibles, pour découvrir l'histoire.", "L'aventure telle qu'elle a été pensée.", "Ennemis plus robustes et plus forts.", "Chaque combat compte. Bonne chance."};
+    float dw = (R.w - 30) / 4;
+    for (int i = 0; i < 4; i++) {
+        Rect r{R.x + i * (dw + 10), R.y, dw, 58};
+        bool on = newOpts.difficulty == i;
+        u.nine(on ? "plaque_hi" : "plaque", r, vec4(1, 1, 1, on ? 1.f : 0.85f), 0.69f);
+        u.text(dn[i], r.x + r.w / 2, r.y + 17, 19, on ? rgba(0xfff1d0) : PALE, F_SERIF, A_CENTER, 0, true);
+        u.tag(r, dn[i]);
+        if (u.button(r)) { newOpts.difficulty = i; play("ui_click", 0.4f); }
+    }
+    u.text(dd[newOpts.difficulty], R.x, R.y + 70, 17, DIM, F_BODY, A_LEFT, R.w);
+    float y = R.y + 120;
+    toggle(u, {R.x, y, R.w, 40}, "Événements aléatoires (embuscades, étoiles filantes, caches)", newOpts.events); y += 54;
+    toggle(u, {R.x, y, R.w, 40}, "Prologue (la cinématique d'ouverture)", newOpts.prologue); y += 70;
+    int active = 0; for (auto& m : mods) if (m.enabled) active++;
+    u.text("Mods actifs : " + std::to_string(active) + " / " + std::to_string((int)mods.size()), R.x, y, 20, PALE, F_SERIF);
+    if (u.fancyButton({R.x + R.w - 200, y - 10, 200, 50}, "Gérer les mods", true, "plaque", 19)) { scanMods(); menu = Menu::Mods; play("ui_open"); return; }
+    y += 44;
+    if (!mods.empty()) {
+        std::string names;
+        for (auto& m : mods) if (m.enabled) names += (names.empty() ? "" : ", ") + m.name;
+        u.text(names.empty() ? "Aucun mod actif." : names, R.x, y, 15, DIM, F_BODY, A_LEFT, R.w);
+    }
+    // ---- start
+    bool overwrite = !saveSummary(newSlot).empty();
+    Rect go{f.x + f.w / 2 - 230, f.y + f.h - 84, 460, 62};
+    if (u.fancyButton(go, overwrite ? "Remplacer la partie " + std::to_string(newSlot + 1) + " et commencer" : "Commencer la partie " + std::to_string(newSlot + 1), true, "plaque", 24)) {
+        play("ui_open");
+        menu = Menu::None;
+        newGame();
+        gameOpts = newOpts;
+        saveSlot = newSlot;
+        pendingPrologue = gameOpts.prologue;
+        startPlaying();
+        regionBanner = "Greenhaven"; regionBannerSub = "Les plaines verdoyantes"; regionBannerT = 5;
+        saveGame(saveSlot);
+    }
+}
+
+void Game::drawCredits(float dt) {
+    UI& u = ui;
+    float W_ = u.W, H_ = u.H;
+    if (stateT < 0.05f) audio.playMusic("credits", 2.f);
+    creditsT += dt;
+    u.rect({0, 0, W_, H_}, vec4(0, 0, 0, 0.72f));
+    static const char* lines[] = {
+        "#LOST KINGDOM", "", "A world waiting to be discovered.", "", "", "@Une production", "#SUPERESSENCE STUDIO", "", "",
+        "@Direction artistique & monde", "Superessence Studio", "", "@Moteur", "AGR Engine — rendu OpenGL ES 3, animation, audio, ECS", "",
+        "@Programmation", "Systèmes de jeu, IA, combat, quêtes, streaming du monde", "", "@Musique", "Bande originale composée pour Lost Kingdom", "Instruments : FluidR3 GM SoundFont, Frank Wen — licence MIT", "", "@Sons", "Ambiances et effets synthétisés pour Lost Kingdom", "",
+        "@Polices", "Cinzel, Cinzel Decorative, Alegreya Sans — SIL Open Font License", "", "@Bibliothèques", "stb_image, stb_vorbis, stb_image_write — domaine public (Sean Barrett)", "", "",
+        "@Merci d'avoir joué", "Le royaume se souviendra de l'Errant.", "", "", "#LOST KINGDOM — A WORLD WITHOUT BOUNDARIES", "", "Created by SUPERESSENCE STUDIO",
+    };
+    float y = H_ + 20 - creditsT * 48.f;
+    for (const char* l : lines) {
+        std::string s = l;
+        if (s.empty()) { y += 34; continue; }
+        if (s[0] == '#') { u.text(s.substr(1), W_ / 2, y, 52, GOLDT, F_TITLE, A_CENTER, W_ * 0.9f, true); y += 74; }
+        else if (s[0] == '@') { u.text(s.substr(1), W_ / 2, y, 22, rgba(0xc9a45c), F_SERIF, A_CENTER, 0, true); y += 36; }
+        else { u.text(s, W_ / 2, y, 22, PALE, F_BODY, A_CENTER, W_ * 0.8f, true); y += 34; }
+    }
+    bool tap = false;
+    for (auto& f : u.fingers) if (f.released) tap = true;
+    if (y < -50 || (tap && creditsT > 1.5f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); if (player != NullEntity && questsDone.count("m7")) { state = GameState::Playing; } }
+}
+
+// ============================================================================================ journal tabs
+static const char* TABS[] = {"Objectifs", "Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "À deux", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
+static const Menu TAB_MENU[] = {Menu::Objectives, Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Coop, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
+static const char* TAB_ICON[] = {"i_star", "i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_waypoint", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static constexpr int TAB_COUNT = 14;
+
+static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
+    UI& u = g.ui;
+    const ItemDef* d = item(s.id);
+    if (!d) return;
+    u.nine("panel_plain", r, vec4(1, 1, 1, 0.95f), 0.7f);
+    vec3 rc = rarityColor(s.rarity);
+    float y = r.y + 18;
+    g.itemShowcase(s.id, {r.x + 10, y - 8, 124, 124}, s.rarity);   // 3.5.0 the item itself, turning
+    std::string nm = d->name + (s.level > 0 ? " +" + std::to_string(s.level) : "");
+    u.text(nm, r.x + 146, y, 24, vec4(rc, 1), F_SERIF, A_LEFT, r.w - 164);
+    y += u.textHeight(nm, 24, F_SERIF, r.w - 164) + 2;
+    static const char* kinds[] = {"Arme", "Bouclier", "Tête", "Torse", "Mains", "Pieds", "Anneau", "Amulette", "Consommable", "Matériau", "Objet de quête", "Outil", "Monture", "Relique", "Apparence", "Objet clé"};
+    int ki = (int)d->kind; const char* kn = ki >= 0 && ki < (int)(sizeof kinds / sizeof kinds[0]) ? kinds[ki] : "Objet";   // 3.5.0 (key items read past the list)
+    u.text(std::string(rarityName(s.rarity)) + " · " + kn, r.x + 146, y, 17, vec4(rc * 0.85f, 1), F_BODY);
+    y = std::max(y + 30, r.y + 140);
+    float m = rarityMult(s.rarity) * (1.f + 0.12f * s.level);
+    auto stat = [&](const char* label, float v, const char* fmt) { if (v == 0) return; char b[64]; snprintf(b, sizeof b, fmt, v); u.text(label, r.x + 22, y, 19, DIM, F_BODY); u.text(b, r.x + r.w - 22, y, 19, GOLDT, F_BOLD, A_RIGHT); y += 26; };
+    stat("Attaque", d->atk * m, "+%.0f");
+    stat("Défense", d->def * m, "+%.0f");
+    stat("Points de vie", d->hp * m, "+%.0f");
+    stat("Mana", d->mp * m, "+%.0f");
+    stat("Critique", d->crit * 100, "+%.0f %%");
+    stat("Vitesse", d->speed * 100, "%+.0f %%");
+    if (d->elemDmg > 0) { char b[64]; snprintf(b, sizeof b, "+%.0f %s", d->elemDmg * m, elementName(d->element)); u.text("Dégâts élémentaires", r.x + 22, y, 19, DIM, F_BODY); u.text(b, r.x + r.w - 22, y, 19, vec4(elementColor(d->element), 1), F_BOLD, A_RIGHT); y += 26; }
+    if (d->heal > 0) stat("Soin", d->heal, "+%.0f PV");
+    if (d->mana > 0) stat("Mana rendu", d->mana, "+%.0f");
+    if (d->set >= 0 && d->set < (int)sets().size()) {
+        const SetDef& sd = sets()[d->set];
+        int n = 0; for (int i = 0; i < SL_COUNT; i++) { const ItemDef* e = item(g.equipment[i].id); if (e && e->set == d->set) n++; }
+        u.text(sd.name + " (" + std::to_string(n) + "/4)", r.x + 22, y + 4, 18, rgba(0x7ad06a), F_BOLD); y += 28;
+        u.text("2 : " + sd.bonus2, r.x + 30, y, 17, n >= 2 ? rgba(0x9ae08a) : DIM, F_BODY, A_LEFT, r.w - 50); y += 24;
+        u.text("4 : " + sd.bonus4, r.x + 30, y, 17, n >= 4 ? rgba(0x9ae08a) : DIM, F_BODY, A_LEFT, r.w - 50); y += 26;
+    }
+    u.text(d->desc, r.x + 22, y + 6, 18, rgba(0xc8bca4), F_BODY, A_LEFT, r.w - 44);
+    if (equipped) u.text("Équipé", r.x + r.w - 22, r.y + 18, 16, rgba(0x9ae08a), F_BOLD, A_RIGHT);
+}
+
+void Game::drawMenus(float dt) {
+    UI& u = ui;
+    float W_ = u.W, H_ = u.H;
+    if (menu == Menu::None) return;
+    if (layoutEdit) { drawLayoutEditor(); return; }
+    if (menu == Menu::HeroWheel) { drawHeroWheel(); return; }
+    if (menu != Menu::Death) u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, 0.55f));
+    // ---------------------------------------------------------------- pause & death
+    if (menu == Menu::Pause) {
+        // 2.3.5 a leather card with big oak plaques (icon + label), sized for thumbs
+        u.consumeAll();
+        float pw = std::min(600.f, W_ - 40), ph = std::min(H_ - 24, 690.f);
+        Rect p{W_ / 2 - pw / 2, H_ / 2 - ph / 2, pw, ph};
+        u.rect({p.x + 8, p.y + 10, p.w, p.h}, vec4(0, 0, 0, 0.5f));
+        u.nine("book", p, vec4(1, 1, 1, 1), 0.55f);
+        u.text("Pause", p.x + p.w / 2, p.y + 40, 40, GOLDT, F_TITLE, A_CENTER, 0, true);
+        u.sprite("divider", {p.x + p.w / 2 - 170, p.y + 92, 340, 16}, vec4(1, 1, 1, 0.85f));
+        float y = p.y + 122;
+        float bh = std::min(64.f, (p.y + p.h - 52 - y) / 7.f - 8.f);
+        auto b = [&](const char* l, const char* icon) {
+            Rect r{p.x + 62, y, p.w - 124, bh};
+            u.tag(r, l);
+            bool h = u.held(r);
+            Rect rr{r.x, r.y + (h ? 2.f : 0.f), r.w, r.h};
+            u.nine(h ? "plaque_hi" : "plaque", rr, vec4(1, 1, 1, 1), std::min(1.f, bh / 84.f));
+            u.sprite(icon, {rr.x + 38, rr.y + rr.h / 2 - 20, 40, 40});
+            u.text(l, rr.x + 92, rr.y + rr.h / 2 - 15, 25, rgba(0xfff1d0), F_SERIF, A_LEFT, 0, true);
+            y += bh + 8;
+            return u.button(r);
+        };
+        if (b("Reprendre", "i_check")) { menu = Menu::None; play("ui_close", 0.5f); }
+        // 2.2.0 respawn point where you stand, and a way out when stuck (back to that point, as dust)
+        if (b("Point de réapparition ici", "i_waypoint")) {
+            if (dungeon.active || !pc().grounded || pc().swimming || bossEnt != NullEntity) notify("Impossible ici (donjon, en l'air, dans l'eau ou en combat de boss).", vec3(1.f, 0.7f, 0.5f), "i_lock");
+            else { respawnPos = pc().pos; notify("Point de réapparition enregistré.", vec3(0.6f, 0.9f, 1.f), "i_waypoint"); }
+            menu = Menu::None;
+        }
+        if (b("Je suis bloqué", "i_lock")) {
+            menu = Menu::None;
+            if (dungeon.active) { pc().pos = dungeon.entrance; pc().vel = vec3(0); notify("Retour à l'entrée du donjon.", vec3(0.8f, 0.9f, 1.f), "i_waypoint"); }
+            else startDustTeleport(respawnPos, "Retour au point de réapparition.");
+        }
+        if (b("Journal", "i_quest")) { menu = Menu::Inventory; }
+        if (b("Sauvegarder", "i_save")) { menu = Menu::Saves; }
+        if (b("Paramètres", "i_settings")) { menu = Menu::Settings; }
+        if (b("Menu principal", "i_village")) { coopLeave(true); saveGame(saveSlot); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
+        return;
+    }
+    if (menu == Menu::Death) {
+        Rect p{W_ / 2 - 240, H_ * 0.52f, 480, 200};
+        u.consumeAll();
+        if (u.fancyButton({p.x + 40, p.y, p.w - 80, 62}, "Réapparaître (-10 % d'or)", true, "button", 24)) {
+            Character& c = pc();
+            gold = (int)(gold * 0.9f);
+            c.dead = false; c.hp = c.maxHp * 0.6f; c.deathT = 0; c.vis.anim.setState(BodyState::Locomotion, 0.1f); c.vis.anim.stopAction(0.05f);
+            c.status = Status();
+            if (dungeon.active) { c.pos = dungeon.entrance; }
+            else { c.pos = respawnPos; c.pos.y = groundAt(c.pos.x, c.pos.z); }
+            camFocus = c.pos;
+            if (bossEnt != NullEntity) { reg.destroyLater(bossEnt); bossEnt = NullEntity; }
+            menu = Menu::None; deathT = 0;
+            play("heal");
+        }
+        if (u.fancyButton({p.x + 40, p.y + 76, p.w - 80, 62}, "Charger la dernière sauvegarde", true, "button_dark", 22)) {
+            if (loadGame(saveSlot) || loadGame(99)) { menu = Menu::None; startPlaying(); }
+        }
+        return;
+    }
+    // ---------------------------------------------------------------- 2.2.0 quick bag: big slots, five filters, one action bar
+    if (menu == Menu::Bag) {
+        u.consumeAll();
+        auto cat = [](ItemKind k) {
+            switch (k) {
+            case ItemKind::Consumable: return 2;
+            case ItemKind::Material: return 3;
+            case ItemKind::Quest: case ItemKind::Relic: return 4;
+            default: return 1;
+            }
+        };
+        float pw = std::min(W_ * 0.62f, 760.f);
+        Rect P{W_ - pw - 24, 24, pw, H_ - 48};
+        u.rect({P.x - 14 + 6, P.y - 14 + 8, P.w + 28, P.h + 28}, vec4(0, 0, 0, 0.45f));
+        u.nine("book", P.inset(-18), vec4(1, 1, 1, 1), 0.42f);   // 2.3.5 leather-bound
+        u.text("Sac", P.x + 24, P.y + 16, 30, GOLDT, F_TITLE);
+        u.sprite("i_coin", {P.x + 110, P.y + 20, 28, 28});
+        u.text(std::to_string(gold), P.x + 144, P.y + 22, 22, GOLDT, F_BOLD);
+        if (u.iconButton({P.x + P.w - 66, P.y + 8, 56, 56}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+        // equipped at a glance (touch: open the full equipment page)
+        static const int strip[] = {SL_WEAPON, SL_OFFHAND, SL_HEAD, SL_CHEST, SL_HANDS, SL_FEET, SL_RING, SL_AMULET};
+        float sx = P.x + 230, ss = std::min(46.f, (P.w - 320) / 8.f - 4.f);
+        for (int i = 0; i < 8; i++) {
+            Rect r{sx + i * (ss + 4), P.y + 16, ss, ss};
+            u.nine("slot", r, vec4(1, 1, 1, 0.9f), 0.4f);
+            if (!equipment[strip[i]].id.empty()) itemIcon(equipment[strip[i]].id, r.inset(4));
+            if (u.button(r)) { menu = Menu::Equipment; play("ui_click", 0.4f); return; }
+        }
+        // filters
+        static const char* cats[] = {"Tout", "Équipement", "Soins", "Matériaux", "Quête"};
+        float cw = (P.w - 48) / 5.f;
+        for (int i = 0; i < 5; i++) {
+            Rect r{P.x + 24 + i * cw, P.y + 76, cw - 8, 46};
+            bool on = bagCat == i;
+            u.nine(on ? "button" : "button_dark", r, vec4(1, 1, 1, on ? 1.f : 0.85f), 0.7f);
+            u.text(cats[i], r.x + r.w / 2, r.y + 12, 17, on ? GOLDT : PALE, F_SERIF, A_CENTER);
+            if (u.button(r)) { bagCat = i; selItem = -1; play("ui_click", 0.4f); }
+        }
+        // items of the filter, sorted: category, rarity, name
+        std::vector<int> list;
+        for (int i = 0; i < (int)inventory.size(); i++) { const ItemDef* d = item(inventory[i].id); if (d && (bagCat == 0 || cat(d->kind) == bagCat)) list.push_back(i); }
+        std::stable_sort(list.begin(), list.end(), [&](int a, int b) {
+            const ItemDef *da = item(inventory[a].id), *db = item(inventory[b].id);
+            if (cat(da->kind) != cat(db->kind)) return cat(da->kind) < cat(db->kind);
+            if (inventory[a].rarity != inventory[b].rarity) return (int)inventory[a].rarity > (int)inventory[b].rarity;
+            return da->name < db->name;
+        });
+        float actionH = 150.f;
+        Rect grid{P.x + 24, P.y + 134, P.w - 48, P.h - 134 - actionH - 16};
+        float cell = 100.f;
+        int cols = std::max(3, (int)(grid.w / cell));
+        cell = grid.w / cols;
+        u.pushClip(grid);
+        float so = u.scrollArea("bag", grid, ((list.size() + cols - 1) / cols) * cell + 10);
+        for (int n = 0; n < (int)list.size(); n++) {
+            int i = list[n];
+            Rect r{grid.x + (n % cols) * cell, grid.y + (n / cols) * cell - so, cell - 8, cell - 8};
+            if (r.y > grid.y + grid.h || r.y + r.h < grid.y) continue;
+            u.nine(i == selItem ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.7f);
+            vec3 rc = rarityColor(inventory[i].rarity);
+            if ((int)inventory[i].rarity >= 2) u.sprite("glow", r.inset(-6), vec4(rc, 0.25f));
+            itemIcon(inventory[i].id, r.inset(10));
+            u.rect({r.x + 8, r.y + r.h - 9, r.w - 16, 3}, vec4(rc, 0.95f));
+            if (inventory[i].count > 1) u.text("x" + std::to_string(inventory[i].count), r.x + r.w - 8, r.y + r.h - 30, 17, PALE, F_BOLD, A_RIGHT, 0, true);
+            if (inventory[i].isNew) u.circle({r.x + 12, r.y + 12}, 5, rgba(0xf8d050), 8);
+            if (u.button(r)) { selItem = i; inventory[i].isNew = false; play("ui_click", 0.4f); }
+        }
+        if (list.empty()) u.text("Rien ici pour l'instant.", grid.x + grid.w / 2, grid.y + 60, 20, DIM, F_BODY, A_CENTER);
+        u.popClip();
+        // action bar: name, what it does, comparison with what you wear, big buttons
+        Rect A{P.x + 24, P.y + P.h - actionH - 8, P.w - 48, actionH};
+        u.nine("slot", A, vec4(1, 1, 1, 0.7f), 0.5f);
+        if (selItem >= 0 && selItem < (int)inventory.size()) {
+            ItemStack st = inventory[selItem];
+            const ItemDef* d = item(st.id);
+            itemIcon(st.id, {A.x + 12, A.y + 12, 64, 64});
+            u.text(d->name, A.x + 88, A.y + 10, 21, vec4(rarityColor(st.rarity), 1), F_BOLD, A_LEFT, A.w - 300);
+            std::string line;
+            int slot = slotForKind(d->kind);
+            if (slot >= 0) {
+                const ItemDef* e = item(equipment[slot].id);
+                char b[160];
+                float da = d->atk - (e ? e->atk : 0), dd = d->def - (e ? e->def : 0), dh = d->hp - (e ? e->hp : 0);
+                snprintf(b, sizeof b, "Par rapport à l'équipé : attaque %+.0f · défense %+.0f · vie %+.0f", da, dd, dh);
+                line = b;
+            } else if (d->kind == ItemKind::Consumable) {
+                char b[120]; snprintf(b, sizeof b, "%s%s", d->heal > 0 ? ("Soigne " + std::to_string((int)d->heal) + " PV. ").c_str() : "", d->mana > 0 ? ("Rend " + std::to_string((int)d->mana) + " mana.").c_str() : "");
+                line = b[0] ? b : d->desc;
+            } else line = d->desc;
+            u.text(line, A.x + 88, A.y + 40, 16, PALE, F_BODY, A_LEFT, A.w - 300);
+            float bw = 130, bx = A.x + A.w - bw * 2 - 22, by = A.y + A.h - 64;
+            bool equipable = slot >= 0 || d->kind == ItemKind::Cosmetic;
+            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, st.id == "bomb" ? "Lancer" : "Utiliser", true, "plaque", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
+            if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "plaque", 21)) { equip(selItem); selItem = -1; }
+            if ((st.id == "tool_shovel" || st.id == "tool_pickaxe") && u.fancyButton({bx, by, bw, 56}, digMode ? "Arrêter" : "Creuser", true, "plaque", 21)) { equip(selItem); selItem = -1; }   // 2.4.0
+            if (d->kind != ItemKind::Quest && d->kind != ItemKind::Relic && u.fancyButton({bx + bw + 10, by, bw, 54}, "Jeter", true, "button_dark", 21)) {
+                Character& pl = pc();
+                spawnPickup(st.id, 1, st.rarity, pl.pos + vec3(std::sin(pl.yaw), 0, std::cos(pl.yaw)) * 1.5f);
+                if (--inventory[selItem].count <= 0) { inventory.erase(inventory.begin() + selItem); selItem = -1; }
+            }
+        } else u.text("Touchez un objet.", A.x + A.w / 2, A.y + 56, 20, DIM, F_BODY, A_CENTER);
+        // the full journal (skills, crafting, quests, map...) for those who want everything
+        Rect J{P.x + 24, P.y + P.h - actionH - 8 - 0, 0, 0};
+        (void)J;
+        if (u.fancyButton({16, H_ - 72, 220, 56}, "Journal complet", true, "button_dark", 19)) { menu = Menu::Inventory; selItem = -1; play("ui_open", 0.5f); }
+        return;
+    }
+    if (menu == Menu::Shop) {
+        // 3.2.0 the shop: the merchant's goods, the Wonders (paid in star shards), and a bag you sell from in two taps
+        u.consumeAll();
+        Rect f = journalFrame(u);
+        const NpcDef& n = npcs()[shopNpc];
+        u.panel(f, n.name + " — Commerce");
+        if (u.iconButton({f.x + f.w - 60, f.y - 10, 64, 64}, "close")) { menu = Menu::None; shopSell = -1; play("ui_close", 0.5f); return; }
+        u.sprite("i_coin", {f.x + 46, f.y + 36, 30, 30});
+        u.text(std::to_string(gold), f.x + 82, f.y + 38, 22, GOLDT, F_BOLD);
+        u.sprite("i_crystal", {f.x + 190, f.y + 36, 28, 28}, rgba(0xb8a0ff));
+        u.text(std::to_string(shards) + " éclats", f.x + 222, f.y + 38, 22, rgba(0xc8b8ff), F_BOLD);
+        char cb[48]; snprintf(cb, sizeof cb, "Sac %d/%d", bagUsed(), bagCapacity());
+        u.text(cb, f.x + 420, f.y + 38, 20, bagUsed() >= bagCapacity() ? rgba(0xe07060) : PALE, F_BOLD);
+        Rect left{f.x + 40, f.y + 80, f.w * 0.5f - 60, f.h - 110}, right{f.x + f.w * 0.5f + 10, f.y + 80, f.w * 0.5f - 50, f.h - 200};
+        u.text("À vendre", left.x, left.y - 30, 20, PALE, F_SERIF);
+        u.text("Votre sac : touchez pour vendre", right.x, right.y - 30, 20, PALE, F_SERIF);
+        // goods: the merchant's list (+ a leather satchel everywhere), then the Wonders for shards
+        std::vector<std::pair<std::string, bool>> goods;   // id, paid in shards
+        for (auto& id : n.shop) goods.push_back({id, false});
+        if (std::find(n.shop.begin(), n.shop.end(), "bag_leather") == n.shop.end()) goods.push_back({"bag_leather", false});
+        int wondersAt = (int)goods.size();
+        for (auto& d : allItems()) if (d.shardPrice > 0) goods.push_back({d.id, true});
+        u.pushClip(left);
+        float so = u.scrollArea("shopL", left, goods.size() * 76.f + 46.f);
+        float y = left.y - so;
+        for (int gi = 0; gi < (int)goods.size(); gi++) {
+            if (gi == wondersAt) {   // the Wonders header
+                u.rectGrad({left.x, y + 4, left.w - 12, 36}, rgba(0x6a50c8, 0.55f), rgba(0x2a2050, 0.35f));
+                u.text("Merveilles · payées en éclats d'étoile", left.x + 12, y + 10, 19, rgba(0xd8c8ff), F_SERIF);
+                y += 46;
+            }
+            const std::string& id = goods[gi].first;
+            bool sh = goods[gi].second;
+            const ItemDef* d = item(id);
+            if (!d) continue;
+            bool owned = d->kind == ItemKind::Key && countItem(id) > 0;
+            int price = sh ? d->shardPrice : (d->kind == ItemKind::MountToken ? mounts()[d->mount].price : itemPrice(id, false));
+            bool afford = sh ? shards >= price : gold >= price;
+            Rect row{left.x, y, left.w - 12, 70};
+            vec3 rc = rarityColor(d->rarity);
+            u.nine("slot", row, vec4(1, 1, 1, 0.9f), 0.5f);
+            if ((int)d->rarity >= 2) u.rectGrad(row.inset(4), vec4(rc, 0.f), vec4(rc, 0.18f));
+            if ((int)d->rarity >= 3) u.sprite("glow", {row.x - 6, row.y - 6, 82, 82}, vec4(rc, 0.3f + 0.1f * std::sin(realTime * 3 + gi)));
+            itemIcon(id, {row.x + 6, row.y + 5, 60, 60});
+            u.text(d->name, row.x + 78, row.y + 6, 20, vec4(rc, 1), F_BODY);
+            u.text(rarityName(d->rarity), row.x + row.w - 10, row.y + 8, 14, vec4(rc * 0.9f, 0.9f), F_BOLD, A_RIGHT);
+            if (owned) u.text("Possédé", row.x + 78, row.y + 38, 17, DIM, F_BOLD);
+            else u.text(std::to_string(price) + (sh ? " éclats" : " or"), row.x + 78, row.y + 38, 17, afford ? (sh ? rgba(0xc8b8ff) : GOLDT) : rgba(0xd06050), F_BOLD);
+            if (u.button(row) && !owned) {
+                if (sh) {
+                    if (shards < price) notify("Pas assez d'éclats d'étoile : totems, orbes, boss et coffres du ciel en donnent.", vec3(0.8f, 0.7f, 1.f), "i_crystal");
+                    else if (addItem(id, 1)) { shards -= price; play("coin", 0.8f, 1.3f); }
+                } else buyItem(id, price);
+            }
+            y += 76;
+        }
+        u.popClip();
+        u.pushClip(right);
+        int cols = std::max(1, (int)(right.w / 86));
+        float so2 = u.scrollArea("shopR", right, ((inventory.size() + cols - 1) / cols) * 86.f);
+        for (int i = 0; i < (int)inventory.size(); i++) {
+            Rect s{right.x + (i % cols) * 86, right.y + (i / cols) * 86 - so2, 80, 80};
+            u.nine(i == shopSell ? "slot_sel" : "slot", s, vec4(1, 1, 1, 0.9f), 0.4f);
+            vec3 rc = rarityColor(inventory[i].rarity);
+            if ((int)inventory[i].rarity >= 2) u.sprite("glow", s.inset(-5), vec4(rc, 0.22f));
+            itemIcon(inventory[i].id, s.inset(6));
+            u.rect({s.x + 6, s.y + s.h - 8, s.w - 12, 3}, vec4(rc, 0.9f));
+            if (inventory[i].count > 1) u.text(std::to_string(inventory[i].count), s.x + s.w - 8, s.y + s.h - 28, 16, PALE, F_BOLD, A_RIGHT, 0, true);
+            if (u.button(s)) { shopSell = i; play("ui_click", 0.4f); }
+        }
+        u.popClip();
+        // the selected item: its value and a sell button (no more selling by mistake)
+        Rect sb{right.x, right.y + right.h + 14, right.w, 80};
+        if (shopSell >= 0 && shopSell < (int)inventory.size()) {
+            const ItemStack& st = inventory[shopSell];
+            const ItemDef* d = item(st.id);
+            bool sellable = d && d->kind != ItemKind::Quest && d->kind != ItemKind::Key;
+            int price = d ? (int)(itemPrice(d->id, true) * rarityMult(st.rarity)) : 0;
+            u.text(d ? d->name : st.id, sb.x, sb.y + 4, 19, vec4(rarityColor(st.rarity), 1), F_BOLD);
+            u.text(sellable ? ("Valeur : " + std::to_string(price) + " or") : std::string("Ne se vend pas"), sb.x, sb.y + 32, 16, DIM, F_BODY);
+            if (sellable && u.fancyButton({sb.x + sb.w - 230, sb.y + 6, 230, 58}, "Vendre " + std::to_string(price) + " or", true, "button", 19)) {
+                sellItem(shopSell);
+                if (shopSell >= (int)inventory.size() || inventory[shopSell].id != st.id) shopSell = -1;
+            }
+        } else u.text("Touchez un objet de votre sac pour voir sa valeur.", sb.x, sb.y + 20, 16, DIM, F_BODY);
+        return;
+    }
+    // ---------------------------------------------------------------- journal: a leather-bound book, bookmark tabs on the left
+    // 2.3.5 phone layout: the whole screen, big labelled tabs that scroll with the thumb, a large close button,
+    // and every text of the pages 12 % larger
+    u.consumeAll();
+    // 2.6.1 outside a game (title screen) only the pages that need no hero: settings, mods, saves.
+    // The other pages read the hero / the world: opening them from the title crashed.
+    bool noGame = state != GameState::Playing || player == NullEntity || !reg.valid(player);
+    if (noGame && menu != Menu::Settings && menu != Menu::Mods && menu != Menu::Saves) menu = Menu::Settings;
+    static const char* T_TABS[] = {"Paramètres", "Mods", "Parties"};
+    static const Menu T_MENU[] = {Menu::Settings, Menu::Mods, Menu::Saves};
+    static const char* T_ICON[] = {"i_settings", "i_settings", "i_save"};
+    const char* const* tabs = noGame ? T_TABS : TABS;
+    const Menu* tabMenu = noGame ? T_MENU : TAB_MENU;
+    const char* const* tabIcon = noGame ? T_ICON : TAB_ICON;
+    const int tabCount = noGame ? 3 : TAB_COUNT;
+    Rect f = journalFrame(u);
+    u.rect({f.x + 6, f.y + 8, f.w, f.h}, vec4(0, 0, 0, 0.45f));
+    u.nine("book", f, vec4(1, 1, 1, 1), 0.62f);
+    const float railW = 232.f;
+    Rect rail{f.x + 40, f.y + 92, railW, f.h - 132};
+    u.text(noGame ? "Options" : "Journal", f.x + 40 + railW / 2, f.y + 40, 34, GOLDT, F_TITLE, A_CENTER, 0, true);
+    u.pushClip(rail);
+    const float tabH = 64.f, tabGap = 6.f;
+    float so = u.scrollArea("journal_tabs", rail, tabCount * (tabH + tabGap));
+    for (int i = 0; i < tabCount; i++) {
+        bool active = tabMenu[i] == menu;
+        Rect t{rail.x - (active ? 0.f : 10.f), rail.y + i * (tabH + tabGap) - so, rail.w + (active ? 14.f : 0.f), tabH};
+        if (t.y + t.h < rail.y || t.y > rail.y + rail.h) continue;
+        u.nine(active ? "tab_hi" : "tab", t, vec4(1, 1, 1, active ? 1.f : 0.92f), 0.9f);
+        u.sprite(tabIcon[i], {t.x + 16, t.y + 12, 40, 40}, vec4(1, 1, 1, active ? 1.f : 0.8f));
+        u.text(tabs[i], t.x + 66, t.y + 19, 22, active ? rgba(0xfff0c8) : PALE, F_SERIF, A_LEFT, 0, active);
+        u.tag(t, tabs[i]);
+        if (u.button(t)) { if (noGame && tabMenu[i] == Menu::Mods) scanMods(); menu = tabMenu[i]; selItem = selSlot = selRecipe = selSkill = selQuest = selEnemy = -1; play("ui_click", 0.5f); }
+    }
+    u.popClip();
+    if (tabCount * (tabH + tabGap) > rail.h) u.text(so < 4 ? "Glissez pour plus d'onglets" : "", rail.x + rail.w / 2, rail.y + rail.h + 6, 15, DIM, F_BODY, A_CENTER);
+    if (u.iconButton({f.x + f.w - 96, f.y + 22, 74, 74}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+    Rect c{rail.x + rail.w + 34, f.y + 66, f.x + f.w - 56 - (rail.x + rail.w + 34), f.h - 108};
+    u.textScale = 1.12f;
+    struct TextScaleReset { UI& u; ~TextScaleReset() { u.textScale = 1.f; } } tsr{u};
+    switch (menu) {
+    // ---------------------------------------------------------------- inventory
+    case Menu::Inventory: {
+        // 3.2.0 the bag has slots (40 to start, more with bags and orbs), key items live in their own strip
+        std::vector<int> keys, bagIdx;
+        for (int i = 0; i < (int)inventory.size(); i++) { const ItemDef* d = item(inventory[i].id); (d && d->kind == ItemKind::Key ? keys : bagIdx).push_back(i); }
+        float keyH = 74;
+        Rect grid{c.x, c.y + 40 + keyH, c.w * 0.58f, c.h - 40 - keyH};
+        int cap = bagCapacity();
+        u.text("Sac · " + std::to_string((int)bagIdx.size()) + "/" + std::to_string(cap), c.x, c.y, 22, (int)bagIdx.size() >= cap ? rgba(0xe07060) : PALE, F_SERIF);
+        u.sprite("i_coin", {c.x + c.w * 0.58f - 230, c.y - 4, 30, 30});
+        u.text(std::to_string(gold), c.x + c.w * 0.58f - 194, c.y, 22, GOLDT, F_BOLD);
+        u.sprite("i_crystal", {c.x + c.w * 0.58f - 110, c.y - 4, 28, 28}, rgba(0xb8a0ff));
+        u.text(std::to_string(shards), c.x + c.w * 0.58f - 78, c.y, 22, rgba(0xc8b8ff), F_BOLD);
+        {   // key items strip + the hunt counters
+            Rect ks{c.x, c.y + 40, c.w * 0.58f, keyH - 8};
+            u.nine("card", ks, vec4(1, 1, 1, 0.55f), 0.5f);
+            char hb[96]; snprintf(hb, sizeof hb, "Totems %d/%d · Orbes %d/%d", totemsTaken(), treasureTotal(0), orbsTaken(), treasureTotal(1));
+            u.text(hb, ks.x + ks.w - 12, ks.y + 6, 15, rgba(0x9ae8ff), F_BOLD, A_RIGHT);
+            if (keys.empty()) u.text("Objets clés : éveillez les totems de pouvoir (lueur bleue dans le ciel) pour en obtenir.", ks.x + 12, ks.y + 30, 15, DIM, F_BODY, A_LEFT, ks.w - 24);
+            for (int k = 0; k < (int)keys.size(); k++) {
+                Rect s{ks.x + 8 + k * 56, ks.y + 10, 48, 48};
+                if (s.x + s.w > ks.x + ks.w - 4) break;
+                const ItemDef* d = item(inventory[keys[k]].id);
+                u.sprite("glow", s.inset(-8), vec4(rarityColor(d->rarity), 0.35f + 0.15f * std::sin(realTime * 3 + k)));
+                u.nine(keys[k] == selItem ? "slot_sel" : "slot", s, vec4(1, 1, 1, 1), 0.35f);
+                itemIcon(d->id, s.inset(6));
+                if (u.button(s)) { selItem = keys[k]; play("ui_click", 0.4f); }
+            }
+        }
+        if (u.fancyButton({c.x + 250, c.y - 8, 150, 42}, "Trier", true, "button_dark", 18)) {
+            std::stable_sort(inventory.begin(), inventory.end(), [](const ItemStack& a, const ItemStack& b) {
+                const ItemDef *da = item(a.id), *db = item(b.id);
+                if (da->kind != db->kind) return (int)da->kind < (int)db->kind;
+                if (a.rarity != b.rarity) return (int)a.rarity > (int)b.rarity;
+                return da->name < db->name;
+            });
+            selItem = -1;
+        }
+        int cols = std::max(4, (int)(grid.w / 92));
+        int shown = std::max((int)bagIdx.size(), cap) + 10;   // the slots, then a row of locked ones to come
+        u.pushClip(grid);
+        float so = u.scrollArea("inv", grid, ((shown + cols - 1) / cols + 1) * 92.f);
+        for (int k = (int)bagIdx.size(); k < shown; k++) {   // empty and locked slots
+            Rect s{grid.x + (k % cols) * 92, grid.y + (k / cols) * 92 - so, 86, 86};
+            if (s.y > grid.y + grid.h || s.y + s.h < grid.y) continue;
+            bool locked = k >= cap;
+            u.nine("slot", s, vec4(1, 1, 1, locked ? 0.28f : 0.6f), 0.45f);
+            if (locked) {
+                u.sprite("i_lock", s.inset(26), vec4(1, 1, 1, 0.45f));
+                if (u.button(s)) notify("Emplacement verrouillé : utilisez un sac (marchands, Merveilles) ou trouvez des orbes anciens.", vec3(0.8f, 0.75f, 1.f), "i_lock");
+            }
+        }
+        for (int k = 0; k < (int)bagIdx.size(); k++) {
+            int i = bagIdx[k];
+            Rect s{grid.x + (k % cols) * 92, grid.y + (k / cols) * 92 - so, 86, 86};
+            if (s.y > grid.y + grid.h || s.y + s.h < grid.y) continue;
+            u.nine(i == selItem ? "slot_sel" : "slot", s, vec4(1, 1, 1, 1), 0.45f);
+            vec3 rc = rarityColor(inventory[i].rarity);
+            if ((int)inventory[i].rarity >= 1) u.sprite("glow", s.inset(-6), vec4(rc, (int)inventory[i].rarity >= 3 ? 0.3f + 0.12f * std::sin(realTime * 3.f + i) : 0.22f));   // 3.2.0 rare items glow, legendary ones breathe
+            if ((int)inventory[i].rarity >= 2) u.rectGrad(s.inset(5), vec4(rc, 0.0f), vec4(rc, 0.22f));
+            itemIcon(inventory[i].id, s.inset(8));
+            u.rect({s.x + 8, s.y + s.h - 9, s.w - 16, 3}, vec4(rc, 0.95f));
+            if (inventory[i].count > 1) u.text(std::to_string(inventory[i].count), s.x + s.w - 8, s.y + s.h - 30, 17, PALE, F_BOLD, A_RIGHT, 0, true);
+            if (inventory[i].isNew) u.circle({s.x + 12, s.y + 12}, 5, rgba(0xf8d050), 8);
+            if (u.button(s)) { selItem = i; inventory[i].isNew = false; play("ui_click", 0.4f); }
+        }
+        u.popClip();
+        Rect info{c.x + c.w * 0.6f, c.y, c.w * 0.4f, c.h - 90};
+        if (selItem >= 0 && selItem < (int)inventory.size()) {
+            ItemStack s = inventory[selItem];
+            itemTooltip(*this, info, s, false);
+            const ItemDef* d = item(s.id);
+            float bx = info.x, by = info.y + info.h + 14, bw = (info.w - 12) / 2;
+            bool equipable = slotForKind(d->kind) >= 0 || d->kind == ItemKind::Cosmetic;
+            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, "Utiliser", true, "button", 22)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
+            if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "button", 22)) { equip(selItem); selItem = -1; }
+            if (d->kind != ItemKind::Quest && d->kind != ItemKind::Key && u.fancyButton({bx + bw + 12, by, bw, 56}, "Jeter", true, "button_dark", 22)) {
+                Character& p = pc();
+                spawnPickup(s.id, 1, s.rarity, p.pos + vec3(std::sin(p.yaw), 0, std::cos(p.yaw)) * 1.5f);
+                if (--inventory[selItem].count <= 0) { inventory.erase(inventory.begin() + selItem); selItem = -1; }
+            }
+        } else u.text("Touchez un objet pour voir ses détails.", info.x + info.w / 2, info.y + 120, 20, DIM, F_BODY, A_CENTER, info.w - 40);
+        break;
+    }
+    // ---------------------------------------------------------------- equipment (live 3D preview)
+    case Menu::Equipment: {
+        Rect prev{c.x + c.w * 0.32f, c.y, c.w * 0.3f, c.h};
+        // render the hero into the portrait target with a slow turntable
+        {
+            static RenderTarget heroRT;
+            if (!heroRT.fbo) heroRT.create(384, 512, GL_RGBA8, true);
+            Character& p = pc();
+            Camera cm; cm.target = vec3(0, 1.0f, 0); cm.pos = vec3(std::sin(realTime * 0.4f) * 3.6f, 1.35f, std::cos(realTime * 0.4f) * 3.6f); cm.fovY = 36 * DEG; cm.zNear = 0.1f; cm.zFar = 20; cm.update(384.f / 512.f);
+            Environment e; e.sunDir = normalize(vec3(0.5f, 0.7f, 0.6f)); e.sunIntensity = 2.8f; e.sunColor = srgb(0xfff0dc); e.skyAmbient = srgb(0x8a9ac0); e.groundAmbient = srgb(0x5a4030) * 0.8f; e.fogDensity = 0; e.exposure = 1.05f; e.saturation = 1.08f; e.contrast = 1.05f;
+            Visual& v = p.vis;
+            Pose save = v.anim.pose; PoseWorld pw;
+            Pose idle; idle.reset();
+            for (int b = 0; b < H_COUNT; b++) idle.rot[b] = save.rot[b];
+            computeWorld(*v.anim.skeleton, save, pw);
+            std::vector<DrawItem> items;
+            DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.7f; d.outline = true; d.outlineWidth = 0.006f;
+            items.push_back(d);
+            if (v.weapon) { DrawItem w; w.mesh = v.weapon.get(); w.model = pw.world[v.wt == WeaponType::Bow ? H_PROPL : H_PROPR]; items.push_back(w); }
+            if (v.offhand) { DrawItem w; w.mesh = v.offhand.get(); w.model = pw.world[H_PROPL]; items.push_back(w); }
+            renderer.renderToTarget(heroRT, cm, e, items, vec4(0, 0, 0, 0));
+            float ph = prev.h, pwid = ph * 0.75f;
+            u.sprite("glow", {prev.x + prev.w / 2 - pwid * 0.6f, prev.y + ph * 0.1f, pwid * 1.2f, ph * 0.9f}, rgba(0xf6dc9a, 0.15f));
+            u.image(heroRT.color.id, {prev.x + prev.w / 2 - pwid / 2, prev.y, pwid, ph}, vec4(0, 1, 1, 0));
+        }
+        // slots on both sides
+        int order[SL_COUNT] = {SL_HEAD, SL_CHEST, SL_HANDS, SL_FEET, SL_WEAPON, SL_OFFHAND, SL_RING, SL_AMULET};
+        for (int k = 0; k < SL_COUNT; k++) {
+            int sl = order[k];
+            bool leftSide = k < 4;
+            Rect s{leftSide ? c.x + c.w * 0.32f - 104 : c.x + c.w * 0.62f + 14, c.y + 20 + (k % 4) * 118.f, 96, 96};
+            u.nine(sl == selSlot ? "slot_sel" : "slot", s, vec4(1, 1, 1, 1), 0.45f);
+            if (!equipment[sl].id.empty()) { itemIcon(equipment[sl].id, s.inset(8)); u.rect({s.x + 8, s.y + s.h - 9, s.w - 16, 3}, vec4(rarityColor(equipment[sl].rarity), 1)); if (equipment[sl].level) u.text("+" + std::to_string(equipment[sl].level), s.x + s.w - 8, s.y + 4, 16, GOLDT, F_BOLD, A_RIGHT, 0, true); }
+            u.text(slotName(sl), s.x + s.w / 2, s.y + s.h + 2, 15, DIM, F_BODY, A_CENTER);
+            if (u.button(s)) { selSlot = sl; play("ui_click", 0.4f); }
+        }
+        // stats
+        Rect st{c.x, c.y, c.w * 0.32f - 130, c.h};
+        Character& p = pc();
+        float y = st.y;
+        u.text("Caractéristiques", st.x, y, 22, GOLDT, F_SERIF); y += 40;
+        auto row = [&](const char* l, const std::string& v) { u.text(l, st.x, y, 18, DIM, F_BODY); u.text(v, st.x + st.w, y, 18, PALE, F_BOLD, A_RIGHT); y += 28; };
+        char b[64];
+        row("Niveau", std::to_string(level));
+        snprintf(b, sizeof b, "%.0f", p.maxHp); row("Vie", b);
+        snprintf(b, sizeof b, "%.0f", maxMp); row("Mana", b);
+        snprintf(b, sizeof b, "%.0f", maxStamina); row("Endurance", b);
+        snprintf(b, sizeof b, "%.0f", p.atk); row("Attaque", b);
+        snprintf(b, sizeof b, "%.0f", p.def); row("Défense", b);
+        snprintf(b, sizeof b, "%.0f %%", critChance * 100); row("Critique", b);
+        snprintf(b, sizeof b, "x%.2f", critDmg); row("Dégâts critiques", b);
+        if (p.elemDmg > 0) { snprintf(b, sizeof b, "+%.0f %s", p.elemDmg, elementName(p.element)); row("Élément", b); }
+        snprintf(b, sizeof b, "%+.0f %%", (moveSpeedMul - 1) * 100); row("Vitesse", b);
+        if (!dye.empty()) row("Teinture", item(dye)->name);
+        if (selSlot >= 0 && !equipment[selSlot].id.empty()) {
+            Rect info{c.x + c.w * 0.62f + 130, c.y, c.w * 0.38f - 130, c.h - 80};
+            itemTooltip(*this, info, equipment[selSlot], true);
+            float bw = (info.w - 12) / 2;
+            if (u.fancyButton({info.x, info.y + info.h + 12, bw, 56}, "Retirer", true, "button_dark", 21)) { unequip(selSlot); selSlot = -1; }
+            if (craftStation == ST_FORGE && selSlot >= 0 && u.fancyButton({info.x + bw + 12, info.y + info.h + 12, bw, 56}, "Améliorer", equipment[selSlot].level < 5, "button", 21)) upgradeItem(selSlot);
+        } else if (craftStation == ST_FORGE) u.text("Forge : choisissez un objet équipé à améliorer.", c.x + c.w * 0.81f, c.y + 60, 18, DIM, F_BODY, A_CENTER, c.w * 0.3f);
+        break;
+    }
+    // ---------------------------------------------------------------- skill tree
+    case Menu::Skills: {
+        u.text("Points disponibles : " + std::to_string(skillPoints), c.x, c.y, 22, skillPoints ? GOLDT : PALE, F_SERIF);
+        static const char* emb[] = {"i_cl_warrior", "i_cl_archer", "i_cl_assassin", "i_cl_mage", "i_cl_paladin", "i_cl_hunter"};
+        float colW = (c.w * 0.68f) / BR_COUNT;
+        const auto& T = skillTree();
+        for (int b = 0; b < BR_COUNT; b++) {
+            float x = c.x + b * colW + colW / 2;
+            u.sprite(emb[b], {x - 34, c.y + 36, 68, 68});
+            u.text(branchName(b), x, c.y + 108, 18, PALE, F_SERIF, A_CENTER);
+            for (int ti = 0; ti < 5; ti++) {
+                int idx = -1;
+                for (int i = 0; i < (int)T.size(); i++) if (T[i].branch == b && T[i].tier == ti) idx = i;
+                if (idx < 0) continue;
+                float y = c.y + 150 + ti * ((c.h - 170) / 5.f);
+                bool have = skills.count(T[idx].id) > 0;
+                bool avail = !have && (T[idx].requires_.empty() || skills.count(T[idx].requires_));
+                if (ti < 4) u.rect({x - 2, y + 30, 4, (c.h - 170) / 5.f - 60}, have ? rgba(0xc9a45c) : rgba(0x4a3a2a));
+                Rect n{x - 30, y, 60, 60};
+                u.sprite(idx == selSkill ? "round_hi" : (have ? "round_red" : "round"), n, vec4(1, 1, 1, avail || have ? 1.f : 0.5f));
+                std::string ic = T[idx].spell.empty() ? std::string(emb[b]) : spells()[spellIndex(T[idx].spell)].icon;
+                u.sprite(ic, n.inset(10), vec4(1, 1, 1, have ? 1.f : (avail ? 0.8f : 0.35f)));
+                if (u.button(n)) { selSkill = idx; play("ui_click", 0.4f); }
+            }
+        }
+        Rect info{c.x + c.w * 0.7f, c.y, c.w * 0.3f, c.h * 0.48f};
+        u.nine("card", info, vec4(1, 1, 1, 1), 0.9f);
+        if (selSkill >= 0) {
+            const SkillNode& n = T[selSkill];
+            u.text(n.name, info.x + 20, info.y + 18, 24, GOLDT, F_SERIF, A_LEFT, info.w - 40);
+            u.text(std::string(branchName(n.branch)) + " · coût " + std::to_string(n.cost), info.x + 20, info.y + 54, 17, DIM, F_BODY);
+            u.text(n.desc, info.x + 20, info.y + 86, 19, PALE, F_BODY, A_LEFT, info.w - 40);
+            bool have = skills.count(n.id) > 0;
+            bool can = !have && skillPoints >= n.cost && (n.requires_.empty() || skills.count(n.requires_));
+            if (!have && u.fancyButton({info.x + 20, info.y + info.h - 70, info.w - 40, 54}, "Apprendre", can, "plaque", 22)) unlockSkill(selSkill);
+            if (have) u.text("Acquise", info.x + info.w / 2, info.y + info.h - 52, 20, rgba(0x9ae08a), F_BOLD, A_CENTER);
+        }
+        // spell slots
+        Rect sp{c.x + c.w * 0.7f, c.y + c.h * 0.5f, c.w * 0.3f, c.h * 0.5f};
+        u.text("Sorts : touchez pour équiper", sp.x, sp.y, 18, PALE, F_SERIF, A_LEFT, sp.w);
+        for (int s = 0; s < 3; s++) {
+            Rect r{sp.x + s * 92, sp.y + 34, 84, 84};
+            u.nine(s == selSlot - 100 ? "slot_sel" : "slot", r, vec4(1, 1, 1, 1), 0.45f);
+            if (equippedSpells[s] >= 0) u.sprite(spells()[equippedSpells[s]].icon, r.inset(8));
+            u.text(std::to_string(s + 1), r.x + 8, r.y + 4, 16, GOLDT, F_BOLD, A_LEFT, 0, true);
+            if (u.button(r)) selSlot = 100 + s;
+        }
+        int cols = std::max(1, (int)(sp.w / 76));
+        for (int k = 0; k < (int)knownSpells.size(); k++) {
+            int si = spellIndex(knownSpells[k]);
+            Rect r{sp.x + (k % cols) * 76, sp.y + 134 + (k / cols) * 76, 70, 70};
+            u.sprite(spells()[si].icon, r);
+            if (u.button(r)) {
+                int slot = selSlot >= 100 ? selSlot - 100 : 0;
+                for (int s = 0; s < 3; s++) if (equippedSpells[s] == si) equippedSpells[s] = -1;
+                equippedSpells[slot] = si;
+                notify(spells()[si].name + " → emplacement " + std::to_string(slot + 1) + " · " + std::to_string((int)spells()[si].mana) + " mana", elementColor(spells()[si].school), spells()[si].icon);
+            }
+        }
+        break;
+    }
+    // ---------------------------------------------------------------- crafting
+    case Menu::Crafting: {
+        // a campfire nearby enables cooking
+        if (craftStation == ST_ANY || craftStation == ST_CAMPFIRE) {
+            craftStation = ST_ANY;
+            world.forEachVisibleChunk([&](Chunk& ch) { for (auto& e : ch.emitters) if ((int)e.w == EM_FIRE && distXZ(vec3(e.x, e.y, e.z), pc().pos) < 6) craftStation = ST_CAMPFIRE; });
+            for (auto& b : base.built) if (baseBuildings()[b.def].id == "forge" && length(b.pos - pc().pos.xz()) < 8.f) craftStation = ST_FORGE;   // the domain's forge
+        }
+        u.text(std::string("Poste : ") + (craftStation == ST_ANY ? "Sac (recettes simples)" : stationName(craftStation)), c.x, c.y, 22, GOLDT, F_SERIF);
+        if (craftStation == ST_ANY) u.text("Parlez à un forgeron, un alchimiste ou un marchand, ou approchez d'un feu de camp, pour plus de recettes.", c.x, c.y + 34, 17, DIM, F_BODY, A_LEFT, c.w * 0.55f);
+        const auto& R = recipes();
+        // 2.3.5: every recipe is listed (the page used to be empty away from a workshop), those of the current station
+        // first, the others greyed with the workshop they need
+        std::vector<int> list;
+        for (int i = 0; i < (int)R.size(); i++) if (R[i].station == ST_ANY || R[i].station == craftStation) list.push_back(i);
+        int here = (int)list.size();
+        for (int st : {ST_FORGE, ST_WORKBENCH, ST_ALCHEMY, ST_CAMPFIRE})
+            for (int i = 0; i < (int)R.size(); i++) if (R[i].station == st && st != craftStation) list.push_back(i);
+        Rect lr{c.x, c.y + 80, c.w * 0.55f, c.h - 80};
+        u.pushClip(lr);
+        const float rowH = 84.f;
+        float so = u.scrollArea("craft", lr, list.size() * rowH);
+        for (int k = 0; k < (int)list.size(); k++) {
+            const Recipe& r = R[list[k]];
+            const ItemDef* d = item(r.result);
+            Rect row{lr.x, lr.y + k * rowH - so, lr.w - 12, rowH - 6};
+            if (row.y + row.h < lr.y || row.y > lr.y + lr.h) continue;
+            bool atStation = k < here;
+            bool can = atStation && canCraft(r);
+            u.nine(list[k] == selRecipe ? "card_sel" : "card", row, vec4(1, 1, 1, atStation ? 1.f : 0.75f), 0.8f);
+            itemIcon(r.result, {row.x + 8, row.y + 8, 62, 62}, can ? 1.f : 0.55f);
+            u.text(d ? d->name : r.result, row.x + 82, row.y + 8, 20, can ? vec4(rarityColor(d ? d->rarity : Rarity::Common), 1) : DIM, F_BODY, A_LEFT, row.w - 92);
+            std::string req;
+            for (auto& in : r.inputs) req += std::to_string(countItem(in.first)) + "/" + std::to_string(in.second) + " " + item(in.first)->name + "  ";
+            if (!atStation) req = std::string("À fabriquer : ") + stationName(r.station) + "  ·  " + req;
+            else if (level < r.minLevel) req = "Niveau " + std::to_string(r.minLevel) + " requis";
+            u.text(req, row.x + 82, row.y + 40, 15, can ? PALE : (atStation ? rgba(0xc07060) : DIM), F_BODY, A_LEFT, row.w - 92);
+            if (u.button(row)) selRecipe = list[k];
+        }
+        u.popClip();
+        if (selRecipe >= 0) {
+            Rect info{c.x + c.w * 0.58f, c.y + 80, c.w * 0.42f, c.h - 170};
+            ItemStack s; s.id = R[selRecipe].result; s.rarity = item(s.id) ? item(s.id)->rarity : Rarity::Common;
+            itemTooltip(*this, info, s, false);
+            bool ok = (R[selRecipe].station == ST_ANY || R[selRecipe].station == craftStation) && canCraft(R[selRecipe]);
+            if (u.fancyButton({info.x, info.y + info.h + 14, info.w, 64}, ok || R[selRecipe].station == ST_ANY || R[selRecipe].station == craftStation ? "Fabriquer" : (std::string("Il faut : ") + stationName(R[selRecipe].station)), ok, "plaque", 24)) craft(selRecipe);
+        }
+        break;
+    }
+    // ---------------------------------------------------------------- world map
+    case Menu::Map: {
+        static GLuint fogMap = 0;
+        static float rebuildT = 0;
+        rebuildT -= dt;
+        if (world.mapReady && (rebuildT <= 0 || !fogMap)) {
+            rebuildT = 2.f;
+            std::vector<uint8_t> img = world.mapImage;
+            int R = world.mapRes;
+            for (int j = 0; j < R; j++) for (int i = 0; i < R; i++) {
+                uint8_t f2 = fog[(j * 128 / R) * 128 + i * 128 / R];
+                if (!f2) { uint8_t* p = &img[((size_t)j * R + i) * 4]; uint8_t l = (uint8_t)((p[0] + p[1] + p[2]) / 3); p[0] = (uint8_t)(l * 0.35f + 40); p[1] = (uint8_t)(l * 0.32f + 34); p[2] = (uint8_t)(l * 0.28f + 26); }
+            }
+            if (!fogMap) glGenTextures(1, &fogMap);
+            glBindTexture(GL_TEXTURE_2D, fogMap);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, R, R, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        }
+        float side = std::min(c.w * 0.72f, c.h) * mapZoom;
+        Rect mr{c.x + (std::min(c.w * 0.72f, c.h) - side) / 2 + mapPan.x, c.y + (c.h - side) / 2 + mapPan.y, side, side};
+        u.pushClip(c);
+        if (fogMap) u.image(fogMap, mr);
+        else u.text("Cartographie en cours…", c.x + c.w * 0.36f, c.y + c.h / 2, 22, PALE, F_BODY, A_CENTER);
+        auto toMap = [&](vec2 w) { return vec2(mr.x + w.x / WORLD_SIZE * mr.w, mr.y + w.y / WORLD_SIZE * mr.h); };
+        for (auto& P : world.pois) {
+            if (!discovered.count(P.id)) continue;
+            vec2 m = toMap(P.pos);
+            const char* ic = P.type == PoiType::Village || P.type == PoiType::Mill ? "i_village" : P.type == PoiType::Castle ? "i_castle" : (P.type == PoiType::Cave || P.type == PoiType::Mine || P.type == PoiType::Graveyard) ? "i_cave" : P.type == PoiType::Waystone ? "i_waypoint" : P.type == PoiType::BossArena ? "i_boss" : P.type == PoiType::Monastery || P.type == PoiType::Tower ? "i_tower" : "i_star";
+            u.sprite(ic, {m.x - 15, m.y - 15, 30, 30});
+            if (P.hostile) u.ring(m, 16, 19, 0, TAU, fortConquered(P.id) ? vec4(1.f, 0.85f, 0.3f, 0.9f) : vec4(0.75f, 0.1f, 0.08f, 0.9f), 24);   // 3.0.0 Iron Legion
+            if (mapZoom > 1.3f || P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Monastery)
+                u.text(P.hostile ? P.name + (fortConquered(P.id) ? " (à vous)" : " (Légion de Fer)") : P.name, m.x, m.y + 15, 15, P.hostile && !fortConquered(P.id) ? rgba(0x7a1410) : rgba(0x2a1a10), F_BOLD, A_CENTER);
+        }
+        // 2.2.0 every dungeon entrance is on the map: found ones with their name, the others as a "?" to look for
+        for (int di = 0; di < (int)dungeons().size(); di++) {
+            const Poi* P = world.poiById(dungeons()[di].poi);
+            if (!P) continue;
+            vec2 m = toMap(P->pos);
+            bool known = discovered.count(P->id) > 0, cleared = dungeonsDone.count(dungeons()[di].id) > 0;
+            u.circle(m, 17.f, cleared ? vec4(0.15f, 0.35f, 0.15f, 0.85f) : vec4(0.35f, 0.08f, 0.06f, 0.85f), 16);
+            u.sprite("i_cave", {m.x - 13, m.y - 13, 26, 26}, vec4(1, 1, 1, known ? 1.f : 0.45f));
+            if (!known) u.text("?", m.x + 12, m.y - 24, 18, rgba(0xf6dc9a), F_BOLD, A_CENTER, 0, true);
+            else if (mapZoom > 1.3f) u.text(std::string("Donjon : ") + dungeons()[di].name + (cleared ? " (terminé)" : ""), m.x, m.y + 17, 14, rgba(0x5a1410), F_BOLD, A_CENTER);
+        }
+        // 2.1.0 fast travel: touch a discovered waystone on the map, then "Voyage rapide"
+        // 2.2.0 touching anywhere else drops a personal pin (touch a pin again to remove it; 6 at most)
+        static std::string wayPick;
+        bool tapUsed = false;
+        for (auto& P : world.pois) {
+            if ((P.type != PoiType::Waystone && !(P.hostile && fortConquered(P.id))) || !discovered.count(P.id)) continue;   // 3.0.0 + your fortresses
+            vec2 m = toMap(P.pos);
+            if (P.id == wayPick) u.ring(m, 20, 25, 0, TAU, vec4(1.f, 0.85f, 0.3f, 0.6f + 0.4f * std::sin(realTime * 6.f)), 28);
+            for (auto& fg : u.fingers) if (fg.released && fg.t < 0.35f && length(vec2(fg.x - fg.sx, fg.y - fg.sy)) < 14.f && length(vec2(fg.x, fg.y) - m) < 26.f && c.contains(fg.x, fg.y)) { wayPick = P.id; tapUsed = true; play("ui_click", 0.5f); }
+        }
+        for (size_t i = 0; i < mapPins.size(); i++) {
+            vec2 m = toMap(mapPins[i]);
+            u.circle(m, 12.f, vec4(0.03f, 0.08f, 0.12f, 0.9f), 4); u.circle(m, 9.f, vec4(0.35f, 0.9f, 1.f, 1.f), 4);
+            u.text(std::to_string(i + 1), m.x, m.y - 9, 13, rgba(0x06202a), F_BOLD, A_CENTER);
+        }
+        Rect mapArea{c.x, c.y, c.w * 0.72f, c.h};
+        for (auto& fg : u.fingers) {
+            if (tapUsed || !fg.released || fg.t > 0.35f || length(vec2(fg.x - fg.sx, fg.y - fg.sy)) > 14.f || !mapArea.contains(fg.x, fg.y) || !mr.contains(fg.x, fg.y)) continue;
+            int hitPin = -1;
+            for (size_t i = 0; i < mapPins.size(); i++) if (length(toMap(mapPins[i]) - vec2(fg.x, fg.y)) < 20.f) hitPin = (int)i;
+            if (hitPin >= 0) { mapPins.erase(mapPins.begin() + hitPin); play("ui_close", 0.4f); }
+            else {
+                vec2 w{(fg.x - mr.x) / mr.w * WORLD_SIZE, (fg.y - mr.y) / mr.h * WORLD_SIZE};
+                if (mapPins.size() >= 6) mapPins.erase(mapPins.begin());
+                mapPins.push_back(w); play("ui_click", 0.5f);
+            }
+            tapUsed = true;
+        }
+        // region names
+        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}, {1800, 5450}, {6900, 3300}, {5600, 6800}};
+        for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
+        bool has; vec3 qm = questMarker(&has);
+        if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }
+        for (const RaceTrack& t : races) {   // 1.11.1 race starts and routes
+            if (t.cps.empty()) continue;
+            vec2 prev = toMap(t.start);
+            for (vec2 c : t.cps) { vec2 m = toMap(c); u.circle(m, 2.5f, vec4(0.3f, 0.6f, 0.9f, 0.7f), 8); prev = m; }
+            vec2 m = toMap(t.start);
+            u.circle(m, 9.f, vec4(0.35f, 0.85f, 0.45f, 0.95f), 14);
+            u.text(raceDefs()[t.def].name, m.x + 12, m.y - 10, 14, rgba(0x1a4020), F_BOLD);
+        }
+        if (coop.connected && reg.valid(coop.partner)) {   // 1.13.0 the other player
+            vec2 m = toMap(reg.get<Character>(coop.partner)->pos.xz());
+            u.circle(m, 11.f, vec4(0.05f, 0.1f, 0.2f, 0.9f), 16); u.circle(m, 8.f, vec4(0.35f, 0.75f, 1.f, 1), 16);
+            u.text(coop.peerName, m.x, m.y + 14, 16, rgba(0x14305a), F_BOLD, A_CENTER);
+        }
+        for (const VehicleState& v : vehicles) {   // 1.11.1 where the car and the motorbike are parked
+            vec2 m = toMap(v.pos.xz());
+            u.circle(m, 15.f, vec4(0.05f, 0.08f, 0.15f, 0.85f), 18);
+            u.sprite("i_mount", {m.x - 12, m.y - 12, 24, 24}, vec4(0.45f, 0.75f, 1.f, 1));
+            u.text(vehicleDefs()[v.def].moto ? "Moto" : "Voiture", m.x, m.y + 16, 16, rgba(0x1a2a50), F_BOLD, A_CENTER);
+        }
+        vec2 pm = toMap(pc().pos.xz());
+        u.spriteRot("i_player_arrow", pm, vec2(30, 30), minimapArrowAngle(pc().yaw, 0.f), vec4(1, 1, 1, 1));
+        u.popClip();
+        // pan with a finger
+        static std::map<int, vec2> last;
+        for (auto& fg : u.fingers) {
+            if (!fg.down || !c.contains(fg.sx, fg.sy)) continue;
+            auto it = last.find(fg.id);
+            if (it != last.end()) mapPan += vec2(fg.x, fg.y) - it->second;
+            last[fg.id] = vec2(fg.x, fg.y);
+        }
+        for (auto it = last.begin(); it != last.end();) { bool alive = false; for (auto& fg : u.fingers) if (fg.id == it->first && fg.down) alive = true; if (!alive) it = last.erase(it); else ++it; }
+        Rect side2{c.x + c.w * 0.75f, c.y, c.w * 0.25f, c.h};
+        if (u.fancyButton({side2.x, side2.y, side2.w, 54}, "Zoom +", mapZoom < 3, "button_dark", 20)) mapZoom = std::min(3.f, mapZoom * 1.4f);
+        if (u.fancyButton({side2.x, side2.y + 64, side2.w, 54}, "Zoom -", mapZoom > 1, "button_dark", 20)) { mapZoom = std::max(1.f, mapZoom / 1.4f); if (mapZoom == 1) mapPan = vec2(0, 0); }
+        if (u.fancyButton({side2.x, side2.y + 128, side2.w, 54}, "Centrer", true, "button_dark", 20)) mapPan = vec2(0, 0);
+        {
+            const Poi* wp = wayPick.empty() ? nullptr : world.poiById(wayPick);
+            bool can = wp && !dungeon.active && !riding && driving < 0 && bossEnt == NullEntity;
+            std::string lab = wp ? "Aller : " + wp->name : "Voyage rapide";
+            if (u.fancyButton({side2.x, side2.y + 192, side2.w, 54}, lab, can, "button", 16)) {
+                std::string id = wayPick; wayPick.clear();
+                menu = Menu::None;
+                if (const Poi* t = world.poiById(id)) {   // 2.2.0 the hero turns to dust and re-forms at the stone
+                    vec3 dst(t->pos.x + 3.f, 0.f, t->pos.y + 3.f);
+                    respawnPos = vec3(dst.x, world.groundHeight(dst.x, dst.z), dst.z);
+                    startDustTeleport(dst, "Voyage rapide : " + t->name);
+                }
+            }
+            if (wp && !can) u.text("Impossible : donjon, combat de boss, monture ou véhicule.", side2.x, side2.y + 250, 14, rgba(0xd0a080), F_BODY, A_LEFT, side2.w);
+            if (!mapPins.empty() && u.fancyButton({side2.x, side2.y + 372, side2.w, 44}, "Effacer les repères", true, "button_dark", 16)) mapPins.clear();
+            u.text("Touchez une pierre violette pour le voyage rapide, ailleurs pour poser un repère (touchez-le pour l'enlever).", side2.x, side2.y + 424, 14, DIM, F_BODY, A_LEFT, side2.w);
+        }
+        int found = 0; for (int i = 0; i < 128 * 128; i++) if (fog[i]) found++;
+        char b[64]; snprintf(b, sizeof b, "Royaume exploré : %.1f %%", found * 100.f / (128 * 128));
+        u.text(b, side2.x, side2.y + 276, 18, PALE, F_BODY, A_LEFT, side2.w);
+        u.text(std::string("Région : ") + regionName(world.regionId(pc().pos.x, pc().pos.z)), side2.x, side2.y + 306, 18, GOLDT, F_BODY, A_LEFT, side2.w);
+        u.text("Lieux découverts : " + std::to_string(discovered.size()) + "/" + std::to_string(world.pois.size()), side2.x, side2.y + 336, 18, PALE, F_BODY, A_LEFT, side2.w);
+        break;
+    }
+    // ---------------------------------------------------------------- quests
+    case Menu::Quests: {
+        Rect lr{c.x, c.y, c.w * 0.4f, c.h};
+        u.pushClip(lr);
+        float so = u.scrollArea("quests", lr, questLog.size() * 70.f + 40);
+        float y = lr.y - so;
+        std::vector<int> order;
+        for (int i = 0; i < (int)questLog.size(); i++) if (!questLog[i].done) order.push_back(i);
+        for (int i = 0; i < (int)questLog.size(); i++) if (questLog[i].done) order.push_back(i);
+        for (int i : order) {
+            const QuestDef& q = quests()[questLog[i].idx];
+            Rect row{lr.x, y, lr.w - 14, 62};
+            u.nine(i == selQuest ? "slot_sel" : "slot", row, vec4(1, 1, 1, questLog[i].done ? 0.6f : 1.f), 0.4f);
+            static const char* typ[] = {"Principale", "Secondaire", "Cachée", "Contrat", "Trésor", "Faction"};
+            u.text(q.title, row.x + 16, row.y + 8, 20, questLog[i].done ? DIM : (q.type == QuestType::Main ? GOLDT : PALE), F_BODY, A_LEFT, row.w - 140);
+            u.text(questLog[i].done ? "Terminée" : typ[(int)q.type], row.x + 16, row.y + 36, 15, questLog[i].done ? rgba(0x9ae08a) : DIM, F_BODY);
+            if (i == trackedQuest) u.sprite("i_quest_marker", {row.x + row.w - 34, row.y + 14, 22, 30});
+            if (u.button(row)) selQuest = i;
+            y += 70;
+        }
+        u.popClip();
+        if (selQuest >= 0 && selQuest < (int)questLog.size()) {
+            const QuestState& s = questLog[selQuest];
+            const QuestDef& q = quests()[s.idx];
+            Rect info{c.x + c.w * 0.43f, c.y, c.w * 0.57f, c.h};
+            u.nine("parchment", info, vec4(1, 1, 1, 1), 0.7f);
+            float y2 = info.y + 30;
+            u.text(q.title, info.x + 34, y2, 28, rgba(0x5a2a14), F_SERIF, A_LEFT, info.w - 68); y2 += 46;
+            y2 += u.text(q.desc, info.x + 34, y2, 19, INK, F_BODY, A_LEFT, info.w - 68) + 18;
+            for (int k = 0; k < (int)q.steps.size(); k++) {
+                bool done = k < s.step || s.done;
+                bool cur = k == s.step && !s.done;
+                if (!done && !cur) continue;
+                u.sprite(done ? "i_check" : "i_quest_marker", {info.x + 34, y2, 24, 24});
+                std::string t = q.steps[k].desc;
+                if (cur && q.steps[k].count > 1) t += " (" + std::to_string(s.progress[k]) + "/" + std::to_string(q.steps[k].count) + ")";
+                u.text(t, info.x + 66, y2, 19, done ? rgba(0x6a5a40) : INK, F_BODY, A_LEFT, info.w - 100);
+                y2 += 32;
+            }
+            y2 += 10;
+            std::string rw = "Récompenses : " + std::to_string(q.xp) + " XP · " + std::to_string(q.gold) + " or";
+            for (auto& r : q.rewards) if (item(r)) rw += " · " + item(r)->name;
+            u.text(rw, info.x + 34, y2, 17, rgba(0x6a4a20), F_BODY, A_LEFT, info.w - 68);
+            if (!s.done && u.fancyButton({info.x + info.w - 230, info.y + info.h - 76, 200, 54}, selQuest == trackedQuest ? "Suivie" : "Suivre", selQuest != trackedQuest, "button", 21)) trackedQuest = selQuest;
+        }
+        if (questLog.empty()) u.text("Aucune quête.", lr.x + lr.w / 2, lr.y + 60, 20, DIM, F_BODY, A_CENTER);
+        break;
+    }
+    // ---------------------------------------------------------------- bestiary
+    case Menu::Bestiary: {
+        const auto& E = enemies();
+        Rect lr{c.x, c.y, c.w * 0.42f, c.h};
+        u.pushClip(lr);
+        float so = u.scrollArea("best", lr, E.size() * 58.f);
+        for (int i = 0; i < (int)E.size(); i++) {
+            Rect row{lr.x, lr.y + i * 58 - so, lr.w - 14, 52};
+            auto it = bestiary.find(E[i].id);
+            int kills = it == bestiary.end() ? 0 : it->second;
+            u.nine(i == selEnemy ? "slot_sel" : "slot", row, vec4(1, 1, 1, kills ? 1.f : 0.6f), 0.4f);
+            u.text(kills ? E[i].name : "???", row.x + 14, row.y + 12, 19, kills ? (E[i].behavior == Behavior::Boss ? GOLDT : PALE) : DIM, F_BODY);
+            u.text(kills ? std::to_string(kills) : "", row.x + row.w - 14, row.y + 12, 18, DIM, F_BOLD, A_RIGHT);
+            if (u.button(row) && kills) { selEnemy = i; portraitNpc = -2; }
+        }
+        u.popClip();
+        if (selEnemy >= 0) {
+            const EnemyDef& e = E[selEnemy];
+            Rect info{c.x + c.w * 0.45f, c.y, c.w * 0.55f, c.h};
+            u.nine("parchment", info, vec4(1, 1, 1, 1), 0.7f);
+            // 3D preview of the creature
+            static RenderTarget prevRT; static int prevFor = -1; static Visual pv;
+            if (!prevRT.fbo) prevRT.create(320, 320, GL_RGBA8, true);
+            if (prevFor != selEnemy) {
+                prevFor = selEnemy;
+                if (e.arch == Arch::Humanoid) setupVisualHumanoid(pv, e.hlook, e.weapon, e.offhand, 1.f); else setupVisualCreature(pv, e.arch, e.clook, 1.f);
+            }
+            pv.anim.speed = 0; pv.anim.update(dt);
+            computeWorld(*pv.anim.skeleton, pv.anim.pose, pv.pw);
+            Camera cm; float hgt = e.arch == Arch::Humanoid ? 1.0f : 0.6f;
+            cm.target = vec3(0, hgt, 0); cm.pos = vec3(std::sin(realTime * 0.5f) * 3.f, hgt + 0.9f, std::cos(realTime * 0.5f) * 3.f); cm.fovY = 40 * DEG; cm.zNear = 0.1f; cm.zFar = 30; cm.update(1);
+            Environment en; en.sunDir = normalize(vec3(0.4f, 0.8f, 0.5f)); en.sunIntensity = 2.8f; en.sunColor = srgb(0xfff0dc); en.skyAmbient = srgb(0x8a9ac0); en.groundAmbient = srgb(0x5a4030); en.fogDensity = 0; en.exposure = 1.05f; en.saturation = 1.05f; en.contrast = 1.05f;
+            DrawItem d; d.mesh = pv.mesh.get(); d.flags = LIT_SKINNED | (pv.albedo ? LIT_TEXTURED : 0); d.albedo = pv.albedo; d.bones = pv.pw.skin[0].m; d.boneCount = pv.anim.skeleton->size(); d.fx.z = 0.6f;
+            std::vector<DrawItem> list{d};
+            if (pv.weapon) { DrawItem w; w.mesh = pv.weapon.get(); w.model = pv.pw.world[pv.wt == WeaponType::Bow ? H_PROPL : H_PROPR]; list.push_back(w); }
+            renderer.renderToTarget(prevRT, cm, en, list, vec4(0, 0, 0, 0));
+            u.image(prevRT.color.id, {info.x + info.w - 300, info.y + 20, 280, 280}, vec4(0, 1, 1, 0));
+            float y2 = info.y + 30;
+            u.text(e.name, info.x + 34, y2, 28, rgba(0x5a2a14), F_SERIF, A_LEFT, info.w - 340); y2 += 44;
+            u.text(e.family + " · " + regionName(e.region) + " · niveau " + std::to_string(e.level), info.x + 34, y2, 17, rgba(0x6a4a2a), F_BODY, A_LEFT, info.w - 340); y2 += 34;
+            y2 += u.text(e.desc, info.x + 34, y2, 19, INK, F_BODY, A_LEFT, info.w - 340) + 14;
+            int kills = bestiary[e.id];
+            char b[96];
+            snprintf(b, sizeof b, "Vaincus : %d", kills); u.text(b, info.x + 34, y2, 18, INK, F_BOLD); y2 += 30;
+            if (kills >= 3) {
+                if (e.weak != Element::Count) { u.text(std::string("Faiblesse : ") + elementName(e.weak), info.x + 34, y2, 18, vec4(elementColor(e.weak) * 0.7f, 1), F_BOLD); y2 += 28; }
+                if (e.resist != Element::Count) { u.text(std::string("Résiste : ") + elementName(e.resist), info.x + 34, y2, 18, rgba(0x5a4a3a), F_BOLD); y2 += 28; }
+                snprintf(b, sizeof b, "PV ~%.0f · Attaque ~%.0f", e.hp, e.atk); u.text(b, info.x + 34, y2, 17, rgba(0x5a4a3a), F_BODY);
+            } else u.text("Vainquez-en 3 pour révéler ses faiblesses.", info.x + 34, y2, 17, rgba(0x7a6a5a), F_BODY, A_LEFT, info.w - 68);
+        }
+        break;
+    }
+    // ---------------------------------------------------------------- collection
+    // ---------------------------------------------------------------- mods
+    case Menu::Mods: {
+        u.text("Mods", c.x, c.y, 26, GOLDT, F_SERIF);
+        u.text("Les mods remplacent des modèles, textures, sons et musiques, ou modifient objets, ennemis, dialogues et chroniques. Ils ne contiennent jamais de code. Les changements s'appliquent au prochain lancement du jeu.",
+               c.x, c.y + 38, 17, DIM, F_BODY, A_LEFT, c.w * 0.62f);
+        if (u.fancyButton({c.x + c.w - 300, c.y - 6, 300, 54}, "Importer un mod (.zip)", true, "button", 19)) {
+            if (!platform::requestModImport()) notify("Sur ordinateur : copiez le dossier du mod dans " + platform::writableDir() + "/mods", vec3(1, 0.9f, 0.7f), "i_settings");
+        }
+        Rect list{c.x, c.y + 110, c.w, c.h - 110};
+        if (mods.empty()) {
+            u.text("Aucun mod installé. Touchez « Importer un mod » et choisissez un fichier .zip.", list.x + list.w / 2, list.y + 80, 20, PALE, F_BODY, A_CENTER);
+            break;
+        }
+        u.pushClip(list);
+        float so = u.scrollArea("mods", list, mods.size() * 96.f);
+        float y = list.y - so;
+        bool changed = false;
+        for (auto& m : mods) {
+            Rect row{list.x, y, list.w - 14, 88};
+            u.nine(m.enabled ? "card_sel" : "card", row, vec4(1, 1, 1, m.enabled ? 1.f : 0.75f), 0.8f);
+            std::string head = m.name + (m.version.empty() ? "" : "  v" + m.version) + (m.author.empty() ? "" : "  · " + m.author);
+            u.text(head, row.x + 16, row.y + 10, 20, m.enabled ? GOLDT : DIM, F_BOLD);
+            std::string info = m.desc;
+            if (m.applied) info = (m.patches ? std::to_string(m.patches) + " modification(s) appliquée(s)" : std::string("ressources seulement")) + (m.errors ? " · " + std::to_string(m.errors) + " erreur(s), " + m.firstError : "") + (m.desc.empty() ? "" : " · " + m.desc);
+            else if (m.enabled) info = "Sera appliqué au prochain lancement" + (m.desc.empty() ? std::string() : " · " + m.desc);
+            u.text(info, row.x + 16, row.y + 44, 16, m.errors ? rgba(0xe0a070) : PALE, F_BODY, A_LEFT, row.w - 140);
+            bool v = m.enabled;
+            if (toggle(u, {row.x + row.w - 110, row.y + 24, 100, 40}, "", v)) { m.enabled = v; changed = true; }
+            y += 96;
+        }
+        u.popClip();
+        if (changed) { saveModList(); bool had = gameTuning().allHeroes; refreshLiveModFlags();
+            if (had != gameTuning().allHeroes) notify(gameTuning().allHeroes ? "Tous les héros sont débloqués dans la roue" : "Héros : retour aux héros réellement débloqués", vec3(0.7f, 1.f, 0.7f), "i_character");
+            else notify("Redémarrez le jeu pour appliquer les mods", vec3(1, 0.9f, 0.7f), "i_settings"); }
+        break;
+    }
+    // ---------------------------------------------------------------- chronicles (lore)
+    case Menu::Base: drawBaseMenu(c); break;
+    case Menu::Objectives: drawObjectives(c); break;
+    case Menu::Coop: drawCoopMenu(c); break;
+    case Menu::Chronicles: {
+        Rect list{c.x, c.y + 40, c.w * 0.38f, c.h - 40};
+        const auto& L = lore();
+        int found = 0; for (auto& l : L) found += loreFound.count(l.id) ? 1 : 0;
+        u.text("Chroniques · " + std::to_string(found) + "/" + std::to_string(L.size()), c.x, c.y, 22, PALE, F_SERIF);
+        if (u.fancyButton({c.x + c.w * 0.38f - 210, c.y - 8, 210, 42}, "Revoir le prologue", true, "button_dark", 17)) { menu = Menu::None; startPrologue(); }
+        u.pushClip(list);
+        float so = u.scrollArea("lore", list, L.size() * 52.f + 20);
+        std::string cat;
+        float y = list.y - so;
+        for (int i = 0; i < (int)L.size(); i++) {
+            bool f2 = loreFound.count(L[i].id) > 0;
+            Rect row{list.x, y, list.w - 12, 46};
+            u.nine(i == selLore ? "slot_sel" : "slot", row, vec4(1, 1, 1, f2 ? 1.f : 0.5f), 0.4f);
+            u.text(f2 ? L[i].title : "???", row.x + 14, row.y + 12, 18, f2 ? (i == selLore ? GOLDT : PALE) : DIM, f2 ? F_BOLD : F_BODY);
+            if (f2 && u.button(row)) { selLore = i; play("ui_click", 0.4f); }
+            y += 52;
+        }
+        u.popClip();
+        Rect page{c.x + c.w * 0.42f, c.y + 40, c.w * 0.58f, c.h - 40};
+        u.panel(page, "", true);
+        if (selLore >= 0 && selLore < (int)L.size() && loreFound.count(L[selLore].id)) {
+            u.text(L[selLore].title, page.x + 34, page.y + 26, 32, rgba(0x5a2a14), F_TITLE);
+            u.text(L[selLore].text, page.x + 34, page.y + 86, 21, INK, F_BODY, A_LEFT, page.w - 68);
+        } else {
+            u.text("Touchez une chronique pour la lire.", page.x + page.w / 2, page.y + page.h / 2 - 12, 20, rgba(0x7a5a3a), F_BODY, A_CENTER);
+        }
+        break;
+    }
+    case Menu::Collection: {
+        float y = c.y;
+        float colW = c.w / 2 - 20;
+        u.text("Fragments de Couronne", c.x, y, 22, GOLDT, F_SERIF);
+        int shards = countItem("crown_shard") + (questsDone.count("m5") ? 6 : 0);
+        for (int i = 0; i < 6; i++) u.sprite(i < shards ? "i_collection" : "i_lock", {c.x + i * 62, y + 34, 54, 54}, vec4(1, 1, 1, i < shards ? 1.f : 0.4f));
+        y += 110;
+        u.text("Gardiens vaincus : " + std::to_string(defeatedBosses.size()) + "/8", c.x, y, 20, PALE, F_BODY); y += 34;
+        for (auto& b : bosses()) { bool d = defeatedBosses.count(b.id) > 0; u.text(std::string(d ? "✓ " : "· ") + (d ? b.name : "???"), c.x + 10, y, 18, d ? rgba(0x9ae08a) : DIM, F_BODY); y += 26; }
+        y += 10;
+        u.text("Montures", c.x, y, 22, GOLDT, F_SERIF); y += 36;
+        for (int i = 0; i < (int)mounts().size(); i++) {
+            bool own = std::find(ownedMounts.begin(), ownedMounts.end(), mounts()[i].id) != ownedMounts.end();
+            Rect r{c.x, y, colW, 40};
+            u.text(std::string(own ? (activeMount == i ? "★ " : "· ") : "  ") + (own ? mounts()[i].name : "???"), r.x + 10, r.y + 8, 18, own ? (activeMount == i ? GOLDT : PALE) : DIM, F_BODY);
+            if (own && u.button(r)) { activeMount = i; if (reg.valid(mountEnt) && !riding) { reg.destroyLater(mountEnt); mountEnt = NullEntity; } notify(mounts()[i].name + " sera appelé·e.", vec3(1, 0.9f, 0.7f), "i_mount"); }
+            y += 34;
+        }
+        float x2 = c.x + c.w / 2 + 20;
+        y = c.y;
+        u.text("Reliques", x2, y, 22, GOLDT, F_SERIF); y += 36;
+        for (auto& d : allItems()) if (d.kind == ItemKind::Relic) { bool f2 = relicsFound.count(d.id) > 0; u.text(std::string(f2 ? "✓ " : "· ") + (f2 ? d.name : "???"), x2 + 10, y, 18, f2 ? PALE : DIM, F_BODY); y += 26; }
+        y += 14;
+        {
+            int found = 0; for (auto& l : lore()) found += loreFound.count(l.id) ? 1 : 0;
+            u.text("Chroniques : " + std::to_string(found) + "/" + std::to_string(lore().size()) + " (onglet Chroniques)", x2, y, 20, GOLDT, F_SERIF); y += 44;
+        }
+        u.text("Réputation", x2, y, 22, GOLDT, F_SERIF); y += 34;
+        for (int fa = 0; fa < FA_COUNT; fa++) { u.text(factionName(fa), x2 + 10, y, 17, PALE, F_BODY); u.bar({x2 + colW - 170, y, 160, 20}, std::min(1.f, reputation[fa] / 150.f), vec4(0.85f, 0.7f, 0.3f, 1)); y += 28; }
+        break;
+    }
+    // ---------------------------------------------------------------- settings
+    case Menu::Settings: {
+        float y = c.y, colW = c.w / 2 - 30;
+        u.text("Qualité graphique", c.x, y, 22, GOLDT, F_SERIF); y += 36;
+        for (int p = 0; p < 5; p++) {
+            Rect b{c.x + p * (colW / 5), y, colW / 5 - 6, 50};
+            bool on = (int)settings.profile == p;
+            if (u.fancyButton(b, profileName((QualityProfile)p), true, on ? "button" : "button_dark", 15)) { applyGraphicsProfile((QualityProfile)p); notify(std::string("Profil graphique : ") + profileName((QualityProfile)p), vec3(0.8f, 0.9f, 1.f), "i_settings"); }
+        }
+        y += 60;
+        const GraphicsSettings& gs = renderer.settings;
+        char b[200];
+        snprintf(b, sizeof b, "Résolution %d %% · ombres %s · occlusion %s · bloom %s · %d FPS · herbe %d %% · feuillage %s", (int)(gs.renderScale * 100), gs.shadowRes ? (gs.softShadows ? "douces" : "oui") : "non", gs.ssao ? "oui" : "non", gs.bloom ? "oui" : "non", gs.fpsCap, (int)(gs.grassDensity * 100), settings.profile <= QualityProfile::Medium ? "détaillé" : "simple");
+        u.text(b, c.x, y, 16, DIM, F_BODY, A_LEFT, colW); y += 44;
+        if (toggle(u, {c.x, y, colW, 40}, "Aberration chromatique", settings.chromatic)) applyGraphicsProfile(settings.profile); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Afficher les FPS", settings.showFps); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Tremblements de caméra", settings.cameraShake); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Inverser la caméra (horizontal)", settings.invertCamera); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Inverser l'axe vertical", settings.invertCameraY); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Caméra souple (suit avec retard)", settings.cameraSmooth); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Visée automatique", settings.autoTarget); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Vibrations (retour haptique)", settings.haptics); y += 46;
+        if (importedModel("hero") && toggle(u, {c.x, y, colW, 40}, "Héros 3D détaillé (armure fixe)", settings.importedHero)) { rebuildPlayerVisual(); saveSettings(); }
+        if (importedModel("hero")) y += 46;
+        float x2 = c.x + colW + 60; y = c.y;
+        u.text("Audio", x2, y, 22, GOLDT, F_SERIF); y += 36;
+        bool a = false;
+        a |= slider(u, {x2, y, colW, 60}, "Volume général", settings.master, 0, 1); y += 64;
+        a |= slider(u, {x2, y, colW, 60}, "Musique", settings.music, 0, 1); y += 64;
+        a |= slider(u, {x2, y, colW, 60}, "Effets", settings.sfx, 0, 1); y += 64;
+        a |= slider(u, {x2, y, colW, 60}, "Ambiances", settings.ambience, 0, 1); y += 70;
+        if (a) audio.setVolumes(settings.master, settings.music, settings.sfx, settings.ambience);
+        u.text("Commandes", x2, y, 22, GOLDT, F_SERIF); y += 36;
+        slider(u, {x2, y, colW, 60}, "Sensibilité caméra", settings.camSensitivity, 0.3f, 2.5f, "x%.2f", 1.f); y += 64;
+        slider(u, {x2, y, colW, 60}, "Zone morte du joystick", settings.joystickDeadzone, 0.f, 0.4f); y += 64;
+        if (u.fancyButton({x2, y, colW, 54}, "Personnaliser les commandes", state == GameState::Playing, "button", 20)) { layoutEdit = true; }
+        y += 64;
+        if (toggle(u, {x2, y, colW, 40}, "Mode gaucher", settings.layout.leftHanded)) {}
+        y += 50;
+        {
+            int on = 0; for (auto& m : mods) on += m.enabled ? 1 : 0;
+            if (u.fancyButton({x2, y, colW, 54}, "Mods (" + std::to_string(on) + " actif" + (on > 1 ? "s" : "") + ")", true, "button_dark", 20)) { scanMods(); menu = Menu::Mods; }
+        }
+        static float lastSave = 0;
+        lastSave += dt;
+        if (lastSave > 1.f) { saveSettings(); lastSave = 0; }
+        break;
+    }
+    // ---------------------------------------------------------------- saves
+    case Menu::Saves: {
+        // 2.6.0 six games side by side (each with its own autosave); the old shared autosave is listed if present
+        static int confirmDel = -1; static float confirmT = 0;
+        confirmT = std::max(0.f, confirmT - dt); if (confirmT <= 0) confirmDel = -1;
+        std::vector<int> slots; for (int s = 0; s < GAME_SLOTS; s++) slots.push_back(s);
+        if (!saveSummary(99).empty()) slots.push_back(99);
+        u.text(state == GameState::Playing ? "Partie en cours : " + std::to_string(saveSlot + 1) : "Choisissez une partie", c.x, c.y - 4, 22, GOLDT, F_SERIF);
+        Rect lr{c.x, c.y + 36, c.w, c.h - 36};
+        u.pushClip(lr);
+        const float rowH = 104;
+        float so = u.scrollArea("saves", lr, slots.size() * rowH);
+        for (size_t k = 0; k < slots.size(); k++) {
+            int s = slots[k];
+            Rect r{lr.x, lr.y + k * rowH - so, lr.w - 14, rowH - 10};
+            if (r.y + r.h < lr.y || r.y > lr.y + lr.h) continue;
+            bool cur = state == GameState::Playing && s == saveSlot;
+            u.nine(cur ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.9f);
+            std::string sum = saveSummary(s);
+            u.text(s == 99 ? "Ancienne sauvegarde automatique" : "Partie " + std::to_string(s + 1) + (cur ? " (en cours)" : ""), r.x + 20, r.y + 12, 23, GOLDT, F_SERIF);
+            u.text(sum.empty() ? "Vide" : sum, r.x + 20, r.y + 50, 17, sum.empty() ? DIM : PALE, F_BODY, A_LEFT, r.w - 520);
+            float bx = r.x + r.w - 168;
+            if (u.fancyButton({bx, r.y + 18, 150, 54}, "Charger", !sum.empty(), "plaque", 20)) { if (loadGame(s)) { menu = Menu::None; startPlaying(); notify("Partie chargée", vec3(0.7f, 0.9f, 1.f), "i_save"); u.popClip(); return; } }
+            bx -= 160;
+            if (state == GameState::Playing && s != 99 && u.fancyButton({bx, r.y + 18, 150, 54}, "Sauvegarder", true, "plaque", 19)) {
+                if (saveGame(s)) { saveSlot = s; notify("Partie sauvegardée (partie " + std::to_string(s + 1) + ")", vec3(0.7f, 0.9f, 1.f), "i_save"); }
+            }
+            bx -= 160;
+            if (!sum.empty() && !cur && u.fancyButton({bx, r.y + 18, 150, 54}, confirmDel == s ? "Confirmer ?" : "Supprimer", true, "button_dark", 19)) {
+                if (confirmDel == s) { platform::removeFile(platform::writableDir() + "/save_" + std::to_string(s) + ".lks"); confirmDel = -1; notify("Partie supprimée", vec3(1.f, 0.7f, 0.5f), "i_trash"); }
+                else { confirmDel = s; confirmT = 3.f; }
+            }
+        }
+        u.popClip();
+        break;
+    }
+    default: break;
+    }
+}
+
+// Drag & drop editor for the on-screen controls (positions, size, opacity).
+void Game::drawLayoutEditor() {
+    UI& u = ui;
+    u.rect({0, 0, u.W, u.H}, vec4(0, 0, 0, 0.35f));
+    u.text("Faites glisser les boutons · Touchez « Terminer » pour enregistrer", u.W / 2, 90, 22, GOLDT, F_SERIF, A_CENTER, 0, true);
+    static const char* names[CTL_COUNT] = {"Attaque", "Esquive", "Saut", "Parade", "Sort 1", "Sort 2", "Sort 3", "Potion", "Interagir", "Monture", "Courir"};
+    for (int i = 0; i < CTL_COUNT; i++) {
+        if (i == CTL_SPRINT) continue;   // 2.3.3 no run button any more (joystick to the edge)
+        Rect r = ctlRect(*this, i);
+        u.sprite(i == layoutDrag ? "round_hi" : "round", r, vec4(1, 1, 1, settings.layout.opacity));
+        if (CTL_ICON[i][0]) u.sprite(std::string("i_") + CTL_ICON[i], r.inset(r.w * 0.25f));
+        u.text(names[i], r.x + r.w / 2, r.y + r.h + 2, 15, PALE, F_BOLD, A_CENTER, 0, true);
+    }
+    for (auto& f : u.fingers) {
+        if (f.pressed) for (int i = 0; i < CTL_COUNT; i++) if (i != CTL_SPRINT && ctlRect(*this, i).contains(f.x, f.y)) layoutDrag = i;
+        if (f.down && layoutDrag >= 0) {
+            vec2 p{f.x - u.W, f.y - u.H};
+            if (settings.layout.leftHanded) p.x = -f.x;
+            settings.layout.pos[layoutDrag] = vec2(clampf(p.x, -u.W + 60, -40), clampf(p.y, -u.H + 120, -40));
+        }
+        if (f.released) layoutDrag = -1;
+    }
+    Rect panel{u.W / 2 - 300, u.H / 2 - 120, 600, 240};
+    u.nine("panel_plain", panel, vec4(1, 1, 1, 0.85f), 0.6f);
+    slider(u, {panel.x + 30, panel.y + 20, 540, 60}, "Taille des boutons", settings.layout.scale, 0.7f, 1.4f, "x%.2f", 1.f);
+    slider(u, {panel.x + 30, panel.y + 84, 540, 60}, "Opacité", settings.layout.opacity, 0.3f, 1.f);
+    if (u.fancyButton({panel.x + 30, panel.y + 166, 250, 54}, "Réinitialiser", true, "button_dark", 20)) { ControlLayout L; settings.layout = L; settings.layout.leftHanded = false; loadSettings(); for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = defaultLayoutPos()[i]; settings.layout.scale = 1; settings.layout.opacity = 0.85f; }
+    if (u.fancyButton({panel.x + 320, panel.y + 166, 250, 54}, "Terminer", true, "button", 20)) { layoutEdit = false; saveSettings(); }
+    u.consumeAll();
+}
+
+}  // namespace lk

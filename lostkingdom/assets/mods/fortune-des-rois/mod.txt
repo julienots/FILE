@@ -1,0 +1,4 @@
+name = Fortune des rois
+author = Superessence Studio
+version = 1.0
+description = Trois fois plus d'or sur les ennemis, un quart d'expérience en plus.

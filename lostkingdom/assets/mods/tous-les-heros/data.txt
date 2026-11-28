@@ -1,0 +1,3 @@
+# Tous les héros (mod livré avec LOST KINGDOM 3.9.6)
+# Tous les personnages jouables sont disponibles dans le menu des héros, sans leur quête.
+game.all_heroes = 1

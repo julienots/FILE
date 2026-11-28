@@ -1,0 +1,824 @@
+#include "Game.h"
+#include "../engine/core/Platform.h"
+#include <algorithm>
+#include <chrono>
+
+namespace lk {
+
+// ============================================================================================ camera
+void Game::updateCamera(float dt) {
+    vec3 target;
+    bool playing = state == GameState::Playing && player != NullEntity;
+    float distMin = CameraRig::DIST_MIN;
+    if (playing) {
+        Character& p = pc();
+        // "Caméra souple" (option): leads the hero a little in his running direction. Default: locked on the hero.
+        vec3 lead = settings.cameraSmooth ? vec3(p.vel.x, 0, p.vel.z) * 0.25f : vec3(0);
+        target = p.pos + vec3(0, 1.1f, 0) + lead;
+        // ---- player input: drag = yaw / pitch, pinch = zoom (multiplicative: same feel near and far)
+        bool touched = input.camDrag.x != 0 || input.camDrag.y != 0 || input.pinch != 0;
+        camIdleT = touched ? 0.f : camIdleT + dt;
+        float sens = settings.camSensitivity;
+        // 1.10.2: slower (x0.6) and the same rate on both axes, so a diagonal drag moves the view diagonally
+        camYaw += input.camDrag.x * 0.0034f * sens * (settings.invertCamera ? -1.f : 1.f);
+        camPitch = CameraRig::clampPitch(camPitch + input.camDrag.y * 0.0034f * sens * (settings.invertCameraY ? -1.f : 1.f));
+        if (input.pinch != 0) camDistTarget = CameraRig::clampDist(camDistTarget * std::exp(-input.pinch * 0.0035f));
+        if (input.camReset) { camResetT = 0.8f; play("ui_click", 0.3f); }
+        if (touched && !input.camReset) camResetT = 0;
+        if (camResetT > 0) {
+            camResetT -= dt;
+            camPitch = damp(camPitch, CameraRig::PITCH_DEFAULT, 7.f, dt);
+            camDistTarget = damp(camDistTarget, CameraRig::DIST_DEFAULT, 7.f, dt);
+        }
+        float hs = length(vec2(p.vel.x, p.vel.z));
+        bool locked = false;
+        // lock-on: frame both the hero and the target (wider shot). The camera never turns by itself (1.6.1).
+        if (lockTarget != NullEntity && reg.valid(lockTarget)) {
+            Character* t = reg.get<Character>(lockTarget);
+            if (t && !t->dead) {
+                locked = true;
+                target = lerp(target, t->pos + vec3(0, 1.f, 0), 0.3f);
+                float sep = distXZ(p.pos, t->pos);
+                distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, sep * 0.9f + 7.f + t->height));
+            }
+        }
+        if (bossEnt != NullEntity && reg.valid(bossEnt)) {
+            Character* b = reg.get<Character>(bossEnt);
+            if (b && !b->dead) { target = lerp(target, b->pos, 0.25f); distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, 24.f + b->vis.scale * 1.5f)); }
+        }
+        // automatic return: only from extreme angles (sky / top view), after 6 s without touching the camera
+        // while travelling; normal angles chosen by the player are kept
+        if (camIdleT > 6.f && hs > 1.f && !locked && camResetT <= 0 && (camPitch < 0.3f || camPitch > 1.05f))
+            camPitch = damp(camPitch, clampf(camPitch, 0.3f, 1.05f), 0.6f, dt);
+        // look ahead: only when sprinting, slowly (zig-zags must not swing the camera)
+        float runK = smoothstepf(5.5f, 7.f, hs) * (p.attackClip ? 0.f : 1.f);
+        vec3 ahead = hs > 0.1f ? vec3(p.vel.x / hs, 0, p.vel.z / hs) * 1.5f * runK : vec3(0);
+        camLookAhead = damp(camLookAhead, settings.cameraSmooth ? ahead : vec3(0), 1.2f, dt);
+    } else {
+        // title / credits: slow cinematic fly-over above Greenhaven
+        titleCamT += dt;
+        if (state == GameState::Title) {
+            // 3.10.2 the title: low over the meadow by Brindlemere at dusk, looking up at the golden breach; a slow
+            // sideways drift (the world is the background of the menu, on the right of the screen)
+            const vec2 Rh = normalize(vec2(0.596f, -0.745f));
+            const Poi* bp = world.poiById("brindlemere");
+            vec2 B = (bp ? bp->pos : vec2(1480, 1620)) + vec2(70, 90) + Rh * 12.f;   // the open meadow of the prologue's tear
+            vec2 side{-Rh.y, Rh.x};
+            float drift = std::sin(titleCamT * 0.03f) * 8.f;
+            vec2 c = B + side * drift;
+            target = vec3(c.x, world.height(c.x, c.y) + 3.f, c.y);
+            camYaw = std::atan2(-Rh.x, -Rh.y) + 0.32f;   // the breach a little right of the centre (the menu is on the left)
+            camDistTarget = 11.f;
+            camPitch = -0.2f;
+        } else {
+            float a = titleCamT * 0.035f;
+            vec2 c{1480.f + std::cos(a) * 60.f, 1600.f + std::sin(a) * 60.f};
+            target = vec3(c.x, world.height(c.x, c.y) + 4.f, c.y);
+            camYaw = a + 2.2f;
+            camDistTarget = 36.f;
+            camPitch = CameraRig::PITCH_DEFAULT;
+        }
+        camLookAhead = vec3(0);
+    }
+    // 1.6.2: the camera follows the hero tightly by default (players found the floaty follow "bizarre")
+    // story cinematics drive camFocus themselves (the world streams around what they film)
+    if (!cine.active) {
+        camFocus = damp(camFocus, target, state == GameState::Playing ? (settings.cameraSmooth ? 7.f : 22.f) : 1.5f, dt);
+        if (length2(camFocus - target) > 60 * 60) camFocus = target;  // teleports
+    }
+    // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
+    // for the overworld)
+    bool openSky = dungeon.active && (dungeon.theme == 8 || dungeon.theme == 10);   // 3.2.0 + space   // 2.2.2 the celestial realm: free camera, the sky and the far islands are the show
+    float distCap = dungeon.active && !openSky ? 16.f : CameraRig::DIST_MAX;
+    camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), settings.cameraSmooth ? 4.f : 10.f, dt);
+
+    CameraRigIn ri;
+    ri.focus = camFocus; ri.lookAhead = camLookAhead;
+    // dungeons (narrow 4 m corridors): the camera stays above the walls as in 1.5 and the see-through shader
+    // fades them; no low "sky" angle there (walls would fill the view)
+    ri.yaw = camYaw; ri.pitch = dungeon.active && !openSky ? std::max(camPitch, 0.35f) : camPitch; ri.dist = camDist;
+    ri.playing = state == GameState::Playing;
+    ri.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
+    ri.ground = [this](float x, float z) {
+        if (dungeon.active) { float y; return dungeonFloor(x, z, y) ? y : camFocus.y - 1.1f; }
+        return world.height(x, z);
+    };
+    if (playing && !dungeon.active) ri.blocked = [this](vec3 p) { return cameraBlocked(p); };
+    // smoothing state (collision distance, terrain lift); reset on teleports and outside gameplay
+    bool jump = length2(camFocus - camRigFocusPrev) > 15.f * 15.f;
+    camRigFocusPrev = camFocus;
+    ri.dt = (playing && !jump) ? dt : 0.f;
+    ri.prevCollisionDist = camRig.collisionDist; ri.prevLift = camRig.lift;
+    ri.smooth = settings.cameraSmooth ? 1.f : 2.5f;   // tight mode: terrain lift / wall back-out settle 2.5x faster
+    camRig = CameraRig::compute(ri);
+    if (camRig.yawFix != 0 && state == GameState::Playing && !cine.active) camYaw = wrapAngle(camYaw + camRig.yawFix * std::min(1.f, dt * 3.f));   // 1.12.0
+    vec3 eye = camRig.eye, look = camRig.look;
+    { float wle = dungeon.active ? -1e9f : waterAt(eye.x, eye.z); underwaterView = wle > -1e8f && eye.y < wle - 0.05f;   // 2.4.0
+      // 3.5.0 the water near the camera: caustics on everything under it, the underwater look when the eye is below
+      bool lv = false, fr = false;
+      vec3 f = camFocus;
+      float wl = dungeon.active ? -1e9f : waterAt(f.x, f.z, &lv, &fr);
+      if (wl < -1e8f && !dungeon.active)   // on the shore: the water a few metres away
+          for (int k = 0; k < 4 && wl < -1e8f; k++) { vec2 o = vec2(std::cos(k * 1.5708f), std::sin(k * 1.5708f)) * 9.f; wl = waterAt(f.x + o.x, f.z + o.y, &lv, &fr); }
+      bool ok = wl > -1e8f && !lv && !fr;
+      env.waterLevel = ok ? wl : -1e9f;
+      env.caustics = ok ? (1.f - env.night) * clampf(env.sunIntensity / 2.5f, 0.25f, 1.f) : 0.f;
+      env.underwater = underwaterView ? 1.f : 0.f;
+      env.underDepth = underwaterView ? wle - eye.y : 0.f;
+      if (underwaterView) {
+          int rg = world.regionId(eye.x, eye.z);
+          vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);
+          if (rg == R_CORAL || rg == R_JUNGLE) { deep = srgb(0x0a5a82); shallow = srgb(0x35d6c8); }
+          else if (rg == R_FROSTHEIM || rg == R_AURORA) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }
+          else if (rg == R_SHADOWS) { deep = srgb(0x14200e); shallow = srgb(0x3a4a26); }
+          else if (rg == R_AMBER || rg == R_CANYON) { deep = srgb(0x0e5260); shallow = srgb(0x4ac0a0); }
+          env.waterTint = lerp(deep, shallow, 0.4f) * 0.9f;
+      }
+    }
+    // 3.6.0 first person (Settings): the eye in the hero's head, the drag turns the view, a gentle head bob
+    fpActive = settings.firstPerson && state == GameState::Playing && player != NullEntity && !cine.active && cinematicT <= 0 && camCineBlend <= 0 && !dialog.open;
+    if (fpActive) {
+        Character& c = pc();
+        vec3 f3 = look - eye;
+        vec2 f2 = vec2(f3.x, f3.z);
+        if (length(f2) > 1e-4f) fpYaw = std::atan2(f2.x, f2.y);
+        fpPitch = clampf((camPitch - CameraRig::PITCH_DEFAULT) * 1.3f, -1.2f, 1.25f);
+        vec3 head = c.pos + vec3(0, 1.62f * c.vis.scale, 0);
+        if (c.vis.anim.skeleton && c.vis.visY > -1e8f) head = vec3(c.pos.x, c.vis.visY, c.pos.z) + quat::axisAngle({0, 1, 0}, c.vis.visYaw).rotate(c.vis.pw.wpos[H_HEAD] * c.vis.scale);
+        vec3 fw{std::sin(fpYaw), 0, std::cos(fpYaw)};
+        fpFwd = normalize(vec3(std::sin(fpYaw) * std::cos(fpPitch), -std::sin(fpPitch), std::cos(fpYaw) * std::cos(fpPitch)));
+        fpRight = normalize(cross(fpFwd, vec3(0, 1, 0)));
+        fpUp = cross(fpRight, fpFwd);
+        float sp = saturate(length(vec2(c.vel.x, c.vel.z)) / 7.f) * (c.grounded ? 1.f : 0.f);
+        fpBob = c.vis.anim.phase * TAU;
+        eye = head + fw * 0.16f + vec3(0, 0.06f, 0);
+        eye += vec3(0, std::sin(fpBob * 2.f) * 0.04f * sp, 0) + fpRight * std::cos(fpBob) * 0.025f * sp;
+        look = eye + fpFwd;
+        fpEye = eye;
+    }
+    // 3.8.0 conversations are filmed: an over-the-shoulder two-shot, on the side of whoever listens, that glides
+    // in from the gameplay camera and swaps gently with the speaker
+    {
+        Character* npc = (dialog.open && reg.valid(dialog.ent) && player != NullEntity) ? reg.get<Character>(dialog.ent) : nullptr;
+        bool want = npc && !cine.active && cinematicT <= 0 && driving < 0 && !riding && distXZ(npc->pos, pc().pos) < 6.f;
+        dlgCamK = damp(dlgCamK, want ? 1.f : 0.f, want ? 2.6f : 4.f, dt);
+        if (want) {
+            Character& p = pc();
+            bool heroTalks = dialog.whoAt(dialog.line) == 'H';
+            vec3 hp = p.pos + vec3(0, 1.62f * p.vis.scale, 0), np = npc->pos + vec3(0, npc->height * 0.9f, 0);
+            vec3 spk = heroTalks ? hp : np, lis = heroTalks ? np : hp;
+            vec3 d = spk - lis; d.y = 0;
+            float L = std::max(0.6f, length(d)); d = d / L;
+            vec3 side = normalize(cross(vec3(0, 1, 0), d));
+            float sd = heroTalks ? -1.f : 1.f;   // stay on the same side of the line of action (180° rule)
+            float kin = dungeon.active ? 0.55f : 1.f;   // 3.9.0 indoors: closer, so the camera stays inside the room
+            vec3 e2 = lis - d * (1.5f * kin) + side * sd * (1.05f * kin) + vec3(0, 0.18f, 0);
+            vec3 l2 = lerp(spk, lis, 0.3f) + side * sd * 0.15f + vec3(0, -0.38f, 0);
+            if (!dungeon.active) e2.y = std::max(e2.y, world.height(e2.x, e2.z) + 0.5f);
+            if (!dlgCamInit) { dlgEye = e2; dlgLook = l2; dlgCamInit = true; }
+            dlgEye = lerp(dlgEye, e2, 1.f - std::exp(-3.f * dt));
+            dlgLook = lerp(dlgLook, l2, 1.f - std::exp(-4.f * dt));
+        } else if (dlgCamK < 0.01f) dlgCamInit = false;
+        if (dlgCamK > 0.001f && dlgCamInit) {
+            float k = easeInOut(saturate(dlgCamK));
+            eye = lerp(eye, dlgEye, k); look = lerp(look, dlgLook, k);
+        }
+    }
+    float cineFov = 0;
+    if (cine.active) {
+        vec3 ce, cl;
+        if (cinematicCamera(ce, cl, cineFov)) { eye = ce; look = cl; cineLastEye = eye; cineLastLook = look; camCineBlend = 0; }
+    } else if (cinematicT > 0) {
+        float u = 1.f - cinematicT / 4.f;
+        eye = lerp(cineFrom, cineTo, easeInOut(saturate(u)));
+        look = cineLook;
+        if (!dungeon.active) eye.y = std::max(eye.y, world.height(eye.x, eye.z) + 0.6f);
+        cineLastEye = eye; cineLastLook = look; camCineBlend = 1.f;
+    } else if (camCineBlend > 0) {
+        // glide from the last cinematic shot back to the player's camera (no hard cut)
+        float k = easeInOut(camCineBlend);
+        eye = lerp(eye, cineLastEye, k); look = lerp(look, cineLastLook, k);
+        camCineBlend = std::max(0.f, camCineBlend - dt / 0.7f);
+    }
+    if (riding && dlgCamK < 0.01f) { eye.y += rideBob * 0.3f; look.y += rideBob * 0.45f; }   // 3.8.1 the horse's gait felt in the camera (softened)
+    if (shake > 0) {
+        Rng r((uint64_t)(realTime * 977));
+        eye += r.onSphere() * shake * 0.35f;
+        shake = std::max(0.f, shake - dt * 2.5f);
+    }
+    cam.pos = eye; cam.target = look;
+    cam.fovY = cineFov > 0 ? cineFov : (dungeon.active ? 40.f : 38.f) * DEG;
+    if (fpActive) cam.fovY = (62.f + 4.f * saturate(length(vec2(pc().vel.x, pc().vel.z)) / 7.f - 0.5f)) * DEG;   // 3.6.0 first person: a human field of view (wider when running)
+    {   // 3.9.2 speed felt in the view: the field of view opens a little while sprinting (eased, never during a cinematic or a conversation)
+        static float speedFov = 0.f;
+        float hs = (player != NullEntity && !fpActive && cineFov <= 0 && dlgCamK < 0.01f && !cine.active) ? length(vec2(pc().vel.x, pc().vel.z)) : 0.f;
+        speedFov = damp(speedFov, saturate((hs - 5.f) / 3.f), 3.f, std::min(dt, 0.05f));
+        cam.fovY += 3.f * DEG * speedFov;
+    }
+    cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
+    if (fpActive) cam.zNear = 0.06f;   // 3.6.0 the hands and weapon are close to the eye
+    cam.zFar = dungeon.active ? 420.f : 1500.f;   // the horizon relief reaches the whole island (fog hides the rest)
+    cam.update((float)W / std::max(1, H));
+    dofFocus = length(look - eye);
+}
+
+// Grass benders (1.6.1): the hero, the trail he leaves (grass stays down ~0.7 s then springs back with a small
+// wobble), and the nearest characters (enemies, animals, villagers, the mount).
+void Game::updateGrassPushers() {
+    for (auto& pv : env.pushers) pv = vec4(0, 0, 0, 0);
+    if (state != GameState::Playing || player == NullEntity || dungeon.active) return;
+    int n = 0;
+    auto add = [&](vec3 p, float st, float r) { float w = Environment::packPusher(st, r); if (n < 8 && w != 0.f) env.pushers[n++] = vec4(p, w); };
+    Character& c = pc();
+    float r = riding ? 1.5f : 0.95f;
+    add(c.pos, 0.6f, r);   // 3.7.1 gentler (it flattened the grass far too much)
+    if (c.grounded && distXZ(c.pos, grassTrailLast) > 0.45f) {
+        grassTrail.push_front({c.pos, realTime});
+        grassTrailLast = c.pos;
+        while (grassTrail.size() > (tallGrassHere > 0.3f ? 6u : 4u)) grassTrail.pop_back();
+    }
+    for (auto& t : grassTrail) {
+        float age = realTime - t.t;
+        float st = age < 0.35f ? 1.f : std::exp(-3.5f * (age - 0.35f)) * std::cos(5.f * (age - 0.35f));
+        add(t.p, st * 0.4f, r * 0.85f);   // 3.7.1 a light trail that springs back quickly
+    }
+    std::vector<std::pair<float, Character*>> near;
+    reg.each<Character>([&](Entity e, Character& o) {
+        if (e == player || o.dead) return;
+        float d2 = dist2XZ(o.pos, c.pos);
+        if (d2 < 25.f * 25.f) near.push_back({d2, &o});
+    });
+    std::sort(near.begin(), near.end(), [](auto& a, auto& b) { return a.first < b.first; });
+    for (auto& o : near) add(o.second->pos, 0.5f, clampf(o.second->radius * 1.6f, 0.6f, 3.f));
+}
+
+bool Game::cameraBlocked(vec3 p) const {
+    if (dungeon.active && p.x > WORLD_SIZE) {
+        // wall colliders are 8 m tall for gameplay, but the visible walls stop at ~4.6 m above the floor: the
+        // camera may pass over them (top-down dungeon view, as in 1.5)
+        float wallTop = dungeon.origin.y + 4.6f;
+        if (p.y > wallTop) return false;
+        for (const Collider& c : dungeon.colliders) {
+            if (c.hx <= 0) continue;
+            vec2 l = rotate(p.xz() - c.c, -c.rot);
+            if (std::fabs(l.x) < c.hx && std::fabs(l.y) < c.hz) return true;
+        }
+        return false;
+    }
+    return world.cameraBlocked(p, 0.3f);
+}
+
+vec2 Game::worldToScreen(vec3 p, bool* on) const {
+    vec4 c = cam.viewProj * vec4(p, 1.f);
+    if (on) *on = c.w > 0.1f;
+    if (c.w <= 0.001f) return {-1000, -1000};
+    vec2 n{c.x / c.w, c.y / c.w};
+    return {(n.x * 0.5f + 0.5f) * ui.W, (1.f - (n.y * 0.5f + 0.5f)) * ui.H};
+}
+
+// ============================================================================================ world
+void Game::renderWorld(float dt) {
+    updateCamera(dt);
+    renderer.begin(cam, env);
+    vec3 focus = camFocus;
+    const GraphicsSettings& gs = renderer.settings;
+    // stream the world around the focus point (not while inside a dungeon)
+    // story cinematics film wide views: larger streaming radius and upload budget while they play
+    bool waiting = (cine.active && cine.waitLoad > 0) || loadGate;   // 2.1.0 holding on black until the scenery is in: stream wider and upload faster
+    float streamR = cine.active ? std::max(gs.drawDistance, waiting ? 230.f : 150.f) : (loadGate ? std::max(gs.drawDistance, 200.f) : gs.drawDistance);
+    if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, streamR, waiting ? 48 : (state == GameState::Playing ? (cine.active ? 8 : 3) : 6), realTime);
+    // horizon relief: upload once the background build is done (and again after a context loss)
+    if (!farTerrainData && farTerrainBuild.valid() && farTerrainBuild.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        farTerrainData = farTerrainBuild.get();
+        AGR_LOG("horizon relief: %zu vertices, %zu triangles", farTerrainData->v.size(), farTerrainData->idx.size() / 3);
+    }
+    if (farTerrainData && !farTerrain) { farTerrain = std::make_shared<Mesh>(); farTerrainData->upload(*farTerrain); }
+    if (farTerrain && !dungeon.active) {
+        DrawItem it; it.mesh = farTerrain.get(); it.flags = LIT_FAR; it.castShadow = false;
+        it.farClip = vec4(focus.x, focus.z, std::max(40.f, gs.drawDistance - 14.f), 0);
+        renderer.submit(it);
+    }
+    std::vector<std::pair<float, PointLight>> lights;
+    if (!dungeon.active || focus.x < WORLD_SIZE) {
+        world.forEachVisibleChunk([&](Chunk& ch) {
+            if (!cam.frustum.visible(ch.bounds)) return;
+            float d = distXZ(ch.bounds.center(), focus);
+            if (d > (cine.active ? std::max(gs.drawDistance, 150.f) : gs.drawDistance) + CHUNK) return;
+            DrawItem it; it.tint = vec4(worldTint, 0);   // 3.10.0 the Amber turns the land to honey
+            if (ch.terrain.valid()) { it.mesh = &ch.terrain; it.flags = LIT_TERRAIN; it.castShadow = d < 70.f; renderer.submit(it); }
+            // shadow casters limited to what the ~43 m shadow map around the hero can actually show
+            if (ch.props.valid()) { it.mesh = &ch.props; it.flags = 0; it.tint.w = ch.snow * 0.55f; it.castShadow = d < 44.f; renderer.submit(it); }
+            if (ch.foliage.valid()) { it.mesh = &ch.foliage; it.flags = LIT_WIND; it.tint.w = ch.snow * 0.5f; it.castShadow = d < 36.f; renderer.submit(it); }
+            // imported building models (1.9.0)
+            for (const auto& [mi, xf] : ch.models) {
+                PropModel* P = propModel(mi);
+                if (!P) continue;
+                // 2.3.6 per-building culling (with a margin so shadows from just outside the view still land) and a far LOD
+                vec3 lc = (P->bmin + P->bmax) * 0.5f;
+                vec3 wc = xf.transformPoint(lc);
+                float rad = length(xf.transformPoint(P->bmax) - xf.transformPoint(P->bmin)) * 0.5f;
+                float db = distXZ(wc, focus);
+                if (!cam.frustum.visibleSphere(wc, rad + (db < 40.f ? 10.f : 1.f))) continue;
+                bool far = db > 32.f && !P->lodIdx.empty() && !cine.active;
+                if (!P->mesh || !P->mesh->valid()) { P->mesh = std::make_shared<Mesh>(); P->mesh->upload(P->data.verts, P->data.idx); }
+                if (far && (!P->lodMesh || !P->lodMesh->valid())) { P->lodMesh = std::make_shared<Mesh>(); P->lodMesh->upload(P->lodVerts, P->lodIdx); }
+                if (!P->tex.id) P->tex.create2D(P->data.texW, P->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, P->data.rgba.data(), true, false);
+                DrawItem bi; bi.mesh = far ? P->lodMesh.get() : P->mesh.get(); bi.model = xf; bi.flags = LIT_TEXTURED; bi.albedo = P->tex.id;
+                bi.tint = vec4(worldTint, ch.snow * 0.55f); bi.castShadow = db < 44.f;
+                renderer.submit(bi);
+            }
+            if (d < 42.f && ch.lod == 0 && gs.grassDensity > 0.01f) {
+                it.castShadow = false; it.tint.w = 0;
+                // 2.3.6 distance thinning; 3.0.2 the grass stays thick: full up to ~24 m, never under 60 %
+                float keep = clampf(1.f - (d - 24.f) / 45.f, 0.6f, 1.f);
+                if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.grass.instanceCount * keep); renderer.submit(it); }
+                if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.flowers.instanceCount * keep); renderer.submit(it); }
+                it.instances = -1;
+                if (d < 28.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+            } else if (d < 100.f && ch.grassFar.valid() && gs.grassDensity > 0.01f) {
+                // 3.0.2 beyond, the cheap 4-blade tufts carry the meadow to the horizon of the detailed chunks
+                it.castShadow = false; it.tint.w = 0;
+                float keep = clampf(1.f - (d - 42.f) / 80.f, 0.4f, ch.lod == 0 ? 0.85f : 1.f);
+                it.mesh = &ch.grassFar; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.grassFar.instanceCount * keep); renderer.submit(it); it.instances = -1;
+            }
+            // 2.9.1 wheat fields: thinned with distance (the golden ground carries the field further away)
+            if (d < 62.f && ch.wheat.valid() && gs.grassDensity > 0.01f) {
+                float keep = clampf(1.f - (d - 24.f) / 45.f, 0.3f, 1.f);
+                it.castShadow = false; it.tint.w = 0; it.mesh = &ch.wheat; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.wheat.instanceCount * keep); renderer.submit(it); it.instances = -1;
+            }
+            // 1.9.1 tall grass meadows: visible a little further than the short grass (they shape the landscape)
+            if (d < 50.f && ch.tallGrass.valid() && gs.grassDensity > 0.01f) {
+                it.castShadow = false; it.tint.w = 0; it.mesh = &ch.tallGrass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it);
+            }
+            if (ch.water.valid()) {
+                vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);
+                if (ch.region == R_SHADOWS) { deep = srgb(0x14200e); shallow = srgb(0x3a4a26); }
+                else if (ch.region == R_ELDERWOOD) { deep = srgb(0x0c3a3a); shallow = srgb(0x2fa090); }
+                else if (ch.region == R_FROSTHEIM) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }
+                else if (ch.region == R_CORAL) { deep = srgb(0x0a5a82); shallow = srgb(0x35d6c8); }   // 2.0.0 tropical lagoons: azure over white sand
+                else if (ch.region == R_AMBER) { deep = srgb(0x0e5260); shallow = srgb(0x4ac0a0); }   // oases
+                if (amberK > 0.01f) { deep = lerp(deep, srgb(0x5a2c06), amberK); shallow = lerp(shallow, srgb(0xd89a3a), amberK); }   // 3.10.0 water turned to honey
+                renderer.submitWater({&ch.water, mat4(), deep, shallow, 0.f, false});
+            }
+            if (ch.lava.valid()) renderer.submitWater({&ch.lava, mat4(), vec3(0), vec3(0), 0.f, true});
+            // lights
+            for (const vec4& l : ch.lights) {
+                int kind = (int)l.w;
+                if (kind == LI_LANTERN && env.night < 0.3f) continue;
+                vec3 p{l.x, l.y, l.z};
+                float dd = length2(p - focus);
+                if (dd > 45 * 45) continue;
+                PointLight pl;
+                pl.pos = p;
+                switch (kind) {
+                case LI_LANTERN: pl.color = srgb(0xffb060) * 4.f * env.night; pl.radius = 9; pl.flicker = 0.5f; break;
+                case LI_FIRE: pl.color = srgb(0xff8a3a) * 6.f; pl.radius = 10; pl.flicker = 1.f; break;
+                case LI_LAVA: pl.color = srgb(0xff5a1a) * 5.f; pl.radius = 12; pl.flicker = 0.3f; break;
+                case LI_MAGIC: pl.color = srgb(0x6ff0ff) * 3.f; pl.radius = 8; pl.flicker = 0.2f; break;
+                default: pl.color = srgb(0xb06cff) * 2.5f; pl.radius = 6; pl.flicker = 0.2f; break;
+                }
+                lights.push_back({dd, pl});
+            }
+            // animated windmills
+            for (const vec4& e : ch.emitters) {
+                if ((int)e.w != EM_WINDMILL || !windmillBlades) continue;
+                float rot = (e.w - EM_WINDMILL) * 1000.f;
+                DrawItem w; w.mesh = windmillBlades.get();
+                w.model = mat4::trs({e.x, e.y, e.z}, quat::axisAngle({0, 1, 0}, rot) * quat::axisAngle({0, 0, 1}, realTime * 0.7f), vec3(1));
+                renderer.submit(w);
+            }
+        });
+    }
+    renderFish();   // 3.5.0
+    renderFallingTrees();   // 3.6.0
+    renderCellarHatch();    // 3.6.0
+    renderFairBunting();    // 3.9.0
+    renderBirds();          // 3.7.0
+    if (dungeon.active) {
+        renderDungeon();
+        for (const vec4& l : dungeon.lights) {
+            vec3 p{l.x, l.y, l.z};
+            float dd = length2(p - focus);
+            if (dd > 40 * 40) continue;
+            PointLight pl; pl.pos = p; pl.radius = 11; pl.flicker = 1;
+            pl.color = (int)l.w == LI_MAGIC ? srgb(0x9a6aff) * 3.5f : srgb(0xff9a4a) * 5.5f;
+            lights.push_back({dd, pl});
+        }
+    }
+    // characters
+    reg.each<Character>([&](Entity e, Character& c) { renderCharacter(e, c); });
+    if (!bombs.empty()) {   // 2.4.0 bombs: an iron ball with a fuse, spinning in flight
+        static std::shared_ptr<Mesh> bombMesh;
+        if (!bombMesh || !bombMesh->valid()) bombMesh = cachedMesh("bomb_24", [](MeshBuilder& b) {
+            b.ellipsoid({0, 0, 0}, vec3(0.22f), Mat(hexColor(0x1c1c20), 0.35f, 0.6f), 12, 8);
+            b.tube({0, 0.2f, 0}, {0.05f, 0.34f, 0.02f}, 0.03f, 0.025f, Mat(hexColor(0x8a6a3a), 0.9f), 6, true);
+        });
+        for (const Bomb& bb : bombs) {
+            DrawItem d; d.mesh = bombMesh.get(); d.castShadow = true;
+            d.model = mat4::trs(bb.pos, quat::axisAngle({1, 0, 0}, realTime * 8.f * (bb.bounces < 2 ? 1.f : 0.f)), vec3(1));
+            d.fx = vec4(bb.fuse < 0.6f ? 0.5f + 0.5f * std::sin(realTime * 40.f) : 0.f, 0, 0, 0);
+            renderer.submit(d);
+        }
+    }
+    // spell / weapon lights from projectiles
+    reg.each<Projectile>([&](Entity, Projectile& p) {
+        if (p.kind == ProjKind::Arrow || p.kind == ProjKind::Boulder) return;
+        PointLight pl; pl.pos = p.pos; pl.radius = 6; pl.flicker = 0.2f; pl.color = elementColor(p.elem) * 4.f;
+        lights.push_back({length2(p.pos - focus) * 0.5f, pl});
+        if (p.kind == ProjKind::Boulder && boulderMesh) {
+            DrawItem d; d.mesh = boulderMesh.get(); d.model = mat4::trs(p.pos, quat::euler(realTime * 3, realTime * 2, 0), vec3(p.radius)); renderer.submit(d);
+        }
+    });
+    reg.each<Projectile>([&](Entity, Projectile& p) {
+        if (p.kind == ProjKind::Arrow && arrowMesh) {
+            DrawItem d; d.mesh = arrowMesh.get(); d.castShadow = false;
+            vec3 dir = normalize(p.vel);
+            d.model = mat4::trs(p.pos, fromTo({0, 0, 1}, dir), vec3(1));
+            renderer.submit(d);
+        } else if (p.kind == ProjKind::Boulder && boulderMesh) {
+            DrawItem d; d.mesh = boulderMesh.get(); d.model = mat4::trs(p.pos, quat::euler(realTime * 3, realTime * 2, 0), vec3(p.radius * 1.2f)); renderer.submit(d);
+        } else if (p.kind != ProjKind::Arrow && p.kind != ProjKind::Web) {
+            // 3.0.1 spells fly as orbs of energy: a white-hot core, a swirling surface and a glowing shell
+            vec3 ec = elementColor(p.elem);
+            float r = std::max(0.22f, p.radius * 0.9f) * (p.kind == ProjKind::Fireball ? 1.35f : 1.f);
+            FxItem f; f.shape = FX_SPHERE; f.style = 2; f.color = vec4(lerp(ec, vec3(1.f), 0.45f), 1); f.color2 = vec4(ec, 1);
+            f.age = 0.5f; f.time = realTime; f.seed = (float)((size_t)&p % 97); f.intensity = 2.6f;
+            f.model = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, realTime * 3.f), vec3(r));
+            renderer.submitFx(f);
+            f.style = 0; f.intensity = 1.4f; f.model = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, -realTime * 2.f), vec3(r * 1.9f));
+            renderer.submitFx(f);
+        }
+    });
+    // pickups (loot bags glow with their rarity colour)
+    reg.each<Pickup>([&](Entity e, Pickup& pk) {
+        vec3* pos = &pk.pos;
+        if (!pos || !pickupMesh) return;
+        DrawItem d; d.mesh = pickupMesh.get();
+        float bob = std::sin(realTime * 3.f + e) * 0.08f;
+        d.model = mat4::trs(*pos + vec3(0, 0.25f + bob, 0), quat::axisAngle({0, 1, 0}, realTime * 1.5f), vec3(1));
+        // 3.5.0 the item itself floats there (about 0.6 m across), turning, instead of a sack
+        if (const ItemModel* im = itemModel(pk.item)) {
+            float sc = 0.3f / im->radius;
+            quat q = quat::axisAngle({0, 1, 0}, realTime * 1.5f) * (im->longAxis ? quat::axisAngle({0, 0, 1}, -PI / 4) * quat::axisAngle({1, 0, 0}, -PI / 2) : quat());
+            d.mesh = im->mesh.get();
+            d.model = mat4::trs(*pos + vec3(0, 0.75f + bob, 0), q, vec3(sc)) * mat4::translate(-im->center);
+        }
+        vec3 rc = rarityColor(pk.rarity);
+        d.tint = vec4(rc, 0); d.fx.w = 1.5f; d.outline = true; d.outlineColor = vec4(rc * 0.6f, 1); d.outlineWidth = 0.02f;
+        renderer.submit(d);
+        if ((int)pk.rarity >= (int)Rarity::Rare && particles.rng.f() < dt * 5) particles.magicTrail(*pos + vec3(0, 0.4f, 0), rc, 0.6f);
+        if ((int)pk.rarity >= (int)Rarity::Rare) {   // 3.2.0 a beam of light in the rarity colour, taller for the best loot
+            if (!lootBeamMesh) { MeshBuilder b; b.tube({0, 0, 0}, {0, 1, 0}, 0.07f, 0.16f, Mat(vec3(1), 0.2f, 0, 2.2f), 8, false); lootBeamMesh = std::make_shared<Mesh>(); b.upload(*lootBeamMesh); }
+            float hgt = pk.rarity == Rarity::Rare ? 3.5f : pk.rarity == Rarity::Epic ? 6.f : 10.f;
+            DrawItem bm; bm.mesh = lootBeamMesh.get(); bm.model = mat4::trs(*pos + vec3(0, 0.3f, 0), quat(), vec3(1.f + 0.15f * std::sin(realTime * 4.f + e), hgt, 1.f));
+            bm.tint = vec4(rc, 0); bm.castShadow = false; renderer.submit(bm);
+        }
+        PointLight pl; pl.pos = *pos + vec3(0, 0.6f, 0); pl.radius = 3; pl.color = srgb(0xffffff) * rc * 1.5f; pl.flicker = 0;
+        lights.push_back({length2(*pos - focus) + 50.f, pl});
+    });
+    // harvest nodes & chests
+    reg.each<NodeComp>([&](Entity e, NodeComp& n) {
+        if (!n.mesh) return;
+        if (!world.nodeAvailable(n.node.uid, gameTime) && n.node.type != NodeType::Chest) return;
+        DrawItem d; d.mesh = n.mesh.get();
+        float sh = n.shake > 0 ? std::sin(realTime * 60.f) * n.shake * 0.08f : 0.f;
+        n.shake = std::max(0.f, n.shake - dt * 3.f);
+        bool open = n.node.type == NodeType::Chest && openedChests.count(n.node.uid);
+        if (open && chestOpenMesh) d.mesh = chestOpenMesh.get();
+        d.model = mat4::trs(n.node.pos + vec3(sh, 0, 0), quat::axisAngle({0, 1, 0}, n.node.rot), vec3(1));
+        d.outline = e == interactTarget; d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.035f;
+        d.fx.w = e == interactTarget ? 0.6f + 0.4f * std::sin(realTime * 6) : 0.f;
+        renderer.submit(d);
+        if (n.node.type == NodeType::Chest && !open && particles.rng.f() < dt * 2) particles.magicTrail(n.node.pos + vec3(0, 0.8f, 0), vec3(1, 0.85f, 0.4f), 0.5f);
+    });
+    renderBuildGhost();   // 1.9.2 domain: preview of the building being placed
+    renderVehicles();     // 1.11.0 car and motorbike
+    if (state == GameState::Playing) raceFx(dt, lights);   // 1.11.1 race start zones and checkpoints
+    // 3.10.3 the torch: a warm light that breathes with the flame, and the flame itself at the tip
+    if (player != NullEntity && torchK > 0.02f) {
+        Character& p = pc();
+        vec3 tip = p.pos + vec3(0, 1.4f, 0);
+        if (p.vis.mesh) { mat4 m = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, p.yaw), vec3(p.vis.scale)); tip = m.transformPoint(p.vis.pw.world[H_PROPL].transformPoint({0, 0, 0}) + vec3(0, 0.906f, 0.423f) * 0.47f * torchK); }
+        float fl = 0.82f + 0.12f * std::sin(realTime * 17.f) + 0.08f * std::sin(realTime * 6.1f + 1.3f);
+        PointLight pl; pl.pos = tip + vec3(0, 0.15f, 0); pl.radius = 13.f * torchK; pl.flicker = 0.6f;
+        pl.color = srgb(0xff9a48) * (3.6f + 3.f * env.night) * fl * torchK;
+        lights.push_back({0.f, pl});
+        if (particles.rng.f() < dt * 40.f * torchK) particles.magicTrail(tip + vec3(particles.rng.range(-0.03f, 0.03f), 0.03f, particles.rng.range(-0.03f, 0.03f)), vec3(1.f, 0.6f + 0.25f * particles.rng.f(), 0.2f), 0.55f);
+        if (particles.rng.f() < dt * 6.f * torchK) particles.sparks(tip, vec3(0, 1, 0), 1, vec3(1.f, 0.7f, 0.3f));
+    }
+    // Astra's aura lights her surroundings
+    if (player != NullEntity && heroAura > 0.05f) {
+        PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;
+        lights.push_back({0.f, pl});
+    }
+    renderVfx(lights);   // 3.0.1 shader effects of the powers (they light their surroundings)
+    // nearest lights win (renderer budget)
+    std::sort(lights.begin(), lights.end(), [](auto& a, auto& b) { return a.first < b.first; });
+    for (size_t i = 0; i < lights.size() && i < 8; i++) renderer.addLight(lights[i].second);
+    env.grassPushRadius = 1.3f;
+    updateGrassPushers();
+    renderer.env = env;
+    renderer.render(&particles);
+}
+
+
+// 3.6.0 first person: the forearm and the weapon held in front of the eye. They sway as you walk, lag a little
+// behind a turn, and the weapon sweeps across the view when you strike (from the right, a downward cut for heavy
+// blows); a bow is held up in the left hand, a shield comes up when you guard.
+void Game::renderViewModel(Character& c) {
+    if (!fpArmMesh) fpArmMesh = cachedMesh("fp_arm", [](MeshBuilder& b) {
+        Mat sleeve(hexColor(0x7a5a3e), 0.85f), glove(hexColor(0x5a3e28), 0.8f), cuff(hexColor(0xb08a5a), 0.5f, 0.4f);
+        b.tube({0, -0.03f, -0.36f}, {0, 0, -0.06f}, 0.042f, 0.036f, sleeve, 10, true);
+        b.lathe({{0.048f, -0.1f}, {0.05f, -0.06f}, {0.046f, -0.04f}}, cuff, 10, {}, quat::axisAngle({1, 0, 0}, PI / 2));
+        b.ellipsoid({0, 0, 0.0f}, vec3(0.045f, 0.05f, 0.06f), glove, 10, 7);
+        for (int i = 0; i < 4; i++) b.tube({-0.03f + i * 0.02f, 0.035f, 0.02f}, {-0.03f + i * 0.02f, 0.03f, 0.06f}, 0.012f, 0.011f, glove, 5, true);
+    });
+    vec3 F = fpFwd, R = fpRight, U = fpUp;
+    float sp = saturate(length(vec2(c.vel.x, c.vel.z)) / 7.f) * (c.grounded ? 1.f : 0.f);
+    vec3 sway = R * std::sin(fpBob) * 0.018f * sp + U * std::fabs(std::cos(fpBob)) * 0.02f * sp;
+    // the strike: 0..1 through the attack clip
+    float swing = 0.f; bool heavy = false;
+    if (c.attackClip) { swing = saturate(c.vis.anim.actionTime()); heavy = c.attackClip->duration > 0.9f; }
+    float arc = std::sin(swing * PI);
+    bool bow = c.vis.wt == WeaponType::Bow || c.vis.wt == WeaponType::Crossbow;
+    // the hand: low right, the weapon pointing forward and up
+    vec3 hand = fpEye + F * 0.45f + R * (bow ? -0.06f : 0.2f) - U * 0.16f + sway;
+    mat4 basis = mat4::rotate(quat::axisAngle({0, 1, 0}, fpYaw) * quat::axisAngle({1, 0, 0}, fpPitch));   // the view's orientation (local +Z = where you look)
+    quat hold = bow ? quat::axisAngle({0, 0, 1}, -0.25f) : quat::axisAngle({0, 1, 0}, -0.35f) * quat::axisAngle({1, 0, 0}, -0.55f);   // blade forward, up and towards the centre
+    if (swing > 0 && !bow) {
+        if (heavy) hold = quat::axisAngle({1, 0, 0}, -1.4f + swing * 2.3f) * hold;                    // overhead, then down
+        else hold = quat::axisAngle({0, 1, 0}, 0.9f - swing * 2.0f) * quat::axisAngle({0, 0, 1}, -arc * 0.6f) * hold;   // a sweep right to left
+        hand += R * (-arc * 0.18f) + F * (arc * 0.12f);
+    }
+    if (input.block && c.vis.ot == WeaponType::Shield) hand += U * 0.05f;
+    mat4 handM = mat4::translate(hand) * basis * mat4::rotate(hold);
+    DrawItem d; d.castShadow = false;
+    d.mesh = fpArmMesh.get(); d.model = handM; renderer.submit(d);
+    if (c.vis.weapon) { d.mesh = c.vis.weapon.get(); d.model = handM; d.outline = false; renderer.submit(d); }
+    // the left hand: a shield raised when guarding, otherwise just the forearm at the edge of the view
+    vec3 lhand = fpEye + F * 0.4f - R * 0.26f - U * (input.block ? 0.12f : 0.3f) + sway * 0.7f;
+    mat4 lM = mat4::translate(lhand) * basis * mat4::rotate(quat::axisAngle({1, 0, 0}, -0.3f));
+    d.mesh = fpArmMesh.get(); d.model = lM; renderer.submit(d);
+    if (c.vis.offhand) { d.mesh = c.vis.offhand.get(); d.model = lM * mat4::rotate(quat::axisAngle({0, 1, 0}, PI / 2)); renderer.submit(d); }
+}
+
+// ============================================================================================ characters
+static void buildCapeMesh(Visual& v) {
+    const VerletCloth& c = v.cloth;
+    if (c.p.empty()) return;
+    std::vector<Vertex> verts;
+    std::vector<uint32_t> idx;
+    Color8 col = toColor8(v.capeColor, 1);
+    Color8 trim = toColor8(v.capeColor * 0.55f + vec3(0.25f, 0.2f, 0.1f), 1);
+    for (int pass = 0; pass < 2; pass++) {
+        uint32_t base = (uint32_t)verts.size();
+        for (int y = 0; y < c.rows; y++)
+            for (int x = 0; x < c.cols; x++) {
+                vec3 p = c.at(x, y);
+                vec3 dx = c.at(std::min(x + 1, c.cols - 1), y) - c.at(std::max(x - 1, 0), y);
+                vec3 dy = c.at(x, std::min(y + 1, c.rows - 1)) - c.at(x, std::max(y - 1, 0));
+                vec3 n = normalize(cross(dy, dx)) * (pass ? -1.f : 1.f);
+                Vertex vv{};
+                vv.px = p.x; vv.py = p.y; vv.pz = p.z;
+                vv.nx = (int8_t)(n.x * 127); vv.ny = (int8_t)(n.y * 127); vv.nz = (int8_t)(n.z * 127);
+                Color8 cc = (y == c.rows - 1) ? trim : col;
+                vv.r = cc.r; vv.g = cc.g; vv.b = cc.b; vv.a = (uint8_t)(255 * (0.6f + 0.4f * (1.f - (float)y / c.rows)));
+                vv.rough = 220; vv.metal = 0;
+                verts.push_back(vv);
+            }
+        for (int y = 0; y + 1 < c.rows; y++)
+            for (int x = 0; x + 1 < c.cols; x++) {
+                uint32_t a = base + y * c.cols + x, b = a + 1, d = a + c.cols, e = d + 1;
+                if (pass == 0) { idx.insert(idx.end(), {a, d, e, a, e, b}); }
+                else { idx.insert(idx.end(), {a, e, d, a, b, e}); }
+            }
+    }
+    if (!v.capeMesh) { v.capeMesh = std::make_shared<Mesh>(); v.capeMesh->upload(verts, idx, true); }
+    else v.capeMesh->updateVertices(verts);
+}
+
+void Game::renderCharacter(Entity e, Character& c) {
+    Visual& v = c.vis;
+    if (!v.visible || !v.mesh) return;
+    if (fpActive && e == player) {   // 3.6.0 first person: the body is not drawn, only the hands and the weapon in view
+        if (v.anim.skeleton) computeWorld(*v.anim.skeleton, v.anim.pose, v.pw);   // keeps the head bone for the eye
+        v.visY = c.pos.y; v.visLastT = realTime;   // (kept current: the eye is placed from it)
+        v.visYaw = c.yaw;
+        renderViewModel(c);
+        return;
+    }
+    if (c.npcDef >= 0) { NpcBrain* nb = reg.get<NpcBrain>(e); if (nb && nb->indoors) return; }
+    if (distXZ(c.pos, camFocus) > renderer.settings.drawDistance * 0.75f) return;
+    // 3.4.0 smooth motion: the drawn body eases over steps and bumps instead of popping, turns without
+    // snapping, and animals (and, a little, people) lean with the slope they walk on
+    {
+        float fdt = v.visLastT < 0.f ? 1.f : clampf(realTime - v.visLastT, 0.f, 0.1f);
+        v.visLastT = realTime;
+        bool mounted = (e == player || e == mountEnt) && (riding || driving >= 0);   // rider and mount move as one
+        bool snap = fdt >= 1.f || std::fabs(c.pos.y - v.visY) > 1.6f || !c.grounded || c.swimming || mounted;
+        v.visY = snap ? c.pos.y : damp(v.visY, c.pos.y, c.pos.y > v.visY ? 22.f : 16.f, fdt);
+        bool fast = c.attackClip != nullptr || c.dead || fdt >= 1.f || mounted;
+        v.visYaw = fast ? c.yaw : dampAngle(v.visYaw, c.yaw, 18.f, fdt);
+        float wantP = 0, wantR = 0;
+        if (c.grounded && !c.swimming && !c.dead && !dungeon.active && !mounted && v.tiltPitch == 0 && v.tiltRoll == 0) {
+            vec3 f{std::sin(v.visYaw), 0, std::cos(v.visYaw)}, r{f.z, 0, -f.x};
+            float L = v.arch == Arch::Quadruped ? std::max(0.5f, c.radius * 1.4f) : 0.45f;
+            float dp = (groundAt(c.pos.x + f.x * L, c.pos.z + f.z * L) - groundAt(c.pos.x - f.x * L, c.pos.z - f.z * L)) / (2.f * L);
+            float dr = (groundAt(c.pos.x + r.x * L * 0.6f, c.pos.z + r.z * L * 0.6f) - groundAt(c.pos.x - r.x * L * 0.6f, c.pos.z - r.z * L * 0.6f)) / (1.2f * L);
+            float k = v.arch == Arch::Quadruped ? 1.f : 0.18f;   // people stay upright, leaning only slightly into a climb
+            wantP = clampf(std::atan(dp) * k, -0.45f, 0.45f); wantR = clampf(std::atan(dr) * k * 0.7f, -0.3f, 0.3f);
+        }
+        v.slopePitch = damp(v.slopePitch, wantP, 8.f, fdt); v.slopeRoll = damp(v.slopeRoll, wantR, 8.f, fdt);
+    }
+    vec3 rpos{c.pos.x, v.visY + v.rideY, c.pos.z};
+    quat rq = quat::axisAngle({0, 1, 0}, v.visYaw);
+    if (v.tiltPitch != 0 || v.tiltRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.tiltPitch) * quat::axisAngle({0, 0, 1}, v.tiltRoll);   // rider on the motorbike
+    else if (v.slopePitch != 0 || v.slopeRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.slopePitch) * quat::axisAngle({0, 0, 1}, v.slopeRoll);
+    mat4 model = mat4::trs(rpos, rq, vec3(v.scale));
+    // frustum test with a generous sphere
+    if (!cam.frustum.visibleSphere(c.pos + vec3(0, c.height * 0.5f, 0), c.height * 1.2f + 2.f)) return;
+
+    // ---- foot IK: plant feet on uneven ground (humanoids walking / idle)
+    const Skeleton& sk = *v.anim.skeleton;
+    computeWorld(sk, v.anim.pose, v.pw);
+    Pose fpose = v.anim.pose;   // final pose (foot IK, look-at, weapon clearance)
+    if (v.arch == Arch::Humanoid && v.footIK && c.grounded && !c.swimming && !c.dead && v.anim.state == BodyState::Locomotion && distXZ(c.pos, camFocus) < 30.f) {
+        mat4 inv = model.inverse();
+        float offs[2]; vec3 targets[2];
+        int feet[2] = {H_FOOTL, H_FOOTR};
+        for (int i = 0; i < 2; i++) {
+            vec3 fw = model.transformPoint(v.pw.wpos[feet[i]]);
+            float g = groundAt(fw.x, fw.z);
+            offs[i] = clampf(g - rpos.y, -0.45f, 0.45f);
+            targets[i] = fw + vec3(0, offs[i], 0);
+        }
+        float pelvis = std::min(0.f, std::min(offs[0], offs[1]));
+        v.pelvisAdj = damp(v.pelvisAdj, pelvis, 12.f, 1.f / 60.f);
+        Pose& p = fpose;
+        p.rootOffset.y += v.pelvisAdj / v.scale;
+        computeWorld(sk, p, v.pw);
+        twoBoneIK(sk, p, v.pw, H_THIGHL, H_SHINL, H_FOOTL, inv.transformPoint(targets[0]), model.inverse().transformDir(vec3(std::sin(v.visYaw), 0, std::cos(v.visYaw))) + vec3(0, 0, 0.5f), 0.9f);
+        twoBoneIK(sk, p, v.pw, H_THIGHR, H_SHINR, H_FOOTR, inv.transformPoint(targets[1]), vec3(0, 0, 1), 0.9f);
+        // look at the interaction / lock target
+        Entity look = (e == player) ? (lockTarget != NullEntity ? lockTarget : interactTarget) : NullEntity;
+        if (c.npcDef >= 0 && player != NullEntity && dist2XZ(c.pos, pc().pos) < 6 * 6) look = player;
+        if (look != NullEntity && reg.valid(look)) {
+            Character* lc = reg.get<Character>(look);
+            vec3 tp = lc ? lc->pos + vec3(0, lc->height * 0.9f, 0) : vec3(0);
+            if (!lc) { NodeComp* n = reg.get<NodeComp>(look); if (n) tp = n->node.pos + vec3(0, 0.5f, 0); }
+            lookAtIK(sk, p, v.pw, H_HEAD, inv.transformPoint(tp), {0, 0, 1}, 0.9f, 0.8f);
+        }
+    }
+    // ---- weapon clearance (1.6.2): a blade / spear tip never sinks into the ground. If the animated pose puts
+    // the tip below the terrain (idle carry, slopes, steps, guards), the wrist lifts it just enough.
+    if (v.arch == Arch::Humanoid && v.weapon && !c.dead && !c.swimming && v.anim.state != BodyState::Mounted && v.tip > 0.3f) {
+        bool bow = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow;
+        int pb = bow ? H_PROPL : H_PROPR, hand = bow ? H_HANDL : H_HANDR;
+        for (int it = 0; it < 4; it++) {
+            vec3 tipM = v.pw.world[pb].transformPoint(vec3(0, 0, v.tip));
+            vec3 tipW = model.transformPoint(tipM);
+            float g = (groundAt(tipW.x, tipW.z) + 0.05f - rpos.y) / std::max(0.1f, v.scale);   // model space
+            float clear = (tipM.y - g) * v.scale + 0.05f;
+            if (it == 0) v.tipClearRaw = clear;
+            v.tipClear = clear;
+            if (tipM.y >= g || it == 3) break;
+            vec3 handM = v.pw.wpos[hand];
+            vec3 dir = tipM - handM;
+            float L = std::max(0.15f, length(dir));
+            dir = dir / L;
+            vec3 axis = cross(dir, vec3(0, 1, 0));
+            axis = length2(axis) < 1e-4f ? vec3(-1, 0, 0) : normalize(axis);   // straight down: swing the tip forward
+            float need = std::asin(clampf((g - tipM.y) / L, 0.f, 1.f)) + 0.04f;
+            quat q = quat::axisAngle(axis, need);
+            int par = sk.bones[hand].parent;
+            quat parentRot = par >= 0 ? v.pw.wrot[par] : quat();
+            fpose.rot[hand] = normalize(parentRot.conj() * (q * v.pw.wrot[hand]));
+            computeWorld(sk, fpose, v.pw);
+        }
+    }
+    // ---- 3.10.4 directional flinch: the blow pushes the upper body the way it travels (a hit in the back bends the
+    // body forward, from the left it twists to the right...), with a quick snap and a slower recovery, the head lagging
+    if (v.arch == Arch::Humanoid && v.hitT > 0.f && !c.dead) {
+        float tt = 1.f - v.hitT;                                   // 0 at the impact
+        float k = (tt < 0.12f ? tt / 0.12f : std::pow(v.hitT / 0.88f, 1.6f)) * 0.45f;
+        vec3 hd = model.inverse().transformDir(v.hitDir); hd.y = 0;
+        if (length2(hd) > 1e-4f) {
+            hd = normalize(hd);
+            vec3 axis = normalize(cross(vec3(0, 1, 0), hd));      // tilts the top of the body along the blow
+            const int bones[3] = {H_SPINE, H_CHEST, H_HEAD};
+            const float w[3] = {0.55f, 0.35f, 0.5f};
+            for (int i = 0; i < 3; i++) {
+                int b = bones[i], par = sk.bones[b].parent;
+                quat parentRot = par >= 0 ? v.pw.wrot[par] : quat();
+                float twist = (i == 2 ? -0.35f : 0.2f) * hd.x;    // a little twist away from a side blow; the head turns back to look
+                quat q = quat::axisAngle(axis, k * w[i]) * quat::axisAngle({0, 1, 0}, twist * k);
+                fpose.rot[b] = normalize(parentRot.conj() * (q * v.pw.wrot[b]));
+                computeWorld(sk, fpose, v.pw);
+            }
+        }
+    }
+    // ---- 3.10.4 the torch arm: the hero holds the torch up in front, a little to the side, the elbow bent (not
+    // while the left hand works: bow, two-handed weapons, an attack)
+    if (e == player && v.arch == Arch::Humanoid && torchK > 0.02f && !c.dead && !c.swimming && !c.attackClip && v.anim.state == BodyState::Locomotion) {
+        bool twoHands = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow || v.wt == WeaponType::Longsword || v.wt == WeaponType::Spear || v.wt == WeaponType::Staff || v.wt == WeaponType::Hammer;
+        if (!twoHands) {
+            vec3 sh = v.pw.wpos[H_UARML];
+            float sway = std::sin(realTime * 2.1f) * 0.012f + std::sin(v.anim.phase * TAU) * 0.02f * saturate(c.vel.x * c.vel.x + c.vel.z * c.vel.z);
+            vec3 target = sh + vec3(0.1f, -0.2f + sway, 0.26f);
+            twoBoneIK(sk, fpose, v.pw, H_UARML, H_LARML, H_HANDL, target, vec3(0.6f, -0.6f, -0.5f), torchK * 0.95f);
+            computeWorld(sk, fpose, v.pw);
+        }
+    }
+    DrawItem d;
+    d.mesh = v.mesh.get(); d.model = model; d.flags = LIT_SKINNED | (v.dissolve > 0 ? LIT_DISSOLVE : 0) | (v.albedo ? LIT_TEXTURED : 0);
+    d.albedo = v.albedo;
+    d.bones = v.pw.skin[0].m; d.boneCount = sk.size();
+    d.tint = vec4(v.tint, 0); d.fx = vec4(v.flash, v.dissolve, v.rim, v.emissiveBoost); d.dissolveColor = v.dissolveColor;
+    d.outline = v.outline && v.dissolve <= 0 && v.outlineColor.x > 0.95f; d.outlineColor = v.outlineColor; d.outlineWidth = 0.028f;   // 3.9.1 no glow around characters: only the red attack telegraph, the target and the talk marker keep one
+    if (e == interactTarget && c.npcDef >= 0) { d.outline = v.dissolve <= 0; d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.04f; }
+    if (e == lockTarget) { d.outline = v.dissolve <= 0; d.outlineColor = vec4(0.9f, 0.2f, 0.15f, 1); d.outlineWidth = 0.04f; }
+    {   // 2.3.6 crowds: far version beyond 18 m, no shadow beyond 25 m, no outline beyond 22 m (unless targeted)
+        float dc = distXZ(c.pos, camFocus);
+        bool key = e == player || e == lockTarget || e == interactTarget || e == bossEnt || e == mountEnt;
+        if (!key && dc > 18.f && v.lodMesh && v.lodMesh->valid() && !cine.active) d.mesh = v.lodMesh.get();
+        if (!key) { d.castShadow = dc < 25.f; if (dc > 22.f) d.outline = false; }
+    }
+    renderer.submit(d);
+    // weapons
+    auto attach = [&](std::shared_ptr<Mesh>& m, int bone, bool shield) {
+        if (!m) return;
+        DrawItem w; w.mesh = m.get();
+        mat4 bm = v.pw.world[bone];
+        w.model = model * bm * (shield ? mat4::rotate(quat::axisAngle({0, 1, 0}, 0)) : mat4());
+        w.fx = vec4(v.flash, v.dissolve, 0.2f, 0); w.flags = v.dissolve > 0 ? LIT_DISSOLVE : 0; w.dissolveColor = v.dissolveColor;
+        w.outline = d.outline; w.outlineColor = d.outlineColor; w.outlineWidth = 0.02f;
+        renderer.submit(w);
+    };
+    if (v.arch == Arch::Humanoid) {
+        bool bow = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow;
+        attach(v.weapon, bow ? H_PROPL : H_PROPR, false);
+        // 3.10.3 the torch replaces whatever the left hand holds while it burns
+        bool torchHere = e == player && torchK > 0.02f && !bow;
+        if (!torchHere) attach(v.offhand, H_PROPL, true);
+        else {
+            if (!torchMesh) torchMesh = cachedMesh("torch_held", [](MeshBuilder& b) {
+                Mat wood(hexColor(0x5a3c22), 0.85f), wrap(hexColor(0x2e2418), 0.95f), band(hexColor(0x6a6a70), 0.35f, 1.f);
+                b.tube({0, 0, -0.16f}, {0, 0, 0.36f}, 0.02f, 0.024f, wood, 7, true);
+                b.tube({0, 0, 0.3f}, {0, 0, 0.44f}, 0.036f, 0.032f, wrap, 8, true);   // oiled rags
+                b.tube({0, 0, 0.29f}, {0, 0, 0.31f}, 0.03f, 0.03f, band, 8, true);    // iron band
+            });
+            // held upright and a little forward whatever the hand does (the flame always burns upwards)
+            vec3 hp = v.pw.world[H_PROPL].transformPoint({0, 0, 0});
+            DrawItem w; w.mesh = torchMesh.get();
+            w.model = model * mat4::translate(hp) * mat4::rotate(quat::axisAngle({1, 0, 0}, -65.f * DEG)) * mat4::scale(vec3(torchK));
+            w.fx = vec4(v.flash, v.dissolve, 0.2f, 0); w.outline = false;
+            renderer.submit(w);
+        }
+    }
+    // cape (verlet cloth pinned to the shoulders)
+    if (v.cape && v.arch == Arch::Humanoid) {
+        int cols = v.cloth.cols;
+        if (cols == 0) {
+            vec3 sl = model.transformPoint(v.pw.wpos[H_SHL] + vec3(0.04f, 0.02f, -0.12f)), sr = model.transformPoint(v.pw.wpos[H_SHR] + vec3(-0.04f, 0.02f, -0.12f));
+            v.cloth.init(5, 7, length(sl - sr), 1.05f * v.scale, sr, normalize(sl - sr), {0, -1, 0});
+            v.cloth.damping = 0.04f;
+            cols = 5;
+        }
+        std::vector<vec3> pins(cols);
+        vec3 sl = model.transformPoint(v.pw.wpos[H_SHL] + vec3(0.05f, 0.03f, -0.11f)), sr = model.transformPoint(v.pw.wpos[H_SHR] + vec3(-0.05f, 0.03f, -0.11f));
+        for (int i = 0; i < cols; i++) pins[i] = lerp(sr, sl, (float)i / (cols - 1));
+        vec3 back = model.transformDir({0, 0, -1});
+        vec3 chest = model.transformPoint(v.pw.wpos[H_CHEST]);
+        std::vector<vec4> spheres = {vec4(model.transformPoint(v.pw.wpos[H_SPINE]), 0.2f * v.scale), vec4(chest, 0.22f * v.scale),
+                                     vec4(model.transformPoint(v.pw.wpos[H_THIGHL]), 0.13f * v.scale), vec4(model.transformPoint(v.pw.wpos[H_THIGHR]), 0.13f * v.scale)};
+        vec3 pn = normalize(-back);
+        float pd = -dot(pn, chest - back * 0.1f * v.scale);
+        vec3 wind = vec3(env.windDir.x, 0, env.windDir.y) * env.windStrength * 6.f - c.vel * 1.5f;
+        float dt = 1.f / 60.f;
+        v.cloth.simulate(dt, pins, {0, -9.81f, 0}, wind, spheres, -pn, -pd, 3);
+        buildCapeMesh(v);
+        DrawItem cd; cd.mesh = v.capeMesh.get(); cd.flags = 0; cd.fx = vec4(v.flash, 0, 0.2f, 0);
+        renderer.submit(cd);
+    }
+    // weapon trail ribbon
+    if (v.trail.size() >= 2) {
+        std::vector<Vertex> tv; std::vector<uint32_t> ti;
+        int n = (int)v.trail.size();
+        Color8 tc = toColor8(v.trailColor, 1);
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / (n - 1);
+            for (int s = 0; s < 2; s++) {
+                vec3 p = s ? v.trail[i].second : v.trail[i].first;
+                Vertex vv{}; vv.px = p.x; vv.py = p.y; vv.pz = p.z; vv.r = tc.r; vv.g = tc.g; vv.b = tc.b; vv.a = (uint8_t)(255 * t);
+                vv.rough = (uint8_t)(255 * t); vv.metal = (uint8_t)(s * 255);
+                tv.push_back(vv);
+            }
+            if (i + 1 < n) { uint32_t a = i * 2; ti.insert(ti.end(), {a, a + 2, a + 3, a, a + 3, a + 1}); }
+        }
+        if (!v.trailMesh) v.trailMesh = std::make_shared<Mesh>();
+        v.trailMesh->upload(tv, ti, true);
+        renderer.submitRibbon(v.trailMesh.get(), 2.2f);
+    }
+}
+
+}  // namespace lk

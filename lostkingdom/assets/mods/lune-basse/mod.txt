@@ -1,0 +1,4 @@
+name = Lune basse
+author = Superessence Studio
+version = 1.0
+description = Gravité lunaire : le héros saute très haut et retombe lentement, comme sur la Lune.

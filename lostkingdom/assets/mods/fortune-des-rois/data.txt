@@ -1,0 +1,3 @@
+# Fortune des rois (mod livré avec LOST KINGDOM 2.6.0)
+game.gold = 3
+game.xp = 1.25

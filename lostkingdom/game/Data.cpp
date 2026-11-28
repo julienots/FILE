@@ -1,0 +1,1937 @@
+// LOST KINGDOM — content database. Text is in French (game language).
+#include "Data.h"
+#include <unordered_map>
+#include <mutex>
+#include <cmath>
+#include <cstdlib>
+
+namespace lk {
+
+const char* elementName(Element e) {
+    static const char* n[] = {"Physique", "Feu", "Glace", "Foudre", "Nature", "Ombre", "Lumière", "Arcane"};
+    return n[(int)e < 8 ? (int)e : 0];
+}
+vec3 elementColor(Element e) {
+    switch (e) {
+    case Element::Fire: return {1.f, 0.45f, 0.12f};
+    case Element::Ice: return {0.45f, 0.8f, 1.f};
+    case Element::Lightning: return {0.75f, 0.75f, 1.f};
+    case Element::Nature: return {0.45f, 1.f, 0.4f};
+    case Element::Shadow: return {0.6f, 0.25f, 0.9f};
+    case Element::Light: return {1.f, 0.9f, 0.55f};
+    case Element::Arcane: return {0.8f, 0.45f, 1.f};
+    default: return {1.f, 0.85f, 0.6f};
+    }
+}
+const char* rarityName(Rarity r) {
+    static const char* n[] = {"Commun", "Rare", "Épique", "Légendaire", "Mythique", "Ancestral"};
+    return n[(int)r];
+}
+vec3 rarityColor(Rarity r) {
+    static const uint32_t c[] = {0xd8d2c4, 0x4f9cf0, 0xb36cf0, 0xf2a03a, 0xf04a4a, 0x3fe0c8};
+    return hexColor(c[(int)r]);
+}
+float rarityMult(Rarity r) { static const float m[] = {1.f, 1.18f, 1.4f, 1.7f, 2.05f, 2.5f}; return m[(int)r]; }
+const char* slotName(int s) {
+    static const char* n[] = {"Arme", "Main gauche", "Tête", "Torse", "Mains", "Pieds", "Anneau", "Amulette"};
+    return s >= 0 && s < SL_COUNT ? n[s] : "";
+}
+int slotForKind(ItemKind k) {
+    switch (k) {
+    case ItemKind::Weapon: return SL_WEAPON;
+    case ItemKind::Shield: return SL_OFFHAND;
+    case ItemKind::Head: return SL_HEAD;
+    case ItemKind::Chest: return SL_CHEST;
+    case ItemKind::Hands: return SL_HANDS;
+    case ItemKind::Feet: return SL_FEET;
+    case ItemKind::Ring: return SL_RING;
+    case ItemKind::Amulet: return SL_AMULET;
+    default: return -1;
+    }
+}
+const char* stationName(int s) {
+    static const char* n[] = {"Partout", "Forge", "Table d'alchimie", "Feu de camp", "Établi"};
+    return n[s];
+}
+const char* branchName(int b) {
+    static const char* n[] = {"Guerrier", "Archer", "Assassin", "Mage", "Paladin", "Chasseur"};
+    return n[b];
+}
+const char* factionName(int f) {
+    static const char* n[] = {"Gardiens de Greenhaven", "Clans de Frostheim", "Cercle d'Elderwood", "Guilde des Mineurs", "Ordre de Highspire", "Veilleurs de Gravemoor", "Caravaniers de Solmar", "Marins de Port-Azur"};
+    return f >= 0 && f < FA_COUNT ? n[f] : "";
+}
+
+// ============================================================================================ items
+static std::vector<ItemDef> gItems;
+static std::unordered_map<std::string, int> gItemIdx;
+static int gBaseItemCount = 1 << 30;   // 3.1.1 items below this index belong to the game (mods may not overwrite them)
+static std::once_flag gItemsOnce;
+
+static ItemDef& addItem(const std::string& id, const std::string& name, ItemKind k, Rarity r, int value, const std::string& desc) {
+    ItemDef d; d.id = id; d.name = name; d.kind = k; d.rarity = r; d.value = value; d.desc = desc;
+    gItems.push_back(d);
+    gItemIdx[id] = (int)gItems.size() - 1;
+    return gItems.back();
+}
+
+static void buildItems() {
+    gItems.reserve(4096);   // 3.1.1 mods add items later: pointers handed out by item() must never move
+    // ---- weapons -----------------------------------------------------------------------------
+    struct W { const char* id; const char* name; WeaponType t; int tier; Rarity r; float atk, crit, speed; Element e; float ed; const char* desc; };
+    const W ws[] = {
+        {"sword_rusty", "Épée rouillée", WeaponType::Sword, 0, Rarity::Common, 8, 0.03f, 0, Element::Physical, 0, "Une lame fatiguée, trouvée sur la grève."},
+        {"sword_iron", "Épée de fer", WeaponType::Sword, 1, Rarity::Common, 13, 0.05f, 0, Element::Physical, 0, "Forgée à Brindlemere. Équilibrée et fiable."},
+        {"sword_knight", "Lame du chevalier", WeaponType::Sword, 2, Rarity::Rare, 19, 0.07f, 0, Element::Physical, 0, "Gravée aux armes de Fort Aldren."},
+        {"sword_ember", "Épée de braise", WeaponType::Sword, 3, Rarity::Epic, 26, 0.08f, 0, Element::Fire, 8, "Le métal garde la chaleur des Ashen Lands."},
+        {"sword_aldric", "Aube d'Aldric", WeaponType::Sword, 5, Rarity::Ancestral, 44, 0.12f, 0.05f, Element::Light, 16, "L'épée du Haut-Roi. Elle se souvient de la Couronne."},
+        {"sword_amber", "Lame d'Ambre", WeaponType::Sword, 4, Rarity::Mythic, 34, 0.14f, 0.1f, Element::Light, 12, "Taillée dans l'éternité figée du Héraut. Là où elle frappe, le temps hésite une seconde."},   // 3.10.4
+        {"sword_ancients", "Lame des Anciens", WeaponType::Sword, 5, Rarity::Ancestral, 56, 0.15f, 0.08f, Element::Arcane, 24, "Forgée de quarante orbes. Elle bourdonne comme un totem éveillé."},   // 3.2.0
+        {"longsword_iron", "Épée longue", WeaponType::Longsword, 1, Rarity::Common, 20, 0.05f, -0.1f, Element::Physical, 0, "Deux mains, deux fois plus de conviction."},
+        {"longsword_frost", "Croc-de-givre", WeaponType::Longsword, 3, Rarity::Epic, 34, 0.07f, -0.08f, Element::Ice, 10, "Forgée par Sigrun dans un bloc de glace éternelle."},
+        {"longsword_fallen", "Serment brisé", WeaponType::Longsword, 4, Rarity::Mythic, 46, 0.1f, -0.05f, Element::Shadow, 14, "La lame du Chevalier Déchu. Elle pleure encore."},
+        {"dagger_iron", "Dague de fer", WeaponType::Dagger, 1, Rarity::Common, 9, 0.12f, 0.2f, Element::Physical, 0, "Rapide, discrète, mortelle dans le dos."},
+        {"dagger_shadow", "Murmure d'ombre", WeaponType::Dagger, 3, Rarity::Epic, 18, 0.22f, 0.25f, Element::Shadow, 7, "Elle frappe avant que l'on entende le pas."},
+        {"dagger_viper", "Crochet de la Reine", WeaponType::Dagger, 4, Rarity::Legendary, 24, 0.25f, 0.25f, Element::Nature, 10, "Taillé dans un croc de la Reine des Araignées."},
+        {"axe_iron", "Hache de fer", WeaponType::Axe, 1, Rarity::Common, 15, 0.06f, -0.03f, Element::Physical, 0, "Bonne pour le bois, meilleure pour les gobelins."},
+        {"axe_nordic", "Hache du Jarl", WeaponType::Axe, 3, Rarity::Epic, 27, 0.08f, 0, Element::Ice, 6, "Le Jarl Bjorn la portait à vingt ans."},
+        {"hammer_iron", "Marteau de guerre", WeaponType::Hammer, 1, Rarity::Common, 24, 0.04f, -0.15f, Element::Physical, 0, "Lourd. Très lourd."},
+        {"hammer_titan", "Poing du Titan", WeaponType::Hammer, 4, Rarity::Legendary, 48, 0.06f, -0.12f, Element::Lightning, 12, "Un éclat du Titan de Pierre serti dans l'acier."},
+        {"spear_iron", "Lance de fer", WeaponType::Spear, 1, Rarity::Common, 16, 0.06f, 0, Element::Physical, 0, "Garde l'ennemi à distance."},
+        {"spear_crown", "Lance des Cimes", WeaponType::Spear, 3, Rarity::Epic, 29, 0.09f, 0.02f, Element::Lightning, 9, "Arme cérémonielle de l'Ordre de Highspire."},
+        {"bow_hunter", "Arc de chasse", WeaponType::Bow, 1, Rarity::Common, 12, 0.08f, 0, Element::Physical, 0, "Bois d'if et corde de lin."},
+        {"bow_elder", "Arc sylvestre", WeaponType::Bow, 3, Rarity::Epic, 24, 0.14f, 0.05f, Element::Nature, 8, "Courbé par les druides de Sylvarin."},
+        {"bow_ancestral", "Chant des Rois", WeaponType::Bow, 5, Rarity::Ancestral, 40, 0.2f, 0.08f, Element::Light, 15, "Chaque flèche porte un nom oublié."},
+        {"crossbow_iron", "Arbalète", WeaponType::Crossbow, 2, Rarity::Rare, 22, 0.1f, -0.1f, Element::Physical, 0, "Mécanique des mineurs de Cinderwatch."},
+        {"staff_apprentice", "Bâton d'apprenti", WeaponType::Staff, 1, Rarity::Common, 8, 0.05f, 0, Element::Arcane, 6, "Il canalise la volonté."},
+        {"staff_ember", "Bâton de la fournaise", WeaponType::Staff, 3, Rarity::Epic, 14, 0.07f, 0, Element::Fire, 16, "Son cœur brûle d'un feu qui ne s'éteint pas."},
+        {"staff_abyss", "Sceptre de l'Abîme", WeaponType::Staff, 5, Rarity::Ancestral, 22, 0.12f, 0, Element::Shadow, 30, "Arraché au Seigneur des Abysses."},
+        // 2.0.0 Act II: the Amber Sands and the Coral Coast
+        {"scimitar_dune", "Cimeterre des dunes", WeaponType::Sword, 3, Rarity::Epic, 29, 0.11f, 0.06f, Element::Physical, 0, "Courbe comme une dune sous le vent. Les caravaniers de Solmar la portent à la ceinture."},
+        {"sword_sun", "Lame du Soleil Mort", WeaponType::Sword, 4, Rarity::Legendary, 40, 0.1f, 0.04f, Element::Fire, 13, "Forgée dans l'or d'un roi qui refusait de mourir."},
+        {"sword_silence", "Aube silencieuse", WeaponType::Sword, 5, Rarity::Ancestral, 46, 0.13f, 0.05f, Element::Arcane, 18, "Elle ne fait aucun bruit. Elle n'en a pas besoin."},
+        {"spear_trident", "Trident de Port-Azur", WeaponType::Spear, 3, Rarity::Epic, 31, 0.08f, 0.02f, Element::Ice, 10, "Pour pêcher en haute mer, ou en dissuader les pirates."},
+        {"bow_coral", "Arc de corail", WeaponType::Bow, 3, Rarity::Epic, 25, 0.15f, 0.05f, Element::Nature, 7, "Du bois flotté de l'archipel, tendu d'une corde de soie marine."},
+        {"dagger_tide", "Lame de marée", WeaponType::Dagger, 4, Rarity::Legendary, 25, 0.24f, 0.26f, Element::Ice, 9, "Kaede la tenait de son maître, qui la tenait de la mer."},
+        {"staff_sun", "Bâton d'ambre", WeaponType::Staff, 4, Rarity::Legendary, 18, 0.1f, 0, Element::Fire, 24, "Une larme d'ambre où dort un éclat de soleil."},
+        // 2.3.5 forged from the new resources
+        {"sword_steel", "Épée d'acier", WeaponType::Sword, 3, Rarity::Rare, 25, 0.08f, 0.04f, Element::Physical, 0, "Une lame d'acier trempé, droite et fiable."},
+        {"axe_steel", "Hache d'acier", WeaponType::Axe, 3, Rarity::Rare, 29, 0.06f, -0.02f, Element::Physical, 0, "Elle fend les boucliers comme les bûches."},
+        {"dagger_silver", "Dague d'argent", WeaponType::Dagger, 3, Rarity::Rare, 17, 0.2f, 0.18f, Element::Light, 8, "Les morts sans repos la craignent."},
+        // 2.8.0 the Lands of Aurora
+        {"sword_aurora", "Lame d'aurore", WeaponType::Sword, 4, Rarity::Legendary, 42, 0.12f, 0.06f, Element::Arcane, 14, "Taillée dans un seul cristal. La nuit, elle éclaire le chemin."},
+        {"staff_aurora", "Sceptre boréal", WeaponType::Staff, 4, Rarity::Legendary, 19, 0.1f, 0, Element::Ice, 26, "Les voiles du ciel dansent dans son cristal."},
+        {"bow_aurora", "Arc de lumière", WeaponType::Bow, 4, Rarity::Legendary, 30, 0.16f, 0.06f, Element::Light, 10, "Sa corde est un fil d'aurore tressé."},
+        // 3.0.0 the Titan Mountains and the Iron Legion
+        {"axe_warlord", "Hache du Seigneur de guerre", WeaponType::Axe, 4, Rarity::Legendary, 46, 0.1f, -0.02f, Element::Physical, 0, "Elle a fendu plus de portes que de boucliers. La Légion la remettait à ses conquérants."},
+        {"sword_titansteel", "Lame d'acier-titan", WeaponType::Sword, 4, Rarity::Epic, 38, 0.1f, 0.05f, Element::Physical, 0, "Forgée à Rochebrune avec l'acier noir des mines, plus dur que la montagne."},
+        {"hammer_giant", "Marteau du Roi-Géant", WeaponType::Hammer, 5, Rarity::Ancestral, 58, 0.08f, -0.08f, Element::Lightning, 16, "Ymrir l'abattait sur les cimes pour appeler l'orage."},
+        {"spear_wyrm", "Lance du Ver des Glaces", WeaponType::Spear, 5, Rarity::Legendary, 44, 0.12f, 0.04f, Element::Ice, 14, "Taillée dans une dent du ver. Elle givre ce qu'elle touche."},
+        {"crossbow_legion", "Arbalète de la Légion", WeaponType::Crossbow, 4, Rarity::Epic, 34, 0.14f, -0.06f, Element::Physical, 0, "Un mécanisme d'acier noir. Les arbalétriers de Fer-Noir ne manquaient jamais."},
+        // 3.6.0 new weapons
+        {"axe_lumber", "Hache de bûcheron", WeaponType::Axe, 1, Rarity::Common, 12, 0.04f, 0, Element::Physical, 0, "Large et bien affûtée : elle abat un arbre en deux coups de moins."},
+        {"sword_coral", "Lame de corail", WeaponType::Sword, 3, Rarity::Epic, 30, 0.1f, 0.05f, Element::Ice, 10, "Un corail vivant, taillé en lame sous la mer. Elle garde le froid des abysses."},
+        {"spear_abyss", "Trident des abysses", WeaponType::Spear, 4, Rarity::Legendary, 40, 0.12f, 0.03f, Element::Lightning, 12, "Trouvé dans une épave. Les marins disent qu'il appelle l'orage."},
+        {"sword_dragon", "Croc du dragon", WeaponType::Longsword, 5, Rarity::Legendary, 52, 0.12f, 0.02f, Element::Fire, 18, "Une dent de dragon montée sur une garde d'or. Elle fume encore."},
+        {"staff_star", "Bâton stellaire", WeaponType::Staff, 5, Rarity::Mythic, 24, 0.12f, 0.04f, Element::Arcane, 30, "Un fragment de comète au bout d'un bois des Confins. Il chante dans le noir."},
+        {"hammer_canyon", "Masse des falaises", WeaponType::Hammer, 3, Rarity::Rare, 34, 0.06f, -0.06f, Element::Physical, 0, "Taillée dans le grès des Canyons Écarlates. Lourde comme une falaise."},
+        {"dagger_scorpion", "Crochet de vipère", WeaponType::Dagger, 3, Rarity::Epic, 22, 0.18f, 0.1f, Element::Nature, 10, "Enduite de venin de scorpion. Rapide, discrète, mortelle."},
+        {"bow_wyvern", "Arc de la wyverne", WeaponType::Bow, 4, Rarity::Epic, 32, 0.14f, 0.04f, Element::Fire, 8, "Une côte de wyverne tendue d'un nerf brûlant."},
+    };
+    for (auto& w : ws) {
+        ItemDef& d = addItem(w.id, w.name, ItemKind::Weapon, w.r, 20 + w.tier * w.tier * 60 + (int)w.r * 80, w.desc);
+        d.weapon = w.t; d.tier = w.tier; d.atk = w.atk; d.crit = w.crit; d.speed = w.speed; d.element = w.e; d.elemDmg = w.ed;
+        d.icon = w.t == WeaponType::Bow || w.t == WeaponType::Crossbow ? "i_cl_archer" : (w.t == WeaponType::Staff ? "i_cl_mage" : "i_attack");
+    }
+    struct S { const char* id; const char* name; int tier; Rarity r; float def; vec3 c; const char* desc; };
+    const S ss[] = {
+        {"shield_wood", "Bouclier de bois", 0, Rarity::Common, 6, hexColor(0x8e2a24), "Quelques planches et beaucoup d'espoir."},
+        {"shield_iron", "Écu de fer", 2, Rarity::Rare, 14, hexColor(0x2a4f7a), "Aux couleurs des Gardiens de Greenhaven."},
+        {"shield_aegis", "Égide de Highspire", 4, Rarity::Legendary, 26, hexColor(0xe8dcc0), "Bénie par Sœur Odile. Elle repousse l'ombre."},
+        {"shield_legion", "Pavois de Fer-Noir", 4, Rarity::Epic, 22, hexColor(0x2a2a30), "Le grand bouclier des légionnaires, frappé d'un poing de fer."},   // 3.0.0
+    };
+    for (auto& s : ss) { ItemDef& d = addItem(s.id, s.name, ItemKind::Shield, s.r, 30 + s.tier * 120, s.desc); d.weapon = WeaponType::Shield; d.def = s.def; d.tier = s.tier; d.color = s.c; d.icon = "i_block"; }
+
+    // ---- armour sets (head, chest, hands, feet) ------------------------------------------------
+    struct A { const char* base; const char* setName; int set; int tier; Rarity r; Helm helm; Body body; vec3 c; float def; bool pauld; Element e; };
+    const A as[] = {
+        {"leather", "du rôdeur", 0, 1, Rarity::Common, Helm::Hood, Body::Leather, hexColor(0x5a3a22), 4, false, Element::Physical},
+        {"chain", "de la garde", 1, 2, Rarity::Rare, Helm::Iron, Body::Chain, hexColor(0x2a4f7a), 7, true, Element::Physical},
+        {"frost", "de Frostheim", 2, 3, Rarity::Epic, Helm::Horned, Body::Fur, hexColor(0x9ab8d0), 10, true, Element::Ice},
+        {"ember", "de braise", 3, 3, Rarity::Epic, Helm::Great, Body::Plate, hexColor(0x8a3a22), 12, true, Element::Fire},
+        {"sylvan", "sylvestre", 4, 3, Rarity::Epic, Helm::Circlet, Body::Leather, hexColor(0x2f7a5a), 8, false, Element::Nature},
+        {"shadow", "du voile", 5, 4, Rarity::Legendary, Helm::Hood, Body::Leather, hexColor(0x2a2230), 11, false, Element::Shadow},
+        {"crown", "ancestral", 6, 5, Rarity::Ancestral, Helm::Crown, Body::Plate, hexColor(0xd8b060), 18, true, Element::Light},
+        // 3.6.0 new sets
+        {"canyon", "du nomade écarlate", 7, 2, Rarity::Rare, Helm::Hood, Body::Leather, hexColor(0xb8502a), 8, false, Element::Fire},
+        {"coral", "des abysses", 8, 4, Rarity::Epic, Helm::Great, Body::Plate, hexColor(0x2a8aa8), 13, true, Element::Ice},
+        {"titan", "titanesque", 9, 5, Rarity::Legendary, Helm::Great, Body::Plate, hexColor(0x3a4a6a), 20, true, Element::Lightning},
+        {"dragon", "du dragon", 10, 5, Rarity::Legendary, Helm::Horned, Body::Plate, hexColor(0x2a8a5a), 17, true, Element::Fire},
+        {"star", "stellaire", 11, 5, Rarity::Mythic, Helm::Circlet, Body::Robe, hexColor(0x4a3ab8), 14, false, Element::Arcane},
+    };
+    const char* pieceName[4] = {"Casque", "Plastron", "Gants", "Bottes"};
+    const ItemKind pieceKind[4] = {ItemKind::Head, ItemKind::Chest, ItemKind::Hands, ItemKind::Feet};
+    const float pieceMul[4] = {0.7f, 1.4f, 0.5f, 0.6f};
+    for (auto& a : as)
+        for (int p = 0; p < 4; p++) {
+            std::string id = std::string(a.base) + "_" + (p == 0 ? "head" : p == 1 ? "chest" : p == 2 ? "hands" : "feet");
+            std::string nm = std::string(pieceName[p]) + " " + a.setName;
+            if (p == 0 && (a.helm == Helm::Hood)) nm = std::string("Capuche ") + a.setName;
+            if (p == 0 && a.helm == Helm::Circlet) nm = std::string("Diadème ") + a.setName;
+            if (p == 0 && a.helm == Helm::Crown) nm = std::string("Couronne ") + a.setName;
+            if (p == 1 && a.body == Body::Leather) nm = std::string("Pourpoint ") + a.setName;
+            if (p == 1 && a.body == Body::Fur) nm = std::string("Manteau ") + a.setName;
+            if (p == 1 && a.body == Body::Chain) nm = std::string("Cotte de mailles ") + a.setName;
+            if (p == 1 && a.body == Body::Robe) nm = std::string("Robe ") + a.setName;   // 3.6.0
+            ItemDef& d = addItem(id, nm, pieceKind[p], a.r, (int)(25 * (a.tier + 1) * (a.tier + 1) * pieceMul[p] + 10), "Pièce d'ensemble.");
+            d.set = a.set; d.tier = a.tier; d.def = a.def * pieceMul[p]; d.color = a.c; d.helm = a.helm; d.body = a.body;
+            d.pauldrons = a.pauld && p == 1; d.gauntlets = p == 2 && a.tier >= 2; d.greaves = p == 3 && a.tier >= 2;
+            d.hp = p == 1 ? a.tier * 12.f : 0; d.element = a.e; d.cape = p == 1 && a.tier >= 3;
+            d.icon = p == 0 ? "i_character" : (p == 1 ? "i_block" : (p == 2 ? "i_interact" : "i_dodge"));
+        }
+    // ---- trinkets ------------------------------------------------------------------------------
+    struct T { const char* id; const char* name; ItemKind k; Rarity r; float hp, mp, crit, atk, def, speed; const char* desc; };
+    const T ts[] = {
+        {"ring_copper", "Anneau de cuivre", ItemKind::Ring, Rarity::Common, 10, 0, 0, 0, 1, 0, "Modeste, mais porte chance."},
+        {"ring_sapphire", "Anneau de saphir", ItemKind::Ring, Rarity::Rare, 0, 25, 0.02f, 0, 0, 0, "Le saphir apaise l'esprit."},
+        {"ring_wolf", "Chevalière du loup", ItemKind::Ring, Rarity::Epic, 20, 0, 0.06f, 4, 0, 0.03f, "Les chasseurs de Frostheim se la transmettent."},
+        {"ring_abyss", "Anneau du vide", ItemKind::Ring, Rarity::Mythic, 0, 40, 0.1f, 8, 0, 0.05f, "On dit qu'il murmure la nuit."},
+        {"amulet_oak", "Amulette de chêne", ItemKind::Amulet, Rarity::Common, 15, 10, 0, 0, 1, 0, "Un gland sculpté par un enfant de Brindlemere."},
+        {"amulet_ember", "Cœur de braise", ItemKind::Amulet, Rarity::Rare, 25, 0, 0.03f, 3, 0, 0, "Il bat comme un cœur."},
+        {"amulet_star", "Larme d'étoile", ItemKind::Amulet, Rarity::Legendary, 30, 50, 0.05f, 0, 3, 0, "Tombée du ciel sur les High Crowns."},
+        {"amulet_crown", "Sceau d'Aldric", ItemKind::Amulet, Rarity::Ancestral, 60, 60, 0.08f, 10, 6, 0.05f, "Le sceau royal. Il réchauffe la peau de l'Errant."},
+        {"ring_scarab", "Scarabée d'or", ItemKind::Ring, Rarity::Rare, 15, 0, 0.05f, 2, 1, 0.02f, "Les caravaniers disent qu'il retrouve toujours l'ombre."},
+        {"ring_tide", "Anneau de marée", ItemKind::Ring, Rarity::Epic, 20, 30, 0.04f, 3, 0, 0.03f, "Il murmure comme un coquillage."},
+        {"amulet_sun", "Disque solaire", ItemKind::Amulet, Rarity::Legendary, 40, 20, 0.06f, 8, 4, 0.03f, "L'emblème du Roi-Soleil. Il réchauffe, même la nuit."},
+        {"ring_silver", "Anneau d'argent", ItemKind::Ring, Rarity::Rare, 10, 15, 0.03f, 0, 2, 0, "Froid comme la neige de Frostheim."},
+        {"ring_gold", "Anneau d'or", ItemKind::Ring, Rarity::Epic, 25, 10, 0.05f, 3, 2, 0.02f, "L'or des Sables, poli au sable."},
+        {"amulet_pearl", "Collier de perle", ItemKind::Amulet, Rarity::Epic, 30, 40, 0.03f, 0, 3, 0.03f, "Une perle de la Côte, sertie d'argent."},
+        {"amulet_aurora", "Cœur d'aurore", ItemKind::Amulet, Rarity::Legendary, 45, 45, 0.06f, 6, 4, 0.04f, "Un cristal vivant qui bat doucement contre la poitrine."},   // 2.8.0
+        {"ring_legion", "Chevalière du conquérant", ItemKind::Ring, Rarity::Legendary, 40, 0, 0.06f, 8, 4, 0.02f, "Prise au doigt d'un seigneur de guerre. Les soldats saluent celui qui la porte."},   // 3.0.0
+        {"ring_dragon", "Anneau de l'écaille", ItemKind::Ring, Rarity::Legendary, 35, 0, 0.07f, 7, 4, 0.02f, "Une écaille de dragon sertie d'or. Elle reste chaude."},   // 3.6.0
+        {"amulet_tide", "Coquille des marées", ItemKind::Amulet, Rarity::Epic, 30, 35, 0.03f, 0, 3, 0.04f, "On y entend la mer, même au fond d'une mine."},   // 3.6.0
+        {"amulet_silence", "Joyau du Silence", ItemKind::Amulet, Rarity::Ancestral, 70, 70, 0.1f, 12, 8, 0.06f, "Le septième joyau de la Couronne. Il fait taire le monde, pour mieux l'entendre."},
+    };
+    for (auto& t : ts) {
+        ItemDef& d = addItem(t.id, t.name, t.k, t.r, 40 + (int)t.r * 150, t.desc);
+        d.hp = t.hp; d.mp = t.mp; d.crit = t.crit; d.atk = t.atk; d.def = t.def; d.speed = t.speed; d.icon = t.k == ItemKind::Ring ? "i_coin" : "i_relic";
+    }
+    // ---- consumables -------------------------------------------------------------------------
+    auto cons = [&](const char* id, const char* nm, Rarity r, int v, float heal, float mana, float stam, int buff, float bt, const char* icon, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Consumable, r, v, desc);
+        d.heal = heal; d.mana = mana; d.stam = stam; d.buff = buff; d.buffTime = bt; d.stack = 20; d.icon = icon;
+    };
+    cons("potion_minor", "Petite potion de soin", Rarity::Common, 15, 40, 0, 0, 0, 0, "i_potion", "Rend 40 points de vie.");
+    cons("potion_heal", "Potion de soin", Rarity::Rare, 40, 110, 0, 0, 0, 0, "i_potion", "Rend 110 points de vie.");
+    cons("potion_great", "Élixir de vie", Rarity::Epic, 120, 300, 0, 0, 0, 0, "i_potion", "Rend 300 points de vie.");
+    cons("potion_mana", "Potion de mana", Rarity::Common, 20, 0, 60, 0, 0, 0, "i_potion_mana", "Rend 60 points de mana.");
+    cons("potion_stamina", "Tonique d'endurance", Rarity::Common, 20, 0, 0, 100, 1, 60, "i_potion_stamina", "Endurance pleine et récupération accrue (60 s).");
+    cons("elixir_strength", "Élixir de force", Rarity::Rare, 60, 0, 0, 0, 2, 120, "i_potion", "+20 % de dégâts pendant 2 minutes.");
+    cons("elixir_frost", "Élixir de résistance au froid", Rarity::Rare, 50, 0, 0, 0, 3, 300, "i_potion_mana", "Protège du froid mordant de Frostheim.");
+    cons("bread", "Pain de Brindlemere", Rarity::Common, 4, 20, 0, 20, 0, 0, "i_heart", "Encore tiède.");
+    cons("stew", "Ragoût du chasseur", Rarity::Rare, 18, 70, 0, 50, 4, 180, "i_heart", "Rend 70 PV et accélère la régénération.");
+    cons("fish_grilled", "Poisson grillé", Rarity::Common, 10, 45, 10, 0, 0, 0, "i_heart", "Cuit sur un feu de camp.");
+    cons("berries", "Baies sauvages", Rarity::Common, 2, 12, 5, 0, 0, 0, "i_heart", "Sucrées et acidulées.");
+    cons("dates", "Dattes d'Ambre", Rarity::Common, 6, 28, 0, 30, 0, 0, "i_heart", "Fondantes et sucrées comme du miel.");
+    cons("coco", "Noix de coco fraîche", Rarity::Common, 5, 22, 15, 0, 0, 0, "i_heart", "Le lait est frais, même sous le soleil.");
+    cons("tea_mint", "Thé à la menthe de Solmar", Rarity::Rare, 22, 0, 70, 40, 1, 90, "i_potion_mana", "Mana et endurance, servi bien sucré.");
+    cons("fish_stew", "Bouillabaisse de Port-Azur", Rarity::Rare, 24, 90, 0, 40, 4, 180, "i_heart", "Rend 90 PV et accélère la régénération.");
+    cons("bomb", "Bombe", Rarity::Rare, 30, 0, 0, 0, 0, 0, "i_crystal", "Lancez-la : elle rebondit, siffle, puis explose. Elle creuse un cratère et blesse tout ce qui est autour.");   // 2.4.0
+    cons("bandage", "Bandage de lin", Rarity::Common, 8, 35, 0, 0, 0, 0, "i_heart", "Rend 35 PV. Simple et efficace.");
+    cons("cactus_juice", "Jus de figue de barbarie", Rarity::Common, 10, 15, 0, 60, 0, 0, "i_potion_mana", "Rend de l'endurance, et un peu de vie.");
+    cons("ember_tonic", "Tonique de braise", Rarity::Rare, 28, 60, 20, 40, 0, 0, "i_potion", "Réchauffe jusqu'aux os : vie, mana et endurance.");
+    cons("salted_fish", "Poisson salé", Rarity::Common, 9, 40, 0, 20, 0, 0, "i_heart", "Se garde des semaines en voyage.");
+    cons("cellar_hatch", "Trappe de souterrain", Rarity::Epic, 120, 0, 0, 0, 0, 0, "i_pickaxe", "Posez-la dehors : une échelle descend vers une salle taillée dans la roche. Creusez-y votre base souterraine.");   // 3.6.0
+    cons("apple", "Pomme", Rarity::Common, 3, 18, 0, 20, 0, 0, "i_heart", "Croquante, tombée d'un chêne de Greenhaven.");   // 3.6.0
+    cons("honey_cake", "Gâteau au miel", Rarity::Rare, 20, 60, 20, 40, 4, 120, "i_heart", "Rend 60 PV et accélère la régénération.");   // 3.6.0
+    cons("mushroom_soup", "Velouté des bois", Rarity::Common, 12, 50, 30, 0, 0, 0, "i_heart", "Champignons lumineux et herbes : vie et mana.");   // 3.6.0
+    cons("potion_deep", "Potion des profondeurs", Rarity::Rare, 45, 40, 0, 60, 1, 120, "i_potion_mana", "Vie, endurance pleine : de quoi plonger plus longtemps.");   // 3.6.0
+    cons("elixir_sun", "Élixir solaire", Rarity::Epic, 90, 0, 0, 0, 2, 180, "i_potion", "+20 % de dégâts pendant 3 minutes.");
+    // ---- materials -----------------------------------------------------------------------------
+    auto mat = [&](const char* id, const char* nm, Rarity r, int v, const char* icon, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Material, r, v, desc); d.stack = 99; d.icon = icon;
+    };
+    mat("wood", "Bois", Rarity::Common, 2, "i_woodaxe", "Bûches de chêne et de pin.");
+    mat("stone", "Pierre", Rarity::Common, 1, "i_pickaxe", "Moellons solides.");
+    mat("iron_ore", "Minerai de fer", Rarity::Common, 5, "i_pickaxe", "Se fond à la forge.");
+    mat("copper_ore", "Minerai de cuivre", Rarity::Common, 4, "i_pickaxe", "Reflets orangés.");
+    mat("iron_bar", "Lingot de fer", Rarity::Common, 14, "i_anvil", "Base de toute bonne arme.");
+    mat("copper_bar", "Lingot de cuivre", Rarity::Common, 11, "i_anvil", "Conduit bien la magie.");
+    mat("rare_ore", "Minerai d'étoile", Rarity::Rare, 30, "i_crystal", "Un métal qui scintille dans le noir.");
+    mat("star_bar", "Lingot d'étoile", Rarity::Epic, 90, "i_anvil", "Plus léger que l'air, plus dur que l'acier.");
+    mat("herb", "Herbe médicinale", Rarity::Common, 3, "i_sickle", "Feuilles amères et apaisantes.");
+    mat("frost_lily", "Lys de givre", Rarity::Rare, 12, "i_sickle", "Ne fleurit que sous la neige.");
+    mat("glowcap", "Champignon lumineux", Rarity::Common, 6, "i_sickle", "Brille doucement dans la forêt d'Elderwood.");
+    mat("crystal", "Cristal", Rarity::Rare, 20, "i_crystal", "Résonne au contact de la magie.");
+    mat("frost_crystal", "Cristal de givre", Rarity::Rare, 22, "i_crystal", "Froid même au soleil.");
+    mat("ember_core", "Noyau de braise", Rarity::Rare, 25, "i_crystal", "Le cœur d'un élémentaire de feu.");
+    mat("leather", "Cuir", Rarity::Common, 6, "i_hunt", "Tanné par les chasseurs.");
+    mat("fur", "Fourrure épaisse", Rarity::Common, 9, "i_hunt", "Chaude et douce.");
+    mat("bone", "Os ancien", Rarity::Common, 3, "i_bestiary", "Ce qu'il reste des morts sans repos.");
+    mat("spider_silk", "Soie d'araignée", Rarity::Rare, 15, "i_hunt", "Plus solide qu'une corde.");
+    mat("troll_hide", "Peau de troll", Rarity::Rare, 28, "i_hunt", "Elle se régénère encore.");
+    mat("shadow_essence", "Essence d'ombre", Rarity::Epic, 45, "i_relic", "Une fumée froide qui refuse de se dissiper.");
+    mat("fish", "Poisson", Rarity::Common, 5, "i_fishing", "Encore frétillant.");
+    mat("meat", "Viande crue", Rarity::Common, 4, "i_hunt", "À cuire sur un feu de camp.");
+    mat("dragon_scale", "Écaille de dragon", Rarity::Legendary, 200, "i_relic", "Brûlante au toucher.");
+    mat("amber", "Ambre brut", Rarity::Rare, 30, "i_crystal", "Chaud au toucher, une étincelle emprisonnée.");
+    mat("coral_shard", "Éclat de corail", Rarity::Rare, 22, "i_crystal", "Rose et dur comme la pierre.");
+    mat("scorpion_venom", "Venin de scorpion", Rarity::Rare, 24, "i_hunt", "À manier avec des gants, et du respect.");
+    mat("sand_glass", "Verre du désert", Rarity::Rare, 26, "i_crystal", "Le sable a fondu sous la foudre, et s'est souvenu.");
+    mat("pirate_coin", "Doublon corsaire", Rarity::Common, 12, "i_coin", "Frappé d'un crâne et de deux os.");
+    mat("sea_salt", "Sel de mer", Rarity::Common, 4, "i_hunt", "Gris, humide et précieux.");
+    // 2.3.5 more resources
+    mat("gold_ore", "Minerai d'or", Rarity::Rare, 18, "i_pickaxe", "Des paillettes jaunes dans la roche des Sables et des High Crowns.");
+    mat("gold_bar", "Lingot d'or", Rarity::Rare, 45, "i_anvil", "Trop mou pour une lame, parfait pour un anneau.");
+    mat("silver_ore", "Minerai d'argent", Rarity::Common, 9, "i_pickaxe", "Brillant sous le givre de Frostheim.");
+    mat("silver_bar", "Lingot d'argent", Rarity::Rare, 24, "i_anvil", "Les morts sans repos le craignent.");
+    mat("coal", "Charbon", Rarity::Common, 3, "i_pickaxe", "Noir, friable, il brûle longtemps. Indispensable pour l'acier.");
+    mat("steel_bar", "Lingot d'acier", Rarity::Rare, 32, "i_anvil", "Du fer et du charbon, beaucoup de feu et de patience.");
+    mat("cactus_fruit", "Figue de barbarie", Rarity::Common, 4, "i_heart", "Sucrée, juteuse, et pleine d'épines si l'on se presse.");
+    mat("seashell", "Coquillage", Rarity::Common, 3, "i_crystal", "On y entend la mer, dit-on.");
+    mat("pearl", "Perle", Rarity::Epic, 60, "i_crystal", "Une perle nacrée de la Côte de Corail.");
+    mat("flax", "Lin", Rarity::Common, 3, "i_sickle", "Tiges souples aux fleurs bleues.");
+    mat("linen", "Toile de lin", Rarity::Common, 9, "i_hunt", "Tissée serrée, pour les bandages et les vêtements.");
+    mat("fire_root", "Racine de braise", Rarity::Rare, 14, "i_sickle", "Chaude au toucher, elle pousse dans les cendres.");
+    mat("resin", "Résine", Rarity::Common, 4, "i_crystal", "Ambre tendre des arbres abattus. Elle colle les manches et cire les arcs.");   // 3.6.0
+    mat("bird_nest", "Nid d'oiseau", Rarity::Rare, 25, "i_star", "Tombé d'un arbre abattu. Il y a parfois quelque chose de brillant dedans.");   // 3.6.0
+    mat("honey", "Miel sauvage", Rarity::Common, 6, "i_potion", "Pris dans un tronc creux.");   // 3.6.0
+    mat("titan_steel", "Acier-titan", Rarity::Epic, 50, "i_anvil", "Le minerai noir des Monts Titans, fondu à Rochebrune. Plus dur que l'acier ordinaire.");   // 3.0.0
+    mat("legion_insignia", "Insigne de la Légion", Rarity::Rare, 25, "i_relic", "Un poing de fer sur un disque noir. Les forges et les capitaines de Hautebrume le rachètent.");   // 3.0.0
+    mat("aurora_crystal", "Cristal d'aurore", Rarity::Epic, 45, "i_crystal", "Il garde la lumière des aurores et la rend la nuit. Il ne pousse qu'aux Terres d'Aurore.");   // 2.8.0
+    // ---- quest items & relics -------------------------------------------------------------------
+    auto quest = [&](const char* id, const char* nm, Rarity r, const char* desc, const char* icon = "i_relic") {
+        ItemDef& d = addItem(id, nm, ItemKind::Quest, r, 0, desc); d.icon = icon;
+    };
+    quest("echo_stone", "Pierre d'écho", Rarity::Rare, "Elle répète des voix d'il y a trois siècles.");
+    quest("crown_shard", "Fragment de Couronne", Rarity::Legendary, "L'un des six fragments de la Couronne-Mère.");
+    quest("mother_crown", "Couronne-Mère", Rarity::Ancestral, "Reforgée à Highspire. Elle peut sceller l'Abîme.");
+    quest("miners_badge", "Insigne du contremaître", Rarity::Common, "L'insigne de cuivre de la Guilde des Mineurs.");
+    quest("grave_lantern", "Lanterne des Veilleurs", Rarity::Rare, "Sa flamme guide les âmes perdues.");
+    quest("star_chart", "Carte céleste", Rarity::Rare, "Les constellations de l'astronome Ilian.");
+    quest("treasure_map", "Carte au trésor", Rarity::Rare, "Un X griffonné près d'un repère.", "i_map");
+    quest("letter_maelle", "Lettre de Maëlle", Rarity::Common, "Scellée à la cire verte.", "i_quest");
+    // 2.0.0 Act II
+    quest("sea_chart", "Carte marine de Mareval", Rarity::Epic, "Elle marque un temple que les cartes officielles ignorent.", "i_map");
+    quest("tide_pearl", "Perle de marée", Rarity::Rare, "Elle luit faiblement, comme une lune sous l'eau.");
+    quest("amber_key", "Clé d'ambre", Rarity::Epic, "Une clé de résine où dort un scarabée.");
+    quest("sun_sigil", "Sceau du Soleil", Rarity::Legendary, "Le sceau de Sekhmar. Il est chaud, comme un cœur.");
+    quest("silence_jewel", "Le Silence", Rarity::Ancestral, "Le septième joyau. Il n'a jamais orné aucune Couronne.");
+    quest("sky_shard", "Éclat du ciel", Rarity::Epic, "Un fragment de cristal pur, trouvé dans un coffre des îles flottantes. Il est plus léger que l'air.", "i_crystal");   // 2.8.0
+    quest("caravan_ledger", "Registre de caravane", Rarity::Common, "Des chiffres, des noms, et une dernière ligne raturée.", "i_quest");
+    auto relic = [&](const char* id, const char* nm, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::Relic, Rarity::Legendary, 150, desc); d.icon = "i_relic"; };
+    relic("relic_elven_harp", "Harpe elfique", "Ses cordes vibrent seules quand le vent souffle d'Elderwood.");
+    relic("relic_jarl_horn", "Corne du premier Jarl", "Elle appela jadis les clans au combat.");
+    relic("relic_miner_lamp", "Lampe du premier mineur", "Elle n'a jamais manqué d'huile.");
+    relic("relic_kings_seal", "Sceau des rois de Morneval", "Cire noire et couronne brisée.");
+    relic("relic_star_glass", "Lentille d'étoile", "À travers elle, la nuit devient jour.");
+    relic("relic_aldric_ring", "Alliance d'Aldric", "Gravée : « Pour Elsa, au-delà de l'Abîme ».");
+    relic("relic_sun_mask", "Masque de Sekhmar", "Un visage d'or qui sourit à contre-jour.");
+    relic("relic_sea_bell", "Cloche de l'épave", "Elle sonne seule quand la marée monte.");
+    relic("relic_sphinx_eye", "Œil de la Gardienne", "Une pierre d'ambre. Elle te regarde en retour.");
+    relic("relic_comet", "Cœur de comète", "Rapporté des Confins stellaires. Il est froid comme le vide et brille comme une étoile.");   // 3.2.0
+    // ---- tools & mount tokens --------------------------------------------------------------------
+    auto tool = [&](const char* id, const char* nm, WeaponType w, const char* icon, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::Tool, Rarity::Common, 15, desc); d.weapon = w; d.icon = icon; };
+    tool("tool_pickaxe", "Pioche", WeaponType::Pickaxe, "i_pickaxe", "Pour miner pierre et minerais.");
+    tool("tool_woodaxe", "Hachette", WeaponType::WoodAxe, "i_woodaxe", "Pour couper du bois.");
+    tool("tool_rod", "Canne à pêche", WeaponType::FishingRod, "i_fishing", "Patience et poignet souple.");
+    tool("tool_shovel", "Pelle", WeaponType::Pickaxe, "i_pickaxe", "Touchez « Creuser » dans le sac : l'épée creuse alors le sol devant vous. Pierres, minerais, et parfois un trésor enfoui.");   // 2.4.0
+    auto mtok = [&](const char* id, const char* nm, int m, Rarity r, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::MountToken, r, 0, desc); d.mount = m; d.icon = "i_mount"; };
+    mtok("mount_horse", "Sifflet : Cheval de Brindlemere", 0, Rarity::Rare, "Appelle votre cheval.");
+    mtok("mount_wolf", "Sifflet : Loup géant", 1, Rarity::Epic, "Appelle Fenra, le loup géant d'Eira.");
+    mtok("mount_elk", "Sifflet : Cerf sylvain", 2, Rarity::Epic, "Appelle le grand cerf d'Elderwood.");
+    mtok("mount_boar", "Sifflet : Sanglier de guerre", 3, Rarity::Rare, "Appelle un sanglier caparaçonné.");
+    mtok("mount_spectral", "Sifflet : Destrier spectral", 4, Rarity::Mythic, "Le destrier du Chevalier Déchu, libéré.");
+    mtok("mount_dune", "Sifflet : Destrier d'ambre", 5, Rarity::Epic, "Un coursier des dunes, infatigable sous le soleil.");
+    // ---- 3.2.0 key items: a power for as long as they are carried (totems of power, the Wonders merchant) -----
+    auto key = [&](const char* id, const char* nm, int pw, Rarity r, int shards, const char* icon, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Key, r, 0, desc); d.power = pw; d.icon = icon; d.shardPrice = shards; };
+    key("key_compass", "Boussole des Anciens", KP_COMPASS, Rarity::Epic, 8, "i_compass", "Une aiguille d'or pointe vers le totem de pouvoir ou l'orbe ancien le plus proche. Ils apparaissent aussi sur la mini-carte.");
+    key("key_zephyr", "Bottes de Zéphyr", KP_DOUBLEJUMP, Rarity::Legendary, 0, "i_jump", "Un second saut en plein air. Indispensable pour atteindre le sommet des îles du ciel.");
+    key("key_feather", "Cape de plume de roc", KP_GLIDE, Rarity::Legendary, 0, "i_star", "En l'air, maintenez le saut pour planer. Une chute du haut des îles devient un vol.");
+    key("key_magnet", "Anneau-aimant", KP_MAGNET, Rarity::Epic, 12, "i_coin", "Le butin vole vers vous dans un rayon de 10 m.");
+    key("key_triton", "Écaille de triton", KP_BREATH, Rarity::Epic, 10, "i_drop", "Respirez sous l'eau sans limite et nagez plus vite.");
+    key("key_phoenix", "Plume de phénix", KP_PHOENIX, Rarity::Mythic, 0, "i_heart", "Une fois par jour, elle vous relève avec la moitié de votre vie quand vous tombez au combat.");
+    key("key_clover", "Trèfle d'or", KP_LUCK, Rarity::Legendary, 0, "i_star", "+50 % d'or ramassé, et le butin est plus souvent rare, épique ou légendaire.");
+    key("key_swift", "Sabot de vent", KP_SWIFT, Rarity::Legendary, 0, "i_mount", "Le sprint coûte moitié moins d'endurance et vous courez 10 % plus vite.");
+    // bags: used from the bag, they add slots for good
+    auto bag = [&](const char* id, const char* nm, int slots, Rarity r, int value, int shards, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Consumable, r, value, desc); d.bagSlots = slots; d.icon = "i_inventory"; d.shardPrice = shards; };
+    bag("bag_leather", "Sacoche de cuir", 10, Rarity::Rare, 300, 0, "Utilisez-la : +10 emplacements dans le sac, pour toujours.");
+    bag("bag_adventurer", "Sac d'aventurier", 15, Rarity::Epic, 900, 6, "Utilisez-le : +15 emplacements dans le sac, pour toujours.");
+    bag("bag_bottomless", "Sac sans fond", 25, Rarity::Legendary, 0, 15, "Cousu de fil d'aurore. Utilisez-le : +25 emplacements dans le sac, pour toujours.");
+    { ItemDef& d = addItem("star_shard", "Éclat d'étoile", ItemKind::Material, Rarity::Epic, 0, "La monnaie des Merveilles. Les totems, les orbes anciens, les boss et les coffres du ciel en donnent."); d.icon = "i_crystal"; }
+    // a few wonders sold for shards
+    { ItemDef& d = addItem("elixir_titan", "Élixir du titan", ItemKind::Consumable, Rarity::Legendary, 400, "Force décuplée pendant 2 minutes."); d.buff = 2; d.buffTime = 120; d.heal = 120; d.icon = "i_potion"; d.shardPrice = 3; }
+    { ItemDef& d = addItem("elixir_phoenix", "Larme de phénix", ItemKind::Consumable, Rarity::Mythic, 600, "Rend toute la vie, la mana et l'endurance."); d.heal = 9999; d.mana = 9999; d.stam = 9999; d.icon = "i_potion_mana"; d.shardPrice = 4; }
+    // ---- cosmetics (dyes) ---------------------------------------------------------------------------
+    auto dye = [&](const char* id, const char* nm, uint32_t c, Rarity r) { ItemDef& d = addItem(id, nm, ItemKind::Cosmetic, r, 60, "Teinture d'armure (apparence)."); d.color = hexColor(c); d.icon = "i_star"; };
+    dye("dye_royal", "Teinture bleu royal", 0x2a4f9a, Rarity::Common);
+    dye("dye_crimson", "Teinture pourpre", 0x8e2a24, Rarity::Common);
+    dye("dye_forest", "Teinture forestière", 0x2f6a3a, Rarity::Common);
+    dye("dye_ivory", "Teinture ivoire", 0xe8dcc0, Rarity::Rare);
+    dye("dye_night", "Teinture nuit", 0x1c1c28, Rarity::Rare);
+    dye("dye_gold", "Teinture d'or", 0xc9a45c, Rarity::Epic);
+}
+
+const std::vector<ItemDef>& allItems() { std::call_once(gItemsOnce, [] { buildItems(); gBaseItemCount = (int)gItems.size(); }); return gItems; }
+const ItemDef* item(const std::string& id) {
+    allItems();
+    auto it = gItemIdx.find(id);
+    return it == gItemIdx.end() ? nullptr : &gItems[it->second];
+}
+
+const std::vector<SetDef>& sets() {
+    static std::vector<SetDef> s = {
+        {"Ensemble du rôdeur", "+5 attaque", "+6 % critique, +5 % vitesse", 5, 0, 0, 0.06f, 0, 0, 0, 0.05f},
+        {"Ensemble de la garde", "+8 défense", "+60 PV, +5 défense", 0, 8, 0, 0, 0, 0, 5, 0},
+        {"Ensemble de Frostheim", "+40 PV", "Attaques de glace (+10)", 0, 0, 40, 0, 0, 0, 0, 0, Element::Ice, 10},
+        {"Ensemble de braise", "+10 attaque", "Attaques de feu (+14)", 10, 0, 0, 0, 0, 0, 0, 0, Element::Fire, 14},
+        {"Ensemble sylvestre", "+30 mana", "+10 % critique, attaques de nature (+8)", 0, 0, 0, 0.1f, 0, 30, 0, 0, Element::Nature, 8},
+        {"Ensemble du voile", "+8 % critique", "Attaques d'ombre (+15)", 0, 0, 0, 0.08f, 6, 0, 0, 0.06f, Element::Shadow, 15},
+        {"Ensemble ancestral", "+20 attaque, +10 défense", "+120 PV, attaques de lumière (+20)", 20, 10, 0, 0.05f, 10, 50, 10, 0.05f, Element::Light, 20},
+        // 3.6.0
+        {"Ensemble du nomade écarlate", "+40 PV", "+6 % vitesse, attaques de feu (+8)", 0, 0, 40, 0.03f, 0, 0, 0, 0.06f, Element::Fire, 8},
+        {"Ensemble des abysses", "+10 défense", "+80 PV, attaques de glace (+14)", 0, 10, 0, 0, 0, 30, 0, 0, Element::Ice, 14},
+        {"Ensemble titanesque", "+15 défense, +60 PV", "+20 attaque, attaques de foudre (+18)", 0, 15, 60, 0.04f, 20, 0, 10, 0, Element::Lightning, 18},
+        {"Ensemble du dragon", "+15 attaque", "+10 % critique, attaques de feu (+22)", 15, 0, 0, 0.1f, 10, 0, 8, 0.03f, Element::Fire, 22},
+        {"Ensemble stellaire", "+60 mana", "+12 % critique, attaques arcaniques (+24)", 0, 0, 0, 0.12f, 6, 60, 0, 0.06f, Element::Arcane, 24},
+    };
+    return s;
+}
+
+const std::vector<Recipe>& recipes() {
+    static std::vector<Recipe> r = {
+        {"iron_bar", 1, {{"iron_ore", 2}}, ST_FORGE, 1},
+        {"copper_bar", 1, {{"copper_ore", 2}}, ST_FORGE, 1},
+        {"star_bar", 1, {{"rare_ore", 3}, {"crystal", 1}}, ST_FORGE, 8},
+        {"sword_iron", 1, {{"iron_bar", 3}, {"leather", 1}}, ST_FORGE, 2},
+        {"longsword_iron", 1, {{"iron_bar", 5}, {"leather", 2}}, ST_FORGE, 3},
+        {"dagger_iron", 1, {{"iron_bar", 2}, {"leather", 1}}, ST_FORGE, 2},
+        {"axe_iron", 1, {{"iron_bar", 3}, {"wood", 2}}, ST_FORGE, 2},
+        // 3.6.0 the new weapons, armour and food
+        {"axe_lumber", 1, {{"iron_bar", 2}, {"wood", 4}, {"resin", 1}}, ST_FORGE, 1},
+        {"hammer_canyon", 1, {{"stone", 12}, {"iron_bar", 3}, {"leather", 2}}, ST_FORGE, 5},
+        {"sword_coral", 1, {{"coral_shard", 6}, {"pearl", 2}, {"silver_bar", 2}}, ST_FORGE, 8},
+        {"dagger_scorpion", 1, {{"steel_bar", 2}, {"scorpion_venom", 3}, {"leather", 1}}, ST_FORGE, 8},
+        {"bow_wyvern", 1, {{"wood", 6}, {"bone", 4}, {"ember_core", 1}, {"resin", 2}}, ST_WORKBENCH, 10},
+        {"sword_dragon", 1, {{"dragon_scale", 4}, {"gold_bar", 3}, {"titan_steel", 2}}, ST_FORGE, 14},
+        {"staff_star", 1, {{"star_bar", 3}, {"star_shard", 3}, {"wood", 4}}, ST_WORKBENCH, 16},
+        {"canyon_head", 1, {{"linen", 3}, {"leather", 1}}, ST_WORKBENCH, 4}, {"canyon_chest", 1, {{"leather", 4}, {"linen", 3}}, ST_WORKBENCH, 4},
+        {"canyon_hands", 1, {{"leather", 2}}, ST_WORKBENCH, 4}, {"canyon_feet", 1, {{"leather", 3}}, ST_WORKBENCH, 4},
+        {"coral_head", 1, {{"coral_shard", 4}, {"silver_bar", 2}}, ST_FORGE, 9}, {"coral_chest", 1, {{"coral_shard", 6}, {"silver_bar", 4}, {"pearl", 1}}, ST_FORGE, 9},
+        {"coral_hands", 1, {{"coral_shard", 3}, {"silver_bar", 1}}, ST_FORGE, 9}, {"coral_feet", 1, {{"coral_shard", 3}, {"silver_bar", 2}}, ST_FORGE, 9},
+        {"titan_head", 1, {{"titan_steel", 4}}, ST_FORGE, 13}, {"titan_chest", 1, {{"titan_steel", 7}, {"leather", 2}}, ST_FORGE, 13},
+        {"titan_hands", 1, {{"titan_steel", 3}}, ST_FORGE, 13}, {"titan_feet", 1, {{"titan_steel", 3}, {"leather", 1}}, ST_FORGE, 13},
+        {"dragon_head", 1, {{"dragon_scale", 3}, {"gold_bar", 1}}, ST_FORGE, 15}, {"dragon_chest", 1, {{"dragon_scale", 5}, {"gold_bar", 2}, {"titan_steel", 2}}, ST_FORGE, 15},
+        {"dragon_hands", 1, {{"dragon_scale", 2}, {"gold_bar", 1}}, ST_FORGE, 15}, {"dragon_feet", 1, {{"dragon_scale", 2}, {"leather", 2}}, ST_FORGE, 15},
+        {"star_head", 1, {{"star_bar", 2}, {"star_shard", 1}}, ST_FORGE, 17}, {"star_chest", 1, {{"star_bar", 3}, {"linen", 4}, {"star_shard", 2}}, ST_FORGE, 17},
+        {"star_hands", 1, {{"star_bar", 1}, {"linen", 2}}, ST_FORGE, 17}, {"star_feet", 1, {{"star_bar", 1}, {"leather", 2}}, ST_FORGE, 17},
+        {"cellar_hatch", 1, {{"wood", 12}, {"iron_bar", 3}, {"stone", 6}}, ST_WORKBENCH, 1},   // 3.6.0
+        {"honey_cake", 1, {{"honey", 2}, {"bread", 1}}, ST_CAMPFIRE, 1},
+        {"mushroom_soup", 1, {{"glowcap", 2}, {"herb", 1}}, ST_CAMPFIRE, 1},
+        {"potion_deep", 1, {{"coral_shard", 1}, {"herb", 2}, {"sea_salt", 1}}, ST_ALCHEMY, 3},
+        {"hammer_iron", 1, {{"iron_bar", 6}, {"wood", 2}}, ST_FORGE, 4},
+        {"spear_iron", 1, {{"iron_bar", 2}, {"wood", 4}}, ST_FORGE, 2},
+        {"bow_hunter", 1, {{"wood", 5}, {"leather", 2}}, ST_WORKBENCH, 1},
+        {"crossbow_iron", 1, {{"wood", 4}, {"iron_bar", 3}, {"spider_silk", 2}}, ST_WORKBENCH, 6},
+        {"staff_apprentice", 1, {{"wood", 4}, {"crystal", 1}}, ST_WORKBENCH, 2},
+        {"shield_wood", 1, {{"wood", 6}}, ST_WORKBENCH, 1},
+        {"shield_iron", 1, {{"iron_bar", 4}, {"wood", 2}, {"leather", 2}}, ST_FORGE, 5},
+        {"sword_ember", 1, {{"star_bar", 2}, {"ember_core", 3}, {"iron_bar", 2}}, ST_FORGE, 12},
+        {"longsword_frost", 1, {{"star_bar", 2}, {"frost_crystal", 4}, {"iron_bar", 3}}, ST_FORGE, 12},
+        {"bow_elder", 1, {{"wood", 8}, {"spider_silk", 3}, {"glowcap", 4}}, ST_WORKBENCH, 10},
+        {"staff_ember", 1, {{"wood", 6}, {"ember_core", 4}, {"crystal", 2}}, ST_WORKBENCH, 11},
+        {"leather_head", 1, {{"leather", 3}}, ST_WORKBENCH, 1}, {"leather_chest", 1, {{"leather", 6}}, ST_WORKBENCH, 1},
+        {"leather_hands", 1, {{"leather", 2}}, ST_WORKBENCH, 1}, {"leather_feet", 1, {{"leather", 3}}, ST_WORKBENCH, 1},
+        {"chain_head", 1, {{"iron_bar", 3}}, ST_FORGE, 4}, {"chain_chest", 1, {{"iron_bar", 6}, {"leather", 2}}, ST_FORGE, 4},
+        {"chain_hands", 1, {{"iron_bar", 2}, {"leather", 1}}, ST_FORGE, 4}, {"chain_feet", 1, {{"iron_bar", 3}, {"leather", 1}}, ST_FORGE, 4},
+        {"frost_head", 1, {{"fur", 3}, {"frost_crystal", 1}, {"iron_bar", 2}}, ST_FORGE, 9}, {"frost_chest", 1, {{"fur", 6}, {"frost_crystal", 2}, {"iron_bar", 3}}, ST_FORGE, 9},
+        {"frost_hands", 1, {{"fur", 2}, {"frost_crystal", 1}}, ST_FORGE, 9}, {"frost_feet", 1, {{"fur", 3}, {"frost_crystal", 1}}, ST_FORGE, 9},
+        {"ember_head", 1, {{"star_bar", 1}, {"ember_core", 2}}, ST_FORGE, 12}, {"ember_chest", 1, {{"star_bar", 2}, {"ember_core", 3}}, ST_FORGE, 12},
+        {"ember_hands", 1, {{"star_bar", 1}, {"ember_core", 1}}, ST_FORGE, 12}, {"ember_feet", 1, {{"star_bar", 1}, {"ember_core", 1}}, ST_FORGE, 12},
+        {"sylvan_head", 1, {{"leather", 2}, {"glowcap", 3}, {"crystal", 1}}, ST_WORKBENCH, 10}, {"sylvan_chest", 1, {{"leather", 5}, {"glowcap", 4}, {"spider_silk", 2}}, ST_WORKBENCH, 10},
+        {"sylvan_hands", 1, {{"leather", 2}, {"glowcap", 2}}, ST_WORKBENCH, 10}, {"sylvan_feet", 1, {{"leather", 3}, {"glowcap", 2}}, ST_WORKBENCH, 10},
+        {"ring_copper", 1, {{"copper_bar", 2}}, ST_FORGE, 2},
+        // 2.3.5 the new resources
+        {"gold_bar", 1, {{"gold_ore", 2}}, ST_FORGE, 3},
+        {"silver_bar", 1, {{"silver_ore", 2}}, ST_FORGE, 2},
+        {"steel_bar", 1, {{"iron_bar", 1}, {"coal", 2}}, ST_FORGE, 4},
+        {"linen", 1, {{"flax", 3}}, ST_WORKBENCH, 1},
+        {"sword_steel", 1, {{"steel_bar", 3}, {"leather", 1}}, ST_FORGE, 5},
+        {"axe_steel", 1, {{"steel_bar", 3}, {"wood", 2}}, ST_FORGE, 5},
+        {"dagger_silver", 1, {{"silver_bar", 2}, {"leather", 1}}, ST_FORGE, 4},
+        {"ring_silver", 1, {{"silver_bar", 2}}, ST_FORGE, 3},
+        {"ring_gold", 1, {{"gold_bar", 2}, {"amber", 1}}, ST_FORGE, 6},
+        {"amulet_pearl", 1, {{"pearl", 1}, {"silver_bar", 1}, {"linen", 1}}, ST_FORGE, 6},
+        {"bandage", 2, {{"linen", 1}, {"herb", 1}}, ST_ALCHEMY, 1},
+        {"tool_shovel", 1, {{"iron_bar", 2}, {"wood", 2}}, ST_FORGE, 1},   // 2.4.0
+        {"sword_aurora", 1, {{"aurora_crystal", 5}, {"steel_bar", 2}}, ST_FORGE, 14},   // 2.8.0
+        {"titan_steel", 1, {{"iron_ore", 3}, {"coal", 2}, {"gold_ore", 1}}, ST_FORGE, 15},   // 3.0.0 the Titan Mountains
+        {"sword_titansteel", 1, {{"titan_steel", 4}, {"leather", 2}}, ST_FORGE, 15},
+        {"shield_legion", 1, {{"titan_steel", 3}, {"legion_insignia", 4}, {"wood", 2}}, ST_FORGE, 15},
+        {"crossbow_legion", 1, {{"titan_steel", 2}, {"legion_insignia", 3}, {"wood", 3}}, ST_WORKBENCH, 15},
+        {"staff_aurora", 1, {{"aurora_crystal", 4}, {"wood", 2}, {"crystal", 2}}, ST_FORGE, 14},
+        {"bow_aurora", 1, {{"aurora_crystal", 4}, {"wood", 3}, {"spider_silk", 1}}, ST_WORKBENCH, 14},
+        {"amulet_aurora", 1, {{"aurora_crystal", 3}, {"silver_bar", 1}}, ST_FORGE, 12},
+        {"bomb", 2, {{"coal", 2}, {"fire_root", 1}}, ST_FORGE, 4},
+        {"bomb", 1, {{"coal", 3}, {"sea_salt", 1}}, ST_FORGE, 4},
+        {"cactus_juice", 1, {{"cactus_fruit", 3}}, ST_CAMPFIRE, 1},
+        {"ember_tonic", 1, {{"fire_root", 2}, {"herb", 1}}, ST_ALCHEMY, 5},
+        {"salted_fish", 1, {{"fish", 1}, {"sea_salt", 1}}, ST_CAMPFIRE, 1},
+        {"potion_minor", 1, {{"herb", 2}}, ST_ALCHEMY, 1},
+        {"potion_heal", 1, {{"herb", 3}, {"glowcap", 1}}, ST_ALCHEMY, 4},
+        {"potion_great", 1, {{"herb", 4}, {"frost_lily", 1}, {"crystal", 1}}, ST_ALCHEMY, 10},
+        {"potion_mana", 1, {{"glowcap", 2}, {"crystal", 1}}, ST_ALCHEMY, 3},
+        {"potion_stamina", 1, {{"herb", 1}, {"berries", 3}}, ST_ALCHEMY, 2},
+        {"elixir_strength", 1, {{"troll_hide", 1}, {"herb", 2}, {"ember_core", 1}}, ST_ALCHEMY, 8},
+        {"elixir_frost", 1, {{"frost_lily", 2}, {"fur", 1}}, ST_ALCHEMY, 6},
+        {"fish_grilled", 1, {{"fish", 1}}, ST_CAMPFIRE, 1},
+        {"stew", 1, {{"meat", 2}, {"herb", 1}}, ST_CAMPFIRE, 2},
+        {"bread", 2, {{"herb", 1}}, ST_CAMPFIRE, 1},
+    };
+    return r;
+}
+
+// ============================================================================================ spells & skills
+const std::vector<SpellDef>& spells() {
+    static std::vector<SpellDef> s = {
+        {"fireball", "Boule de feu", "Projectile qui explose à l'impact.", "i_sp_fireball", Element::Fire, SpellKind::Projectile, 18, 2.5f, 1.6f, 3.f, 0},
+        {"flamewave", "Vague ardente", "Une vague de flammes devant vous.", "i_sp_flamewave", Element::Fire, SpellKind::Area, 30, 8, 2.2f, 6.f, 0},
+        {"icespike", "Lance de givre", "Transperce et ralentit les ennemis.", "i_sp_icespike", Element::Ice, SpellKind::Projectile, 16, 2.f, 1.4f, 1.f, 3},
+        {"frostnova", "Nova glaciale", "Gèle les ennemis proches.", "i_sp_frostnova", Element::Ice, SpellKind::Area, 32, 12, 1.2f, 7.f, 2.5f},
+        {"chain", "Éclair en chaîne", "La foudre rebondit entre les ennemis.", "i_sp_chain", Element::Lightning, SpellKind::Chain, 24, 5, 1.5f, 12.f, 0},
+        {"thunder", "Frappe du tonnerre", "La foudre s'abat autour de vous.", "i_sp_thunder", Element::Lightning, SpellKind::Rain, 34, 10, 2.6f, 5.f, 0},
+        {"roots", "Racines", "Des racines immobilisent les ennemis.", "i_sp_roots", Element::Nature, SpellKind::Area, 22, 10, 0.8f, 6.f, 3},
+        {"regrowth", "Régénération", "Soigne au fil du temps.", "i_sp_regrowth", Element::Nature, SpellKind::Self, 26, 14, 1.6f, 0, 8},
+        {"shadowstep", "Pas de l'ombre", "Traverse les ennemis en les lacérant.", "i_sp_shadowstep", Element::Shadow, SpellKind::Dash, 18, 6, 1.8f, 8.f, 0},
+        {"souldrain", "Drain d'âme", "Vole la vie de l'ennemi.", "i_sp_souldrain", Element::Shadow, SpellKind::Beam, 20, 7, 1.3f, 10.f, 2},
+        {"holylight", "Lumière sacrée", "Soigne et brûle les morts-vivants proches.", "i_sp_holylight", Element::Light, SpellKind::Self, 30, 15, 2.f, 5.f, 0},
+        {"aegis", "Égide radieuse", "Un bouclier absorbe les dégâts.", "i_sp_radiantshield", Element::Light, SpellKind::Shield, 28, 18, 1.f, 0, 8},
+        {"missiles", "Projectiles arcaniques", "Trois projectiles à tête chercheuse.", "i_sp_missiles", Element::Arcane, SpellKind::Projectile, 20, 3, 0.9f, 1.f, 0},
+        {"arcanenova", "Nova arcanique", "Repousse violemment les ennemis.", "i_sp_arcanenova", Element::Arcane, SpellKind::Area, 28, 9, 1.4f, 6.f, 0},
+        // 3.2.0 legendary spells: only the totems of power and the ancient orbs teach them
+        {"skyfall", "Colère céleste", "Un orage s'abat sur tout ce qui vous entoure. (Totem de pouvoir)", "i_sp_thunder", Element::Lightning, SpellKind::Rain, 55, 22, 5.5f, 13.f, 0},
+        {"dragonfire", "Souffle du dragon", "Un torrent de flammes ravage le terrain devant vous. (Totem de pouvoir)", "i_sp_flamewave", Element::Fire, SpellKind::Area, 50, 16, 4.6f, 11.f, 0},
+        {"glacier", "Ère glaciaire", "Tout gèle dans un grand rayon. (Totem de pouvoir)", "i_sp_frostnova", Element::Ice, SpellKind::Area, 55, 24, 2.6f, 14.f, 5},
+        {"starstorm", "Pluie d'étoiles", "Des étoiles tombent sur vos ennemis. (Orbes anciens)", "i_sp_missiles", Element::Arcane, SpellKind::Rain, 60, 26, 6.f, 14.f, 0},
+    };
+    return s;
+}
+int spellIndex(const std::string& id) { auto& s = spells(); for (int i = 0; i < (int)s.size(); i++) if (s[i].id == id) return i; return -1; }
+
+const std::vector<SkillNode>& skillTree() {
+    static std::vector<SkillNode> t;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        auto N = [&](const char* id, const char* name, const char* desc, int br, int tier, int cost, const char* req) -> SkillNode& {
+            SkillNode n; n.id = id; n.name = name; n.desc = desc; n.branch = br; n.tier = tier; n.cost = cost; n.requires_ = req; t.push_back(n); return t.back();
+        };
+        N("w1", "Force brute", "+10 % de dégâts physiques.", BR_WARRIOR, 0, 1, "").atk = 0.1f;
+        N("w2", "Endurance", "+25 endurance maximale.", BR_WARRIOR, 1, 1, "w1").stamina = 25;
+        N("w3", "Frappe du tonnerre", "Débloque le sort Frappe du tonnerre.", BR_WARRIOR, 2, 2, "w2").spell = "thunder";
+        N("w4", "Peau de fer", "+15 défense.", BR_WARRIOR, 3, 2, "w3").def = 15;
+        { auto& n = N("w5", "Fureur du champion", "+15 % de dégâts, +25 % de dégâts critiques.", BR_WARRIOR, 4, 3, "w4"); n.atk = 0.15f; n.critDmg = 0.25f; }
+        N("a1", "Œil de faucon", "+20 % de dégâts à l'arc.", BR_ARCHER, 0, 1, "").bowDmg = 0.2f;
+        N("a2", "Pas léger", "+6 % de vitesse de déplacement.", BR_ARCHER, 1, 1, "a1").speed = 0.06f;
+        N("a3", "Éclair en chaîne", "Débloque le sort Éclair en chaîne.", BR_ARCHER, 2, 2, "a2").spell = "chain";
+        N("a4", "Tir précis", "+8 % de chance de critique.", BR_ARCHER, 3, 2, "a3").crit = 0.08f;
+        N("a5", "Projectiles arcaniques", "Débloque le sort Projectiles arcaniques.", BR_ARCHER, 4, 3, "a4").spell = "missiles";
+        N("s1", "Lame sournoise", "+20 % de dégâts aux dagues.", BR_ASSASSIN, 0, 1, "").daggerDmg = 0.2f;
+        N("s2", "Esquive féline", "-20 % d'endurance pour esquiver.", BR_ASSASSIN, 1, 1, "s1").staminaCost = 0.2f;
+        N("s3", "Pas de l'ombre", "Débloque le sort Pas de l'ombre.", BR_ASSASSIN, 2, 2, "s2").spell = "shadowstep";
+        { auto& n = N("s4", "Coup fatal", "+10 % de critique, +30 % de dégâts critiques.", BR_ASSASSIN, 3, 2, "s3"); n.crit = 0.1f; n.critDmg = 0.3f; }
+        N("s5", "Drain d'âme", "Débloque le sort Drain d'âme.", BR_ASSASSIN, 4, 3, "s4").spell = "souldrain";
+        N("m1", "Érudition", "+40 mana maximal.", BR_MAGE, 0, 1, "").mp = 40;
+        N("m2", "Lance de givre", "Débloque le sort Lance de givre.", BR_MAGE, 1, 1, "m1").spell = "icespike";
+        N("m3", "Vague ardente", "Débloque le sort Vague ardente.", BR_MAGE, 2, 2, "m2").spell = "flamewave";
+        N("m4", "Nova glaciale", "Débloque le sort Nova glaciale.", BR_MAGE, 3, 2, "m3").spell = "frostnova";
+        { auto& n = N("m5", "Archimage", "+30 % de puissance des sorts, débloque Nova arcanique.", BR_MAGE, 4, 3, "m4"); n.spellDmg = 0.3f; n.spell = "arcanenova"; }
+        N("p1", "Foi", "+50 points de vie maximum.", BR_PALADIN, 0, 1, "").hp = 50;
+        N("p2", "Lumière sacrée", "Débloque le sort Lumière sacrée.", BR_PALADIN, 1, 1, "p1").spell = "holylight";
+        N("p3", "Parade bénie", "Fenêtre de parade allongée.", BR_PALADIN, 2, 2, "p2").parryWindow = 0.08f;
+        N("p4", "Égide radieuse", "Débloque le sort Égide radieuse.", BR_PALADIN, 3, 2, "p3").spell = "aegis";
+        { auto& n = N("p5", "Rempart", "+20 défense, +80 PV.", BR_PALADIN, 4, 3, "p4"); n.def = 20; n.hp = 80; }
+        N("h1", "Pistage", "+15 % de dégâts contre les bêtes.", BR_HUNTER, 0, 1, "").petDmg = 0.15f;
+        N("h2", "Racines", "Débloque le sort Racines.", BR_HUNTER, 1, 1, "h1").spell = "roots";
+        N("h3", "Herboriste", "+30 % d'efficacité des soins.", BR_HUNTER, 2, 2, "h2").heal = 0.3f;
+        N("h4", "Régénération", "Débloque le sort Régénération.", BR_HUNTER, 3, 2, "h3").spell = "regrowth";
+        { auto& n = N("h5", "Maître de la traque", "+10 % vitesse, +30 endurance.", BR_HUNTER, 4, 3, "h4"); n.speed = 0.1f; n.stamina = 30; }
+    });
+    return t;
+}
+int skillIndex(const std::string& id) { auto& s = skillTree(); for (int i = 0; i < (int)s.size(); i++) if (s[i].id == id) return i; return -1; }
+
+// ============================================================================================ enemies
+static std::vector<EnemyDef> gEnemies;
+static std::once_flag gEnemiesOnce;
+
+static HumanoidLook humanLook(Species sp, Body body, uint32_t c1, uint32_t c2, Helm helm, uint32_t seed) {
+    HumanoidLook h; h.species = sp; h.body = body; h.c1 = hexColor(c1); h.c2 = hexColor(c2); h.helm = helm; h.seed = seed;
+    return h;
+}
+
+static void buildEnemies() {
+    gEnemies.reserve(512);   // 3.1.1 mods add creatures later (enemy.add): no reallocation
+    auto E = [&](const char* id, const char* name, const char* family, int region, int level, float hp, float atk, float def, float speed, Behavior b, const char* desc) -> EnemyDef& {
+        EnemyDef e; e.id = id; e.name = name; e.family = family; e.region = region; e.level = level; e.hp = hp; e.atk = atk; e.def = def; e.speed = speed; e.behavior = b; e.desc = desc;
+        e.xp = (int)(8 + level * level * 3); e.gold = 2 + level * 2;
+        gEnemies.push_back(e); return gEnemies.back();
+    };
+    auto melee = [](ClipId c, float range, float mult, float cd, float tele) { return AttackDef{c, AttackType::Melee, range, mult, cd, tele, Element::Physical, 0, 0}; };
+    // ---- Greenhaven
+    { auto& e = E("wolf", "Loup gris", "Loups", R_GREENHAVEN, 2, 45, 7, 1, 6.5f, Behavior::Pack, "Ils chassent en meute à la lisière des forêts.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0x6a6a70); e.clook.c2 = hexColor(0xb8b4ac); e.clook.mane = true; e.group = 3; e.radius = 0.5f;
+      e.attacks = {melee(C_Q_BITE, 1.8f, 1, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 6, 1.4f, 5, 0.45f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"leather", 0.6f}, {"meat", 0.5f}, {"fur", 0.2f}}; e.night = true; }
+    // ---- 1.9.2 night hunters: they come out after dark, pick up the hero's trail and track him across the map
+    { auto& e = E("abyss_hound", "Molosse de l'Abîme", "Traqueurs de la nuit", R_SHADOWS, 8, 150, 16, 4, 7.6f, Behavior::Pack, "Ils sortent des failles quand le soleil se couche. Ils suivent l'odeur des Errants, jamais celle des vivants ordinaires.");
+      e.arch = Arch::Quadruped; e.clook.kind = 6; e.clook.c1 = hexColor(0x141218); e.clook.c2 = hexColor(0x2c1a34); e.clook.c3 = hexColor(0x050406);
+      e.clook.spikes = true; e.clook.mane = true; e.clook.emissiveEyes = 1.f; e.clook.glow = hexColor(0xff3020); e.scale = 1.35f; e.radius = 0.7f; e.group = 1; e.aggro = 60; e.fov = 360;
+      e.attacks = {melee(C_Q_BITE, 2.2f, 1.1f, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 4, 0.4f, Element::Shadow, 1.8f, 0}};
+      e.loot = {{"shadow_essence", 0.35f}, {"fur", 0.5f}, {"bone", 0.4f}}; e.weak = Element::Light; e.night = true; e.hunter = true; }
+    { auto& e = E("night_stalker", "Rôdeur de minuit", "Traqueurs de la nuit", R_SHADOWS, 10, 190, 20, 6, 6.2f, Behavior::Melee, "Trop grand, trop maigre, et il ne fait aucun bruit. On ne le voit que lorsqu'il a déjà vu.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x18161c, 0x0c0b10, Helm::Hood, 97); e.hlook.emissiveEyes = 1.f; e.hlook.eyes = hexColor(0xc8e8ff); e.hlook.bulk = 0.75f;
+      e.scale = 1.32f; e.radius = 0.55f; e.aggro = 60; e.fov = 360; e.poise = 60;
+      e.attacks = {melee(C_FIST_A1, 2.f, 1.f, 0.9f, 0.3f), melee(C_FIST_A2, 2.f, 1.2f, 1.1f, 0.3f), {C_Q_POUNCE, AttackType::Leap, 9, 1.4f, 5, 0.5f, Element::Shadow, 1.6f, 0}};
+      e.loot = {{"shadow_essence", 0.5f}, {"bone", 0.5f}}; e.weak = Element::Light; e.resist = Element::Shadow; e.night = true; e.hunter = true; }
+    { auto& e = E("boar", "Sanglier furieux", "Bêtes", R_GREENHAVEN, 2, 70, 9, 3, 6.f, Behavior::Charger, "Il charge tout ce qui bouge. Puis il recommence.");
+      e.arch = Arch::Quadruped; e.clook.kind = 1; e.clook.c1 = hexColor(0x5a4030); e.clook.c2 = hexColor(0x7a6050); e.clook.c3 = hexColor(0x2a2018); e.clook.tusks = true; e.clook.girth = 1.25f; e.scale = 1.1f; e.radius = 0.6f;
+      e.attacks = {{C_Q_CHARGE, AttackType::Charge, 12, 1.6f, 6, 0.6f, Element::Physical, 1.2f, 0}, melee(C_Q_BITE, 1.8f, 1, 1.6f, 0.3f)};
+      e.loot = {{"meat", 0.8f}, {"leather", 0.5f}}; }
+    { auto& e = E("bandit", "Bandit coupe-jarret", "Bandits", R_GREENHAVEN, 3, 60, 9, 2, 4.6f, Behavior::Melee, "Les Écorcheurs dépouillent les voyageurs sur les routes.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x5a3a2a, 0x3a3028, Helm::Hood, 11); e.hlook.skin = hexColor(0xc89a7a); e.weapon = WeaponType::Dagger; e.group = 2;
+      e.attacks = {melee(C_DG_A1, 1.9f, 1, 1.2f, 0.3f), melee(C_DG_A2, 1.9f, 1, 1.2f, 0.3f), melee(C_DG_HEAVY, 5.f, 1.6f, 7, 0.5f)};
+      e.loot = {{"leather", 0.4f}, {"potion_minor", 0.25f}, {"bread", 0.3f}, {"dagger_iron", 0.05f}}; e.gold = 12; }
+    { auto& e = E("bandit_archer", "Bandit archer", "Bandits", R_GREENHAVEN, 3, 45, 8, 1, 4.4f, Behavior::Ranged, "Il préfère tirer depuis les buissons.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x3a4a2a, 0x3a3028, Helm::Hood, 12); e.weapon = WeaponType::Bow;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 18, 1, 2.2f, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"wood", 0.4f}, {"bow_hunter", 0.04f}, {"potion_minor", 0.2f}}; e.gold = 10; }
+    { auto& e = E("goblin", "Gobelin pillard", "Gobelins", R_GREENHAVEN, 2, 38, 6, 1, 5.2f, Behavior::Swarm, "Petits, vifs, et beaucoup trop nombreux.");
+      e.hlook = humanLook(Species::Goblin, Body::Rags, 0x6a4a2a, 0x4a3a2a, Helm::None, 13); e.hlook.skin = hexColor(0x6a8a3a); e.hlook.headSize = 1.35f; e.hlook.hair = Hair::None; e.hlook.eyes = hexColor(0xe0c030);
+      e.scale = 0.72f; e.weapon = WeaponType::Dagger; e.group = 3; e.radius = 0.35f;
+      e.attacks = {melee(C_DG_A1, 1.5f, 1, 1.f, 0.25f), melee(C_DG_A3, 1.5f, 1.3f, 4, 0.35f)};
+      e.loot = {{"copper_ore", 0.3f}, {"bone", 0.3f}, {"berries", 0.3f}}; }
+    { auto& e = E("goblin_shaman", "Gobelin chaman", "Gobelins", R_GREENHAVEN, 4, 42, 10, 1, 4.f, Behavior::Caster, "Il agite des os et invoque des flammes vertes.");
+      e.hlook = humanLook(Species::Goblin, Body::Robe, 0x4a5a3a, 0x3a3028, Helm::Skull, 14); e.hlook.skin = hexColor(0x5a7a3a); e.hlook.headSize = 1.35f; e.hlook.emissiveEyes = 0.5f; e.hlook.glow = hexColor(0x8aff5a);
+      e.scale = 0.75f; e.weapon = WeaponType::Staff; e.radius = 0.35f;
+      e.attacks = {{C_STAFF_CAST, AttackType::Projectile, 16, 1.3f, 2.6f, 0.7f, Element::Nature, 1.5f, 0}, {C_CAST_SELF, AttackType::Summon, 20, 0, 15, 0.5f, Element::Nature, 0, 0}};
+      e.loot = {{"herb", 0.5f}, {"crystal", 0.15f}, {"potion_mana", 0.2f}}; }
+    // ---- Frostheim
+    { auto& e = E("snow_wolf", "Loup des neiges", "Loups", R_FROSTHEIM, 6, 85, 13, 3, 7.f, Behavior::Pack, "Le blizzard est leur terrain de chasse.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xd8dde4); e.clook.c2 = hexColor(0xf0f2f4); e.clook.mane = true; e.clook.glow = hexColor(0x80d0ff); e.group = 3; e.scale = 1.15f; e.radius = 0.55f;
+      e.attacks = {melee(C_Q_BITE, 2.f, 1, 1.3f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 7, 1.5f, 5, 0.4f, Element::Ice, 1.5f, 0}};
+      e.loot = {{"fur", 0.7f}, {"meat", 0.4f}}; e.weak = Element::Fire; e.resist = Element::Ice; }
+    { auto& e = E("frost_troll", "Troll des glaces", "Trolls", R_FROSTHEIM, 8, 260, 22, 6, 3.6f, Behavior::Tank, "Sa peau se reforme plus vite qu'on ne la tranche.");
+      e.hlook = humanLook(Species::Troll, Body::Rags, 0x6a5a4a, 0x4a3a2a, Helm::None, 21); e.hlook.skin = hexColor(0x8aa0b0); e.hlook.bulk = 1.7f; e.hlook.hair = Hair::Mohawk; e.hlook.hairCol = hexColor(0xe8eef4);
+      e.scale = 1.75f; e.radius = 0.9f; e.poise = 80;
+      e.attacks = {melee(C_B_SWIPE, 3.2f, 1, 2.2f, 0.55f), {C_B_SLAM, AttackType::Area, 3.4f, 1.6f, 5, 0.8f, Element::Ice, 3.5f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.3f, 7, 0.8f, Element::Ice, 2.f, 0}};
+      e.loot = {{"troll_hide", 0.6f}, {"frost_crystal", 0.3f}, {"fur", 0.4f}}; e.weak = Element::Fire; e.resist = Element::Ice; }
+    { auto& e = E("draugr", "Draugr gelé", "Morts-vivants", R_FROSTHEIM, 7, 120, 16, 6, 3.8f, Behavior::Melee, "Les anciens guerriers des clans, réveillés par le froid de la Couronne.");
+      e.hlook = humanLook(Species::Undead, Body::Fur, 0x4a5a6a, 0x3a3a3a, Helm::Horned, 22); e.hlook.emissiveEyes = 1; e.hlook.glow = hexColor(0x6ff0ff); e.hlook.eyes = hexColor(0x6ff0ff); e.hlook.beard = true; e.hlook.hairCol = hexColor(0xb0b8c0);
+      e.weapon = WeaponType::Axe; e.offhand = WeaponType::Shield;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.5f, 0.4f), melee(C_1H_A3, 2.2f, 1.4f, 3, 0.55f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.35f)};
+      e.loot = {{"bone", 0.5f}, {"iron_ore", 0.4f}, {"axe_iron", 0.05f}}; e.weak = Element::Fire; e.night = true; }
+    { auto& e = E("frost_elemental", "Élémentaire de givre", "Élémentaires", R_FROSTHEIM, 9, 160, 18, 10, 3.2f, Behavior::Caster, "Une tempête de neige qui a appris à marcher.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xa0c8e0, 0xa0c8e0, Helm::None, 23); e.hlook.glow = hexColor(0x9ae6ff); e.hlook.bulk = 1.3f; e.scale = 1.3f; e.radius = 0.6f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 15, 1.2f, 2.5f, 0.6f, Element::Ice, 1.5f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.5f, 8, 0.9f, Element::Ice, 5.f, 0}};
+      e.loot = {{"frost_crystal", 0.8f}, {"crystal", 0.3f}}; e.weak = Element::Fire; e.resist = Element::Ice; }
+    // ---- Ashen Lands
+    { auto& e = E("ember_elemental", "Élémentaire de braise", "Élémentaires", R_ASHEN, 11, 190, 24, 10, 3.4f, Behavior::Caster, "Né des veines de lave, il ne connaît que la faim.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x2a2420, 0x2a2420, Helm::None, 31); e.hlook.glow = hexColor(0xff7a26); e.hlook.bulk = 1.3f; e.scale = 1.35f; e.radius = 0.6f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 15, 1.2f, 2.4f, 0.6f, Element::Fire, 2.f, 0}, {C_B_SLAM, AttackType::Area, 3.f, 1.5f, 6, 0.8f, Element::Fire, 3.5f, 0}};
+      e.loot = {{"ember_core", 0.7f}, {"rare_ore", 0.2f}}; e.weak = Element::Ice; e.resist = Element::Fire; }
+    { auto& e = E("salamander", "Salamandre", "Bêtes", R_ASHEN, 10, 140, 20, 6, 5.2f, Behavior::Ranged, "Elle crache du feu liquide et dort dans la lave.");
+      e.arch = Arch::Quadruped; e.clook.kind = 8; e.clook.c1 = hexColor(0x3a2a24); e.clook.c2 = hexColor(0xd0602a); e.clook.c3 = hexColor(0x1a1210); e.clook.spikes = true; e.clook.fur = false; e.clook.glow = hexColor(0xff8a2a);
+      e.clook.legLen = 0.6f; e.scale = 1.4f; e.radius = 0.6f;
+      e.attacks = {melee(C_Q_BITE, 2.2f, 1, 1.5f, 0.3f), {C_Q_HOWL, AttackType::Breath, 7, 0.4f, 6, 0.6f, Element::Fire, 2.f, 0}};
+      e.loot = {{"leather", 0.5f}, {"ember_core", 0.2f}, {"dragon_scale", 0.01f}}; e.weak = Element::Ice; e.resist = Element::Fire; }
+    { auto& e = E("ash_knight", "Chevalier calciné", "Chevaliers corrompus", R_ASHEN, 12, 240, 26, 14, 3.8f, Behavior::Melee, "Les défenseurs du Bastion, figés dans la cendre et la colère.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x2a2420, 0x2a2420, Helm::Great, 32); e.hlook.metal = hexColor(0x4a403a); e.hlook.emissiveEyes = 1; e.hlook.glow = hexColor(0xff6a20);
+      e.weapon = WeaponType::Longsword; e.poise = 60;
+      e.attacks = {melee(C_2H_A1, 2.6f, 1, 2.f, 0.5f), melee(C_2H_A3, 2.6f, 1.5f, 4, 0.7f), {C_2H_HEAVY, AttackType::Leap, 8, 1.7f, 9, 0.6f, Element::Fire, 3.f, 0}};
+      e.loot = {{"iron_bar", 0.5f}, {"ember_core", 0.3f}, {"ember_head", 0.04f}, {"ember_chest", 0.03f}}; e.resist = Element::Fire; }
+    { auto& e = E("ash_bear", "Ours de cendre", "Bêtes", R_ASHEN, 11, 300, 26, 8, 5.f, Behavior::Tank, "Son pelage fume encore.");
+      e.arch = Arch::Quadruped; e.clook.kind = 2; e.clook.c1 = hexColor(0x2a2624); e.clook.c2 = hexColor(0x4a3a30); e.clook.c3 = hexColor(0x111010); e.clook.girth = 1.5f; e.clook.glow = hexColor(0xff6a20);
+      e.scale = 1.7f; e.radius = 0.9f; e.poise = 70;
+      e.attacks = {melee(C_Q_BITE, 2.6f, 1, 1.8f, 0.35f), {C_Q_REAR, AttackType::Area, 3.f, 1.6f, 6, 0.8f, Element::Physical, 3.f, 0}};
+      e.loot = {{"fur", 0.8f}, {"meat", 0.6f}, {"leather", 0.6f}}; }
+    // ---- Elderwood
+    { auto& e = E("blight_treant", "Sylvain corrompu", "Créatures magiques", R_ELDERWOOD, 9, 200, 19, 9, 2.8f, Behavior::Tank, "Un arbre ancien rendu fou par le fragment du Gardien.");
+      e.hlook = humanLook(Species::Treant, Body::Rags, 0x5a4636, 0x5a4636, Helm::None, 41); e.hlook.bulk = 1.5f; e.hlook.emissiveEyes = 1; e.hlook.eyes = hexColor(0xa0ff60); e.scale = 1.8f; e.radius = 0.8f; e.poise = 70;
+      e.attacks = {melee(C_B_SWIPE, 3.2f, 1, 2.2f, 0.5f), {C_B_STOMP, AttackType::Area, 3.5f, 1.4f, 6, 0.8f, Element::Nature, 4.f, 0}};
+      e.loot = {{"wood", 0.9f}, {"glowcap", 0.4f}, {"herb", 0.4f}}; e.weak = Element::Fire; e.resist = Element::Nature; }
+    { auto& e = E("wisp", "Feu follet", "Créatures magiques", R_ELDERWOOD, 8, 70, 16, 2, 5.5f, Behavior::Flyer, "Une lueur qui attire les voyageurs hors des sentiers.");
+      e.hlook = humanLook(Species::Specter, Body::Robe, 0x4ad0c0, 0x4ad0c0, Helm::None, 42); e.hlook.glow = hexColor(0x8ffff0); e.scale = 0.75f; e.radius = 0.35f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 14, 1, 1.8f, 0.4f, Element::Arcane, 1.f, 0}};
+      e.loot = {{"crystal", 0.4f}, {"glowcap", 0.4f}}; e.night = true; e.weak = Element::Shadow; }
+    { auto& e = E("forest_spider", "Araignée sylvestre", "Araignées géantes", R_ELDERWOOD, 8, 110, 17, 4, 5.8f, Behavior::Ambusher, "Elle tisse entre les racines géantes.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x3a5a2a); e.clook.c2 = hexColor(0xb8e040); e.clook.c3 = hexColor(0x1a2a14); e.clook.glow = hexColor(0xc8ff40); e.scale = 1.2f; e.radius = 0.7f; e.group = 2;
+      e.attacks = {melee(C_S_BITE, 2.f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 12, 0.8f, 4, 0.5f, Element::Nature, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 8, 1.3f, 6, 0.5f, Element::Physical, 1.5f, 0}};
+      e.loot = {{"spider_silk", 0.7f}}; e.weak = Element::Fire; }
+    { auto& e = E("spirit_stag", "Cerf spectral", "Créatures magiques", R_ELDERWOOD, 10, 180, 20, 6, 7.f, Behavior::Charger, "Gardien des clairières, il ne pardonne pas les intrus.");
+      e.arch = Arch::Quadruped; e.clook.kind = 7; e.clook.c1 = hexColor(0x2a6a6a); e.clook.c2 = hexColor(0x8fe0d0); e.clook.horns = true; e.clook.crystal = true; e.clook.glow = hexColor(0x8ffff0); e.scale = 1.6f; e.radius = 0.7f;
+      e.attacks = {{C_Q_CHARGE, AttackType::Charge, 14, 1.5f, 6, 0.6f, Element::Arcane, 1.5f, 0}, {C_Q_REAR, AttackType::Area, 3.f, 1.3f, 5, 0.7f, Element::Nature, 3.5f, 0}};
+      e.loot = {{"crystal", 0.5f}, {"leather", 0.6f}}; }
+    // ---- Shadows
+    { auto& e = E("skeleton", "Squelette guerrier", "Squelettes", R_SHADOWS, 6, 70, 13, 4, 4.f, Behavior::Melee, "Les soldats de Morneval n'ont jamais quitté leur poste.");
+      e.hlook = humanLook(Species::Skeleton, Body::Bones, 0x4a3a3a, 0x3a3030, Helm::Iron, 51); e.hlook.emissiveEyes = 1; e.hlook.glow = hexColor(0x6ff0ff); e.hlook.metal = hexColor(0x7a7a70);
+      e.weapon = WeaponType::Sword; e.offhand = WeaponType::Shield; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.4f, 0.35f), melee(C_1H_A2, 2.f, 1, 1.4f, 0.35f), melee(C_SHIELD_BASH, 2.f, 0.7f, 5, 0.3f)};
+      e.loot = {{"bone", 0.8f}, {"iron_ore", 0.2f}}; e.weak = Element::Light; e.night = true; }
+    { auto& e = E("skeleton_archer", "Squelette archer", "Squelettes", R_SHADOWS, 6, 55, 12, 3, 4.f, Behavior::Ranged, "Ses flèches sont aussi vieilles que lui.");
+      e.hlook = humanLook(Species::Skeleton, Body::Bones, 0x4a3a3a, 0x3a3030, Helm::Hood, 52); e.hlook.emissiveEyes = 1; e.hlook.glow = hexColor(0x6ff0ff); e.weapon = WeaponType::Bow;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 18, 1, 2.4f, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"bone", 0.8f}, {"wood", 0.3f}}; e.weak = Element::Light; e.night = true; }
+    { auto& e = E("ghoul", "Goule", "Morts-vivants", R_SHADOWS, 7, 90, 15, 2, 6.f, Behavior::Pack, "Elle rôde dans les marais, affamée.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x3a3a30, 0x2a2a20, Helm::None, 53); e.hlook.hair = Hair::Long; e.hlook.hairCol = hexColor(0x3a3a3a); e.hlook.emissiveEyes = 0.8f; e.hlook.eyes = hexColor(0xd0ff60); e.group = 2;
+      e.attacks = {melee(C_FIST_A1, 1.8f, 1, 1.f, 0.25f), melee(C_FIST_A2, 1.8f, 1.1f, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 6, 1.3f, 5, 0.4f, Element::Shadow, 1.5f, 0}};
+      e.loot = {{"bone", 0.5f}, {"shadow_essence", 0.05f}}; e.weak = Element::Light; e.night = true; }
+    { auto& e = E("specter", "Spectre", "Morts-vivants", R_SHADOWS, 9, 110, 20, 5, 4.5f, Behavior::Caster, "Un écho de douleur qui refuse de s'éteindre.");
+      e.hlook = humanLook(Species::Specter, Body::Robe, 0x2a2238, 0x2a2238, Helm::None, 54); e.hlook.glow = hexColor(0xb06cff); e.scale = 1.1f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 16, 1.2f, 2.2f, 0.5f, Element::Shadow, 1.5f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.4f, 8, 0.9f, Element::Shadow, 5.f, 0}};
+      e.loot = {{"shadow_essence", 0.4f}}; e.weak = Element::Light; e.resist = Element::Shadow; e.night = true; }
+    { auto& e = E("giant_spider", "Araignée géante", "Araignées géantes", R_SHADOWS, 8, 150, 18, 5, 5.5f, Behavior::Ambusher, "La progéniture de la Reine. Venimeuse.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x2a2028); e.clook.c2 = hexColor(0xc02020); e.clook.c3 = hexColor(0x141014); e.clook.glow = hexColor(0xff3030); e.scale = 1.5f; e.radius = 0.85f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 12, 0.8f, 4, 0.5f, Element::Nature, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"spider_silk", 0.8f}, {"shadow_essence", 0.05f}}; e.weak = Element::Fire; }
+    // ---- High Crowns
+    { auto& e = E("stone_golem", "Golem de pierre", "Golems", R_HIGHCROWNS, 13, 320, 28, 18, 3.f, Behavior::Tank, "Les anciens gardiens des cols, éveillés par le Titan.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x7a766e, 0x7a766e, Helm::None, 61); e.hlook.glow = hexColor(0x40ffd0); e.hlook.bulk = 1.6f; e.scale = 1.6f; e.radius = 0.8f; e.poise = 120;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.4f, 1.6f, 6, 0.9f, Element::Physical, 4.f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.4f, 8, 0.9f, Element::Physical, 2.5f, 0}};
+      e.loot = {{"stone", 1.f}, {"rare_ore", 0.4f}, {"crystal", 0.3f}}; e.weak = Element::Lightning; }
+    { auto& e = E("dark_knight", "Chevalier corrompu", "Chevaliers corrompus", R_HIGHCROWNS, 14, 280, 30, 16, 4.f, Behavior::Melee, "D'anciens paladins de l'Ordre, perdus à l'appel de l'Abîme.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x2a2238, 0x1a1a22, Helm::Great, 62); e.hlook.metal = hexColor(0x3a3644); e.hlook.emissiveEyes = 1; e.hlook.glow = hexColor(0xb06cff); e.hlook.cape = true;
+      e.weapon = WeaponType::Sword; e.offhand = WeaponType::Shield; e.poise = 70;
+      e.attacks = {melee(C_1H_A1, 2.2f, 1, 1.6f, 0.4f), melee(C_1H_A3, 2.3f, 1.4f, 3.5f, 0.55f), melee(C_1H_HEAVY, 2.8f, 1.5f, 7, 0.6f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"iron_bar", 0.5f}, {"shadow_essence", 0.3f}, {"shadow_head", 0.03f}, {"shadow_chest", 0.03f}}; e.weak = Element::Light; }
+    { auto& e = E("mountain_bandit", "Brigand des cimes", "Bandits", R_HIGHCROWNS, 12, 180, 24, 10, 4.6f, Behavior::Melee, "Les cols sont à eux. Le péage est votre vie.");
+      e.hlook = humanLook(Species::Human, Body::Fur, 0x6a5a4a, 0x3a3028, Helm::Leather, 63); e.hlook.beard = true; e.weapon = WeaponType::Spear; e.group = 2;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 8, 0.5f, Element::Physical, 2.f, 0}};
+      e.loot = {{"fur", 0.4f}, {"spear_iron", 0.05f}, {"potion_heal", 0.2f}}; e.gold = 30; }
+    { auto& e = E("drakeling", "Dragonnet des cimes", "Dragons", R_HIGHCROWNS, 15, 260, 28, 12, 5.5f, Behavior::Ranged, "Les petits du Dragon Cendré ont trouvé refuge sur les sommets.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x5a6a7a); e.clook.c2 = hexColor(0xa0a8b0); e.clook.c3 = hexColor(0x3a4a6a); e.clook.glow = hexColor(0x80d0ff); e.scale = 1.6f; e.radius = 0.8f;
+      e.attacks = {melee(C_D_BITE, 2.6f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 8, 0.35f, 7, 0.7f, Element::Lightning, 2.f, 0}, melee(C_D_TAIL, 3.f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.15f}, {"rare_ore", 0.3f}}; e.weak = Element::Ice; }
+
+    // ---- bosses' bodies (indices referenced by BossDef) ----------------------------------------------
+    { auto& e = E("b_root_guardian", "Le Gardien des Racines", "Boss", R_ELDERWOOD, 10, 1600, 30, 12, 3.2f, Behavior::Boss, "Le premier gardien choisi par Aldric. Le fragment l'a enraciné dans la folie.");
+      e.hlook = humanLook(Species::Treant, Body::Rags, 0x4a3a2a, 0x4a3a2a, Helm::None, 71); e.hlook.bulk = 1.8f; e.hlook.emissiveEyes = 1; e.hlook.eyes = hexColor(0x9aff6a); e.hlook.glow = hexColor(0x9aff6a);
+      e.scale = 3.3f; e.radius = 1.6f; e.poise = 400;
+      e.attacks = {melee(C_B_SWIPE, 5.f, 1, 2.6f, 0.6f), {C_B_SLAM, AttackType::Area, 5.5f, 1.6f, 6, 0.9f, Element::Nature, 6.f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.2f, 8, 0.8f, Element::Nature, 9.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 20, 0.6f, Element::Nature, 0, 1}};
+      e.weak = Element::Fire; e.resist = Element::Nature; e.xp = 900; e.gold = 300; }
+    { auto& e = E("b_skeleton_king", "Le Roi Squelette", "Boss", R_SHADOWS, 12, 1900, 34, 14, 4.2f, Behavior::Boss, "Morneval avait un roi. Il règne encore sur ses catacombes.");
+      e.hlook = humanLook(Species::Skeleton, Body::Bones, 0x4a1a1a, 0x3a1a1a, Helm::Crown, 72); e.hlook.emissiveEyes = 2; e.hlook.glow = hexColor(0x6ff0ff); e.hlook.cape = true; e.hlook.pauldrons = true;
+      e.weapon = WeaponType::Longsword; e.scale = 1.9f; e.radius = 0.9f; e.poise = 300;
+      e.attacks = {melee(C_2H_A1, 3.6f, 1, 2.f, 0.55f), melee(C_2H_A3, 3.6f, 1.5f, 4.5f, 0.75f), melee(C_B_SPIN, 4.f, 1.2f, 8, 0.7f), {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Shadow, 0, 1}, {C_CAST_FORWARD, AttackType::Projectile, 20, 1.3f, 5, 0.6f, Element::Shadow, 2.f, 1}};
+      e.weak = Element::Light; e.xp = 1100; e.gold = 400; }
+    { auto& e = E("b_ice_colossus", "Le Colosse de Glace", "Boss", R_FROSTHEIM, 13, 2400, 38, 20, 2.8f, Behavior::Boss, "Gardien du lac de Givre. Son cœur bat au rythme du fragment.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xb0d8f0, 0xb0d8f0, Helm::None, 73); e.hlook.glow = hexColor(0x9ae6ff); e.hlook.bulk = 1.9f;
+      e.scale = 3.6f; e.radius = 1.8f; e.poise = 500;
+      e.attacks = {melee(C_B_SWIPE, 6.f, 1, 2.8f, 0.7f), {C_B_SLAM, AttackType::Area, 6.f, 1.7f, 6, 1.f, Element::Ice, 7.f, 0}, {C_B_THROW, AttackType::Projectile, 30, 1.5f, 7, 1.f, Element::Ice, 3.5f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.3f, 9, 0.9f, Element::Ice, 11.f, 1}};
+      e.weak = Element::Fire; e.resist = Element::Ice; e.xp = 1300; e.gold = 450; }
+    { auto& e = E("b_ash_dragon", "Le Dragon Cendré", "Boss", R_ASHEN, 15, 3200, 42, 18, 4.5f, Behavior::Boss, "Il couvait le fragment au cœur du volcan. Il ne le rendra pas.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x3a3634); e.clook.c2 = hexColor(0x8a5a3a); e.clook.c3 = hexColor(0x7a2a1a); e.clook.glow = hexColor(0xff8020);
+      e.scale = 5.f; e.radius = 2.4f; e.poise = 600;
+      e.attacks = {melee(C_D_BITE, 6.f, 1, 2.2f, 0.6f), melee(C_D_TAIL, 7.f, 1.3f, 5, 0.6f), {C_D_BREATH, AttackType::Breath, 14, 0.45f, 8, 0.9f, Element::Fire, 3.f, 0}, {C_D_WING, AttackType::Area, 10.f, 0.8f, 10, 0.8f, Element::Physical, 10.f, 1}, {C_D_STOMP, AttackType::Area, 6, 1.4f, 7, 0.8f, Element::Fire, 7.f, 1}};
+      e.weak = Element::Ice; e.resist = Element::Fire; e.xp = 1700; e.gold = 600; }
+    { auto& e = E("b_spider_queen", "La Reine des Araignées", "Boss", R_SHADOWS, 14, 2600, 36, 14, 5.f, Behavior::Boss, "Elle a tissé sa toile autour du fragment… et de ceux qui le cherchaient.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x241c28); e.clook.c2 = hexColor(0xb030ff); e.clook.c3 = hexColor(0x100c14); e.clook.glow = hexColor(0xd060ff); e.clook.crystal = true;
+      e.scale = 3.6f; e.radius = 2.f; e.poise = 450;
+      e.attacks = {melee(C_S_BITE, 5.f, 1, 2.f, 0.5f), {C_S_SPIT, AttackType::Projectile, 25, 1.f, 3, 0.6f, Element::Nature, 3.f, 0}, {C_S_LEAP, AttackType::Leap, 18, 1.5f, 7, 0.7f, Element::Physical, 5.f, 0}, {C_S_SPIT, AttackType::Summon, 40, 0, 16, 0.5f, Element::Nature, 0, 1}};
+      e.weak = Element::Fire; e.xp = 1500; e.gold = 500; }
+    { auto& e = E("b_fallen_knight", "Le Chevalier Déchu", "Boss", R_SHADOWS, 16, 2800, 44, 22, 4.6f, Behavior::Boss, "Sire Corwin, champion d'Aldric. Il garde encore le sceau qu'il a juré de protéger.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x1a1420, 0x14101a, Helm::Great, 74); e.hlook.metal = hexColor(0x2e2a36); e.hlook.emissiveEyes = 2; e.hlook.glow = hexColor(0xc070ff); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.c1 = hexColor(0x3a1030);
+      e.weapon = WeaponType::Longsword; e.scale = 1.55f; e.radius = 0.8f; e.poise = 350;
+      e.attacks = {melee(C_2H_A1, 3.f, 1, 1.4f, 0.45f), melee(C_2H_A2, 3.f, 1.1f, 2.f, 0.45f), melee(C_2H_A3, 3.f, 1.5f, 4.f, 0.65f), {C_2H_HEAVY, AttackType::Leap, 12, 1.7f, 7, 0.6f, Element::Shadow, 4.f, 0}, {C_CAST_AREA, AttackType::Area, 6.f, 1.4f, 9, 0.8f, Element::Shadow, 7.f, 1}, melee(C_B_SPIN, 3.5f, 1.3f, 6, 0.5f)};
+      e.weak = Element::Light; e.xp = 2000; e.gold = 700; }
+    { auto& e = E("b_stone_titan", "Le Titan de Pierre", "Boss", R_HIGHCROWNS, 17, 3600, 46, 26, 2.6f, Behavior::Boss, "La montagne elle-même s'est levée pour garder le fragment.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x8a8478, 0x8a8478, Helm::None, 75); e.hlook.glow = hexColor(0xffd060); e.hlook.bulk = 2.f;
+      e.scale = 4.4f; e.radius = 2.2f; e.poise = 700;
+      e.attacks = {melee(C_B_SWIPE, 7.f, 1, 3.f, 0.8f), {C_B_SLAM, AttackType::Area, 7.f, 1.7f, 6, 1.1f, Element::Lightning, 8.f, 0}, {C_B_THROW, AttackType::Projectile, 35, 1.5f, 7, 1.1f, Element::Physical, 4.f, 0}, {C_B_SPIN, AttackType::Area, 7.f, 1.2f, 11, 0.9f, Element::Physical, 8.f, 1}, {C_B_STOMP, AttackType::Area, 7.f, 1.4f, 9, 1.f, Element::Lightning, 13.f, 1}};
+      e.weak = Element::Ice; e.xp = 2200; e.gold = 800; }
+    { auto& e = E("b_abyss_lord", "Le Seigneur des Abysses", "Boss", R_SHADOWS, 20, 5000, 52, 24, 4.2f, Behavior::Boss, "Malgrath, ce qui attendait sous Morneval depuis l'aube du monde.");
+      e.hlook = humanLook(Species::Demon, Body::Robe, 0x1a0a20, 0x100814, Helm::None, 76); e.hlook.skin = hexColor(0x3a1a2a); e.hlook.emissiveEyes = 3; e.hlook.eyes = hexColor(0xff40ff); e.hlook.glow = hexColor(0xd040ff); e.hlook.bulk = 1.4f; e.hlook.hair = Hair::None; e.hlook.cape = true;
+      e.weapon = WeaponType::Staff; e.scale = 2.6f; e.radius = 1.2f; e.poise = 600;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 28, 1.2f, 2.2f, 0.5f, Element::Shadow, 2.5f, 0}, {C_CAST_AREA, AttackType::Area, 8, 1.6f, 7, 0.9f, Element::Shadow, 9.f, 0}, {C_STAFF_CAST, AttackType::Beam, 22, 0.5f, 10, 0.9f, Element::Shadow, 1.5f, 1},
+                   {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Shadow, 0, 1}, melee(C_STAFF_HEAVY, 4.f, 1.6f, 6, 0.7f), {C_CAST_SELF, AttackType::Area, 30, 1.2f, 14, 1.4f, Element::Shadow, 30.f, 2}};
+      e.weak = Element::Light; e.resist = Element::Shadow; e.xp = 5000; e.gold = 2000; }
+
+    // ============================================================ 2.0.0 Amber Sands
+    { auto& e = E("dune_jackal", "Chacal des dunes", "Chacals", R_AMBER, 12, 110, 21, 4, 7.2f, Behavior::Pack, "Ils suivent les caravanes de loin, et les blessés de plus près.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xb88a50); e.clook.c2 = hexColor(0xe8d0a0); e.clook.c3 = hexColor(0x3a2a18); e.clook.mane = false; e.group = 4; e.radius = 0.5f;
+      e.attacks = {melee(C_Q_BITE, 1.8f, 1, 1.3f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 6, 1.4f, 5, 0.4f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"leather", 0.5f}, {"meat", 0.5f}, {"dates", 0.06f}}; }
+    { auto& e = E("sand_scorpion", "Scorpion des sables", "Scorpions", R_AMBER, 13, 170, 24, 8, 5.5f, Behavior::Ambusher, "Il dort sous le sable et attend que l'ombre d'un pas passe.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0xb06a2a); e.clook.c2 = hexColor(0x3a2210); e.clook.c3 = hexColor(0x201008); e.clook.glow = hexColor(0xffa030); e.scale = 1.4f; e.radius = 0.8f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 12, 0.8f, 4, 0.5f, Element::Nature, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"scorpion_venom", 0.35f}, {"amber", 0.1f}}; e.weak = Element::Ice; }
+    { auto& e = E("dust_raider", "Pilleur des dunes", "Pilleurs", R_AMBER, 13, 190, 26, 9, 4.7f, Behavior::Melee, "Voile sur le visage, lame courbe, aucun scrupule.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0xb89868, 0x4a3a28, Helm::Hood, 111); e.hlook.hat = 3; e.hlook.beard = true; e.hlook.c1 = hexColor(0xc8a878);
+      e.weapon = WeaponType::Sword; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.4f, 0.35f), melee(C_1H_A2, 2.f, 1.1f, 1.8f, 0.35f), melee(C_1H_A3, 2.2f, 1.4f, 4.f, 0.5f)};
+      e.loot = {{"leather", 0.4f}, {"potion_heal", 0.15f}, {"amber", 0.05f}, {"caravan_ledger", 0.12f}}; e.gold = 34; }
+    { auto& e = E("raider_archer", "Archer des dunes", "Pilleurs", R_AMBER, 13, 140, 22, 6, 4.5f, Behavior::Ranged, "Il tire du haut des crêtes, là où le soleil vous aveugle.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0xa88858, 0x4a3a28, Helm::Hood, 112); e.hlook.hat = 3; e.weapon = WeaponType::Bow; e.group = 2;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 20, 1, 2.2f, 0.55f, Element::Physical, 0, 0}};
+      e.loot = {{"wood", 0.3f}, {"potion_heal", 0.15f}}; e.gold = 30; }
+    { auto& e = E("sand_wraith", "Spectre des sables", "Morts-vivants du désert", R_AMBER, 15, 150, 27, 6, 4.6f, Behavior::Caster, "Les voyageurs morts de soif se relèvent parfois, avec encore plus soif.");
+      e.hlook = humanLook(Species::Specter, Body::Robe, 0xc8a050, 0xc8a050, Helm::None, 113); e.hlook.glow = hexColor(0xffc060); e.scale = 1.1f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 16, 1.2f, 2.2f, 0.5f, Element::Fire, 1.5f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.4f, 8, 0.9f, Element::Fire, 5.f, 0}};
+      e.loot = {{"sand_glass", 0.35f}, {"amber", 0.12f}}; e.weak = Element::Ice; e.resist = Element::Fire; }
+    { auto& e = E("mummy", "Momie du temple", "Morts-vivants du désert", R_AMBER, 16, 260, 30, 12, 3.8f, Behavior::Melee, "Elle garde les couloirs du Soleil Mort depuis qu'il a refusé de mourir.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0xd8cfae, 0xc8bf98, Helm::None, 114); e.hlook.hair = Hair::None; e.hlook.emissiveEyes = 1.2f; e.hlook.eyes = hexColor(0xffb040); e.hlook.skin = hexColor(0xc8b890);
+      e.attacks = {melee(C_FIST_A1, 1.9f, 1, 1.1f, 0.3f), melee(C_FIST_A2, 1.9f, 1.2f, 1.4f, 0.3f), melee(C_B_SWIPE, 2.6f, 1.3f, 5, 0.5f)};
+      e.loot = {{"bone", 0.5f}, {"amber", 0.15f}, {"sand_glass", 0.1f}}; e.weak = Element::Fire; e.night = false; }
+    { auto& e = E("sandstone_golem", "Golem de grès", "Golems", R_AMBER, 17, 380, 32, 20, 3.2f, Behavior::Tank, "Les statues du temple se sont levées le jour où le roi s'est assis sur son trône d'or.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xc89860, 0xc89860, Helm::None, 115); e.hlook.glow = hexColor(0xffb030); e.hlook.bulk = 1.6f; e.scale = 1.7f; e.radius = 0.85f; e.poise = 130;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.4f, 1.6f, 6, 0.9f, Element::Physical, 4.f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.4f, 8, 0.9f, Element::Fire, 2.5f, 0}};
+      e.loot = {{"amber", 0.5f}, {"stone", 0.8f}, {"sand_glass", 0.2f}}; e.weak = Element::Ice; }
+    { auto& e = E("sun_guard", "Garde solaire", "Légion d'Or", R_AMBER, 18, 330, 34, 18, 4.2f, Behavior::Melee, "La garde personnelle de Sekhmar. Elle ne dort jamais, elle ne mange jamais, elle n'oublie jamais.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0xc8a040, 0x8a6a2a, Helm::Great, 116); e.hlook.metal = hexColor(0xd8b050); e.hlook.emissiveEyes = 1.5f; e.hlook.glow = hexColor(0xffc050); e.hlook.cape = true; e.hlook.c1 = hexColor(0x9a2a1a);
+      e.weapon = WeaponType::Spear; e.offhand = WeaponType::Shield; e.poise = 90;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 8, 0.5f, Element::Fire, 2.f, 0}, melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"amber", 0.3f}, {"iron_bar", 0.4f}, {"potion_great", 0.1f}}; e.weak = Element::Ice; }
+    { auto& e = E("sand_drake", "Dragonnet des sables", "Dragons", R_AMBER, 16, 300, 30, 12, 5.5f, Behavior::Ranged, "Il surgit d'une dune comme d'une vague, et brûle ce qu'elle n'a pas noyé.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0xc0904a); e.clook.c2 = hexColor(0xf0d8a0); e.clook.c3 = hexColor(0x8a4a1a); e.clook.glow = hexColor(0xffa040); e.scale = 1.7f; e.radius = 0.85f;
+      e.attacks = {melee(C_D_BITE, 2.6f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 8, 0.35f, 7, 0.7f, Element::Fire, 2.f, 0}, melee(C_D_TAIL, 3.f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.12f}, {"amber", 0.3f}}; e.weak = Element::Ice; e.resist = Element::Fire; }
+    // ============================================================ 2.4.0 Valdor Steppes
+    { auto& e = E("steppe_rider", "Cavalier noir", "Cavaliers Noirs", R_STEPPE, 18, 300, 34, 14, 5.0f, Behavior::Melee, "Les Cavaliers Noirs rançonnent les caravanes de chevaux entre Valdor et les cols.");
+      e.hlook = humanLook(Species::Human, Body::Chain, 0x2a2a30, 0x5a4a3a, Helm::Iron, 141); e.hlook.cape = true; e.hlook.c1 = hexColor(0x1a1a20); e.hlook.beard = true;
+      e.weapon = WeaponType::Spear; e.group = 3; e.poise = 60;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 7, 0.5f, Element::Physical, 2.f, 0}};
+      e.loot = {{"leather", 0.5f}, {"silver_ore", 0.2f}, {"potion_heal", 0.2f}}; e.gold = 48; }
+    { auto& e = E("steppe_archer", "Archer de la steppe", "Cavaliers Noirs", R_STEPPE, 18, 220, 30, 9, 4.9f, Behavior::Ranged, "Il tire en courant, et ne manque jamais deux fois.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x5a4a30, 0x3a2a20, Helm::Hood, 142); e.hlook.c1 = hexColor(0x6a5a30);
+      e.weapon = WeaponType::Bow; e.group = 2;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 26, 1, 2.0f, 0.5f, Element::Physical, 0, 0}};
+      e.loot = {{"wood", 0.3f}, {"flax", 0.3f}}; e.gold = 40; }
+    { auto& e = E("steppe_wolf", "Loup des steppes", "Loups", R_STEPPE, 17, 210, 30, 8, 7.2f, Behavior::Pack, "Pelage couleur de paille : on ne les voit qu'au dernier moment.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xa8904a); e.clook.c2 = hexColor(0xe0d0a0); e.clook.mane = true; e.group = 4; e.radius = 0.55f; e.scale = 1.15f;
+      e.attacks = {melee(C_Q_BITE, 1.9f, 1, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 7, 1.4f, 5, 0.45f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.5f}, {"meat", 0.5f}, {"leather", 0.4f}}; }
+    { auto& e = E("aurochs", "Aurochs", "Bêtes", R_STEPPE, 19, 520, 38, 22, 6.2f, Behavior::Charger, "Le grand bœuf sauvage des steppes. Un troupeau qui charge fait trembler la plaine.");
+      e.arch = Arch::Quadruped; e.clook.kind = 1; e.clook.c1 = hexColor(0x3a2a20); e.clook.c2 = hexColor(0x6a5040); e.clook.c3 = hexColor(0x1a1210); e.clook.horns = true; e.clook.girth = 1.5f; e.scale = 1.9f; e.radius = 0.9f; e.poise = 140;
+      e.attacks = {melee(C_Q_BITE, 2.4f, 1.2f, 3.f, 0.4f), {C_Q_POUNCE, AttackType::Leap, 9, 1.8f, 7, 0.6f, Element::Physical, 2.5f, 0}};
+      e.loot = {{"leather", 0.8f}, {"meat", 0.9f}, {"fur", 0.4f}}; }
+    // ============================================================ 2.4.0 Emerald Jungle
+    { auto& e = E("jaguar", "Jaguar d'émeraude", "Fauves", R_JUNGLE, 20, 280, 40, 10, 7.6f, Behavior::Melee, "Il dort dans les branches, au-dessus des sentiers. Il ne dort jamais vraiment.");
+      e.arch = Arch::Quadruped; e.clook.kind = 6; e.clook.c1 = hexColor(0xc89a3a); e.clook.c2 = hexColor(0xf0d8a0); e.clook.c3 = hexColor(0x1a1410); e.clook.glow = hexColor(0x60ff90); e.scale = 1.35f; e.radius = 0.6f;
+      e.attacks = {melee(C_Q_BITE, 2.0f, 1.1f, 1.6f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 9, 1.6f, 6, 0.4f, Element::Physical, 2.f, 0}};
+      e.loot = {{"fur", 0.6f}, {"leather", 0.5f}, {"crystal", 0.08f}}; }
+    { auto& e = E("jungle_spider", "Mygale de jade", "Araignées", R_JUNGLE, 20, 240, 36, 10, 5.6f, Behavior::Ranged, "Grosse comme un tonneau, verte comme une feuille, et son venin brûle.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x2a6a2a); e.clook.c2 = hexColor(0x9ad85a); e.clook.c3 = hexColor(0x0a2a0a); e.clook.glow = hexColor(0x80ff60); e.scale = 1.5f; e.radius = 0.85f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 14, 0.8f, 4, 0.5f, Element::Nature, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"spider_silk", 0.6f}, {"fire_root", 0.1f}}; e.weak = Element::Fire; }
+    { auto& e = E("tlaloc_warrior", "Guerrier de Tlaloc", "Peuple oublié", R_JUNGLE, 21, 340, 40, 16, 4.8f, Behavior::Melee, "Le peuple de Tlaloc a disparu il y a mille ans. Ses guerriers, eux, montent encore la garde.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x2a8a5a, 0xc8a040, Helm::Circlet, 151); e.hlook.glow = hexColor(0x60ffb0); e.hlook.emissiveEyes = 1.4f; e.hlook.eyes = hexColor(0x60ffb0); e.hlook.c1 = hexColor(0x2a8a5a);
+      e.weapon = WeaponType::Spear; e.offhand = WeaponType::Shield; e.group = 3; e.poise = 80;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"gold_ore", 0.3f}, {"crystal", 0.15f}, {"potion_great", 0.08f}}; e.gold = 60; e.weak = Element::Light; }
+    { auto& e = E("jade_golem", "Gardien de jade", "Golems", R_JUNGLE, 22, 600, 44, 28, 3.3f, Behavior::Tank, "Sculpté dans un seul bloc de jade, il garde le Temple du Jaguar.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x2a9a6a, 0x2a9a6a, Helm::None, 152); e.hlook.glow = hexColor(0x60ffb0); e.hlook.bulk = 1.6f; e.scale = 1.8f; e.radius = 0.9f; e.poise = 160;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.6f, 1.6f, 6, 0.9f, Element::Nature, 4.f, 0}};
+      e.loot = {{"crystal", 0.5f}, {"gold_ore", 0.4f}, {"rare_ore", 0.3f}}; e.weak = Element::Lightning; }
+    // ============================================================ 2.8.0 Lands of Aurora
+    { auto& e = E("aurora_wolf", "Loup boréal", "Loups", R_AURORA, 21, 260, 38, 12, 7.f, Behavior::Pack, "Son pelage boit la lumière des aurores et la rend la nuit. Une meute qui court ressemble à une vague de lumière.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xc8d8e8); e.clook.c2 = hexColor(0xf0f8ff); e.clook.mane = true; e.clook.glow = hexColor(0x60f0e0); e.group = 3; e.radius = 0.55f; e.scale = 1.25f;
+      e.attacks = {melee(C_Q_BITE, 2.f, 1.1f, 1.5f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 6, 0.45f, Element::Ice, 1.8f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.6f}, {"leather", 0.4f}, {"aurora_crystal", 0.12f}}; e.weak = Element::Fire; }
+    { auto& e = E("crystal_golem", "Golem de cristal", "Golems", R_AURORA, 23, 640, 46, 30, 3.2f, Behavior::Tank, "Un amas de cristaux que l'aurore a mis debout. Il ne se bat que pour protéger ses prairies.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x60d8d0, 0x9a80e0, Helm::None, 171); e.hlook.glow = hexColor(0x80fff0); e.hlook.bulk = 1.7f; e.hlook.emissiveEyes = 2.f; e.scale = 1.9f; e.radius = 0.95f; e.poise = 170;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.8f, 1.6f, 6, 0.9f, Element::Ice, 4.f, 0}};
+      e.loot = {{"aurora_crystal", 0.6f}, {"crystal", 0.6f}, {"rare_ore", 0.25f}}; e.weak = Element::Fire; e.resist = Element::Ice; e.gold = 70; }
+    { auto& e = E("aurora_wraith", "Spectre d'aurore", "Esprits", R_AURORA, 22, 220, 44, 8, 4.2f, Behavior::Caster, "Une silhouette de voiles lumineux qui flotte au-dessus des prairies. Ses éclats de givre traversent les boucliers.");
+      e.hlook = humanLook(Species::Undead, Body::Robe, 0x80d8f0, 0xb090ff, Helm::Hood, 172); e.hlook.glow = hexColor(0x90f0ff); e.hlook.emissiveEyes = 2.2f; e.hlook.eyes = hexColor(0xc0ffff); e.weapon = WeaponType::Staff; e.radius = 0.45f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 16, 1.2f, 2.6f, 0.6f, Element::Ice, 1.6f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.5f, 8, 0.9f, Element::Arcane, 4.5f, 0}};
+      e.loot = {{"aurora_crystal", 0.25f}, {"potion_mana", 0.2f}}; e.weak = Element::Light; e.night = true; }
+    { auto& e = E("crystal_spider", "Araignée de quartz", "Araignées", R_AURORA, 21, 230, 36, 14, 5.4f, Behavior::Ranged, "Son corps est une géode. Elle crache des éclats de quartz aussi tranchants que du verre.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x8ab8d0); e.clook.c2 = hexColor(0xd8f0ff); e.clook.c3 = hexColor(0x3a4a6a); e.clook.glow = hexColor(0x80f0ff); e.scale = 1.4f; e.radius = 0.8f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 14, 0.8f, 4, 0.5f, Element::Arcane, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"spider_silk", 0.5f}, {"crystal", 0.35f}, {"aurora_crystal", 0.08f}}; e.weak = Element::Lightning; }
+    // ============================================================ 2.0.0 Coral Coast
+    { auto& e = E("sea_crab", "Crabe géant", "Crustacés", R_CORAL, 11, 150, 20, 14, 4.4f, Behavior::Melee, "Il mord le filet, puis le pêcheur, puis le bateau.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0xc4482a); e.clook.c2 = hexColor(0xf0d8c0); e.clook.c3 = hexColor(0x6a2210); e.clook.glow = hexColor(0xffd0a0); e.scale = 1.3f; e.radius = 0.8f;
+      e.attacks = {melee(C_S_BITE, 2.3f, 1, 1.5f, 0.35f), {C_S_LEAP, AttackType::Leap, 7, 1.3f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"coral_shard", 0.3f}, {"tide_pearl", 0.14f}, {"fish", 0.3f}}; e.weak = Element::Lightning; }
+    { auto& e = E("pirate", "Écumeur", "Corsaires", R_CORAL, 12, 180, 25, 8, 4.8f, Behavior::Melee, "Il vous laisse le choix : la bourse ou la vie. Il garde les deux.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x8a2a2a, 0x3a2a20, Helm::Leather, 121); e.hlook.hat = 3; e.hlook.beard = true; e.hlook.c1 = hexColor(0x8a2a2a);
+      e.weapon = WeaponType::Sword; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.4f, 0.35f), melee(C_1H_A2, 2.f, 1.1f, 1.8f, 0.35f), melee(C_1H_HEAVY, 2.6f, 1.4f, 6, 0.55f)};
+      e.loot = {{"pirate_coin", 0.7f}, {"potion_heal", 0.15f}, {"sword_iron", 0.04f}}; e.gold = 36; }
+    { auto& e = E("pirate_gunner", "Arbalétrier corsaire", "Corsaires", R_CORAL, 12, 140, 24, 6, 4.4f, Behavior::Ranged, "Son arbalète est volée, ses carreaux aussi.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x2a4a6a, 0x3a2a20, Helm::Leather, 122); e.hlook.hat = 3; e.weapon = WeaponType::Crossbow; e.group = 2;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 20, 1.1f, 2.6f, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"pirate_coin", 0.7f}, {"potion_heal", 0.12f}}; e.gold = 32; }
+    { auto& e = E("drowned", "Noyé", "Morts de la mer", R_CORAL, 14, 200, 26, 7, 5.6f, Behavior::Pack, "Il remonte des fonds quand la marée tourne, et ruisselle d'une eau qui n'est plus la sienne.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x2a5a5a, 0x1a3a3a, Helm::None, 123); e.hlook.hair = Hair::Long; e.hlook.hairCol = hexColor(0x1a4a3a); e.hlook.skin = hexColor(0x6a9a96); e.hlook.emissiveEyes = 1.f; e.hlook.eyes = hexColor(0x70ffe0); e.group = 3;
+      e.attacks = {melee(C_FIST_A1, 1.8f, 1, 1.f, 0.25f), melee(C_FIST_A2, 1.8f, 1.1f, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 6, 1.3f, 5, 0.4f, Element::Ice, 1.5f, 0}};
+      e.loot = {{"bone", 0.4f}, {"tide_pearl", 0.14f}, {"coral_shard", 0.2f}}; e.weak = Element::Fire; e.night = true; }
+    { auto& e = E("reef_serpent", "Serpent des récifs", "Serpents", R_CORAL, 13, 170, 24, 6, 6.2f, Behavior::Ambusher, "Strié de turquoise et de jaune. Si beau qu'on le regarde trop longtemps.");
+      e.arch = Arch::Quadruped; e.clook.kind = 8; e.clook.c1 = hexColor(0x2a9a8a); e.clook.c2 = hexColor(0xf0d060); e.clook.c3 = hexColor(0x104a4a); e.scale = 1.5f; e.radius = 0.6f;
+      e.attacks = {melee(C_Q_BITE, 2.2f, 1, 1.3f, 0.3f), {C_Q_POUNCE, AttackType::Leap, 8, 1.4f, 5, 0.45f, Element::Nature, 1.8f, 0}};
+      e.loot = {{"leather", 0.4f}, {"tide_pearl", 0.1f}}; e.weak = Element::Fire; }
+    { auto& e = E("coral_golem", "Golem de corail", "Golems", R_CORAL, 15, 330, 29, 18, 3.2f, Behavior::Tank, "Les récifs ont grandi autour d'un chagrin, et se sont levés.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xe08a8a, 0xe08a8a, Helm::None, 124); e.hlook.glow = hexColor(0xff90b0); e.hlook.bulk = 1.6f; e.scale = 1.6f; e.radius = 0.8f; e.poise = 120;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.4f, 1.6f, 6, 0.9f, Element::Ice, 4.f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.4f, 8, 0.9f, Element::Ice, 2.5f, 0}};
+      e.loot = {{"coral_shard", 0.7f}, {"tide_pearl", 0.2f}, {"crystal", 0.2f}}; e.weak = Element::Lightning; }
+    { auto& e = E("siren", "Sirène des récifs", "Esprits de la mer", R_CORAL, 15, 160, 28, 5, 4.6f, Behavior::Caster, "On l'entend avant de la voir, et on ne se souvient plus du reste.");
+      e.hlook = humanLook(Species::Specter, Body::Dress, 0x2a8a9a, 0x2a8a9a, Helm::None, 125); e.hlook.glow = hexColor(0x70ffe0); e.hlook.female = true; e.hlook.hair = Hair::Long; e.hlook.hairCol = hexColor(0x30c0a0); e.scale = 1.05f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 16, 1.2f, 2.2f, 0.5f, Element::Ice, 1.5f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.4f, 8, 0.9f, Element::Ice, 5.f, 0}};
+      e.loot = {{"tide_pearl", 0.25f}, {"coral_shard", 0.2f}}; e.weak = Element::Lightning; e.resist = Element::Ice; }
+    // ============================================================ 2.0.0 Act II bosses' bodies
+    { auto& e = E("b_scorpion_queen", "La Reine Scorpion", "Boss", R_AMBER, 18, 3000, 40, 18, 5.2f, Behavior::Boss, "Elle veille sur les caravanes qu'elle a dévorées, une à une, depuis trente ans.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0xa85a20); e.clook.c2 = hexColor(0x2a1608); e.clook.c3 = hexColor(0x140a04); e.clook.glow = hexColor(0xff9020); e.clook.crystal = true;
+      e.scale = 3.9f; e.radius = 2.1f; e.poise = 500;
+      e.attacks = {melee(C_S_BITE, 5.f, 1, 2.f, 0.5f), {C_S_SPIT, AttackType::Projectile, 25, 1.f, 3, 0.6f, Element::Nature, 3.f, 0}, {C_S_LEAP, AttackType::Leap, 18, 1.5f, 7, 0.7f, Element::Physical, 5.f, 0}, {C_S_SPIT, AttackType::Summon, 40, 0, 16, 0.5f, Element::Nature, 0, 1}};
+      e.weak = Element::Ice; e.xp = 1900; e.gold = 650; }
+    { auto& e = E("b_mareval", "Le Capitaine Mareval", "Boss", R_CORAL, 17, 2900, 42, 18, 4.8f, Behavior::Boss, "Il a vendu son équipage à la mer pour une carte. La mer a gardé la dette, et lui avec.");
+      e.hlook = humanLook(Species::Undead, Body::Leather, 0x1a3a4a, 0x14202a, Helm::Leather, 126); e.hlook.hat = 3; e.hlook.skin = hexColor(0x6a9a96); e.hlook.emissiveEyes = 2.f; e.hlook.eyes = hexColor(0x70ffe0); e.hlook.glow = hexColor(0x70ffe0); e.hlook.cape = true; e.hlook.beard = true; e.hlook.c1 = hexColor(0x1a3a4a);
+      e.weapon = WeaponType::Longsword; e.scale = 1.6f; e.radius = 0.85f; e.poise = 320;
+      e.attacks = {melee(C_2H_A1, 3.f, 1, 1.4f, 0.45f), melee(C_2H_A2, 3.f, 1.1f, 2.f, 0.45f), melee(C_2H_A3, 3.f, 1.5f, 4.f, 0.65f), {C_2H_HEAVY, AttackType::Leap, 12, 1.7f, 7, 0.6f, Element::Ice, 4.f, 0}, {C_CAST_AREA, AttackType::Area, 6.f, 1.4f, 9, 0.8f, Element::Ice, 7.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 20, 0.6f, Element::Ice, 0, 1}};
+      e.weak = Element::Fire; e.xp = 2100; e.gold = 800; }
+    { auto& e = E("b_sun_king", "Sekhmar, le Roi-Soleil", "Boss", R_AMBER, 20, 4800, 48, 24, 4.4f, Behavior::Boss, "Il a marchandé avec le soleil pour ne jamais mourir. Son royaume est devenu du sable, lui est resté.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0xd8a838, 0x9a6a20, Helm::Crown, 127); e.hlook.metal = hexColor(0xe0b848); e.hlook.skin = hexColor(0xb89860); e.hlook.emissiveEyes = 3.f; e.hlook.eyes = hexColor(0xffc040); e.hlook.glow = hexColor(0xffc040); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.c1 = hexColor(0xa02a1a);
+      e.weapon = WeaponType::Longsword; e.scale = 2.2f; e.radius = 1.0f; e.poise = 500;
+      e.attacks = {melee(C_2H_A1, 3.6f, 1, 2.f, 0.55f), melee(C_2H_A3, 3.6f, 1.5f, 4.5f, 0.75f), melee(C_B_SPIN, 4.f, 1.2f, 8, 0.7f), {C_CAST_FORWARD, AttackType::Projectile, 26, 1.3f, 4, 0.6f, Element::Fire, 2.5f, 0}, {C_CAST_AREA, AttackType::Area, 7.f, 1.5f, 9, 0.8f, Element::Fire, 8.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Fire, 0, 1}};
+      e.weak = Element::Ice; e.resist = Element::Fire; e.xp = 3600; e.gold = 1400; }
+    { auto& e = E("b_ether_warden", "Le Gardien de l'Éther", "Boss", R_HIGHCROWNS, 18, 4200, 46, 22, 4.4f, Behavior::Boss, "Il garde les îles du ciel depuis qu'elles se sont détachées du monde. Il ne se souvient plus pourquoi.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x6a5ab8, 0x3a2a6a, Helm::Great, 129); e.hlook.metal = hexColor(0xc8c0ff); e.hlook.emissiveEyes = 3.f; e.hlook.eyes = hexColor(0x9af0ff); e.hlook.glow = hexColor(0x9af0ff); e.hlook.cape = true; e.hlook.pauldrons = true;
+      e.weapon = WeaponType::Spear; e.scale = 2.3f; e.radius = 1.05f; e.poise = 520;
+      e.attacks = {melee(C_SP_A1, 3.6f, 1, 1.8f, 0.5f), melee(C_SP_A2, 3.6f, 1.2f, 3.f, 0.55f), {C_SP_HEAVY, AttackType::Leap, 12, 1.7f, 7, 0.6f, Element::Lightning, 4.f, 0}, {C_CAST_FORWARD, AttackType::Projectile, 24, 1.2f, 4, 0.6f, Element::Arcane, 2.f, 1}, {C_CAST_AREA, AttackType::Area, 7.f, 1.4f, 9, 0.8f, Element::Lightning, 7.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Arcane, 0, 2}};
+      e.weak = Element::Shadow; e.xp = 3200; e.gold = 1200; }
+    { auto& e = E("b_silence", "Le Silence", "Boss", R_CORAL, 22, 6200, 54, 26, 4.6f, Behavior::Boss, "Le septième joyau. Il a pris la voix de tous ceux qui l'ont gardé, et n'en a gardé aucune.");
+      e.hlook = humanLook(Species::Specter, Body::Robe, 0xe8f0f8, 0xc8d8e8, Helm::None, 128); e.hlook.skin = hexColor(0xe8f4ff); e.hlook.glow = hexColor(0xb8e8ff); e.hlook.emissiveEyes = 3.f; e.hlook.eyes = hexColor(0xffffff); e.hlook.hair = Hair::None; e.hlook.cape = true; e.hlook.bulk = 1.3f;
+      e.weapon = WeaponType::Staff; e.scale = 2.7f; e.radius = 1.2f; e.poise = 650;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 28, 1.2f, 2.2f, 0.5f, Element::Arcane, 2.5f, 0}, {C_CAST_AREA, AttackType::Area, 8, 1.6f, 7, 0.9f, Element::Arcane, 9.f, 0}, {C_STAFF_CAST, AttackType::Beam, 22, 0.5f, 10, 0.9f, Element::Ice, 1.5f, 1},
+                   {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Ice, 0, 1}, melee(C_STAFF_HEAVY, 4.f, 1.6f, 6, 0.7f), {C_CAST_SELF, AttackType::Area, 30, 1.2f, 14, 1.4f, Element::Arcane, 30.f, 2}};
+      e.weak = Element::Fire; e.resist = Element::Arcane; e.xp = 5200; e.gold = 2400; }
+
+    // ============================================================ 3.0.0 the Titan Mountains
+    { auto& e = E("rock_troll", "Troll des cimes", "Trolls", R_TITANS, 25, 820, 50, 26, 3.6f, Behavior::Tank, "Il dort debout contre la falaise, si gris qu'on le prend pour un rocher. Jusqu'à ce que le rocher se retourne.");
+      e.hlook = humanLook(Species::Troll, Body::Rags, 0x5a5048, 0x3a342e, Helm::None, 181); e.hlook.skin = hexColor(0x8a8a82); e.hlook.bulk = 1.8f; e.hlook.hair = Hair::Mohawk; e.hlook.hairCol = hexColor(0x4a4038);
+      e.scale = 1.9f; e.radius = 0.95f; e.poise = 140;
+      e.attacks = {melee(C_B_SWIPE, 3.3f, 1, 2.2f, 0.55f), {C_B_SLAM, AttackType::Area, 3.6f, 1.6f, 5, 0.8f, Element::Physical, 3.8f, 0}, {C_B_THROW, AttackType::Projectile, 20, 1.4f, 7, 0.8f, Element::Physical, 2.4f, 0}};
+      e.loot = {{"troll_hide", 0.6f}, {"stone", 0.8f}, {"iron_ore", 0.4f}, {"gold_ore", 0.15f}}; e.weak = Element::Fire; e.gold = 80; }
+    { auto& e = E("titan_wolf", "Loup des Titans", "Loups", R_TITANS, 24, 300, 44, 14, 7.2f, Behavior::Pack, "Plus grand qu'un poney, gris comme la roche. Les meutes suivent les troupeaux jusqu'aux neiges.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0x6a6862); e.clook.c2 = hexColor(0xc8c4b8); e.clook.mane = true; e.group = 3; e.radius = 0.6f; e.scale = 1.35f; e.night = true;
+      e.attacks = {melee(C_Q_BITE, 2.1f, 1.1f, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 5, 0.45f, Element::Physical, 1.8f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.7f}, {"leather", 0.5f}, {"meat", 0.5f}}; }
+    { auto& e = E("mountain_wyvern", "Wyverne des cimes", "Dragons", R_TITANS, 26, 520, 52, 18, 5.6f, Behavior::Ranged, "Elle niche sous les corniches de neige et plonge sur tout ce qui traverse les cols.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x5a6470); e.clook.c2 = hexColor(0xb8c0c8); e.clook.c3 = hexColor(0x2a3440); e.clook.glow = hexColor(0xa0e0ff); e.scale = 1.9f; e.radius = 0.9f;
+      e.attacks = {melee(C_D_BITE, 2.8f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 9, 0.38f, 7, 0.7f, Element::Ice, 2.2f, 0}, melee(C_D_TAIL, 3.2f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.25f}, {"rare_ore", 0.3f}}; e.weak = Element::Lightning; e.gold = 90; }
+    { auto& e = E("titan_bandit", "Contrebandier des cols", "Bandits", R_TITANS, 24, 380, 46, 20, 4.8f, Behavior::Melee, "Il fait passer l'acier noir des mines aux légionnaires, et les voyageurs dans le ravin.");
+      e.hlook = humanLook(Species::Human, Body::Fur, 0x4a4a52, 0x2a2a30, Helm::Leather, 182); e.hlook.beard = true; e.weapon = WeaponType::Axe; e.group = 2;
+      e.attacks = {melee(C_1H_A1, 2.3f, 1, 1.4f, 0.4f), melee(C_1H_A3, 2.4f, 1.3f, 3, 0.5f), melee(C_1H_HEAVY, 2.8f, 1.6f, 7, 0.6f)};
+      e.loot = {{"fur", 0.4f}, {"titan_steel", 0.12f}, {"potion_great", 0.1f}}; e.gold = 70; }
+    // ---- 3.3.0 the Scarlet Canyons
+    { auto& e = E("canyon_coyote", "Coyote écarlate", "Loups", R_CANYON, 26, 330, 48, 14, 7.6f, Behavior::Pack, "Roux comme la roche, il chasse en meute au fond des gorges et rit la nuit.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xa85a32); e.clook.c2 = hexColor(0xe8c8a0); e.clook.mane = false; e.clook.girth = 0.9f; e.group = 4; e.radius = 0.5f; e.scale = 1.05f; e.night = true;
+      e.attacks = {melee(C_Q_BITE, 1.9f, 1, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 7, 1.4f, 4, 0.4f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.5f}, {"leather", 0.5f}, {"star_shard", 0.04f}}; e.gold = 60; }
+    { auto& e = E("canyon_scorpion", "Scorpion de feu", "Scorpions", R_CANYON, 27, 460, 52, 22, 5.6f, Behavior::Ambusher, "Il se cache dans les fissures rouges ; sa carapace brûle au toucher.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0xc0401a); e.clook.c2 = hexColor(0x3a1408); e.clook.c3 = hexColor(0x200804); e.clook.glow = hexColor(0xff6020); e.scale = 1.6f; e.radius = 0.85f;
+      e.attacks = {melee(C_S_BITE, 2.5f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 12, 0.9f, 4, 0.5f, Element::Fire, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"scorpion_venom", 0.4f}, {"fire_root", 0.2f}, {"star_shard", 0.05f}}; e.weak = Element::Ice; e.gold = 70; }
+    { auto& e = E("canyon_wyvern", "Wyverne des falaises", "Dragons", R_CANYON, 29, 640, 58, 22, 5.8f, Behavior::Ranged, "Elle niche dans les arches du couchant et crache un feu couleur de rouille.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x8a3a24); e.clook.c2 = hexColor(0xe0a070); e.clook.c3 = hexColor(0x40180c); e.clook.glow = hexColor(0xff8030); e.scale = 2.f; e.radius = 0.95f;
+      e.attacks = {melee(C_D_BITE, 2.9f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 9, 0.4f, 7, 0.7f, Element::Fire, 2.2f, 0}, melee(C_D_TAIL, 3.3f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.3f}, {"rare_ore", 0.3f}, {"star_shard", 0.1f}}; e.weak = Element::Ice; e.gold = 110; }
+    { auto& e = E("canyon_raider", "Pillard des gorges", "Pilleurs", R_CANYON, 27, 480, 54, 24, 4.9f, Behavior::Melee, "Foulard rouge, cimeterre, et la connaissance de chaque passage des canyons.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x9a4a2a, 0x3a2418, Helm::Hood, 221); e.hlook.hat = 3; e.hlook.beard = true; e.hlook.c1 = hexColor(0xb8583a);
+      e.weapon = WeaponType::Sword; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.4f, 0.35f), melee(C_1H_A2, 2.f, 1.1f, 1.8f, 0.35f), melee(C_1H_A3, 2.2f, 1.4f, 4.f, 0.5f)};
+      e.loot = {{"leather", 0.4f}, {"potion_great", 0.15f}, {"gold_ore", 0.15f}}; e.gold = 80; }
+    { auto& e = E("canyon_colossus", "Colosse de grès rouge", "Golems", R_CANYON, 30, 980, 62, 34, 3.2f, Behavior::Tank, "Une falaise qui s'est levée. Il dort debout entre les aiguilles de pierre.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xb8583a, 0xb8583a, Helm::None, 223); e.hlook.glow = hexColor(0xff7030); e.hlook.bulk = 1.8f; e.scale = 2.f; e.radius = 0.95f; e.poise = 160;
+      e.attacks = {melee(C_B_SWIPE, 3.2f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.6f, 1.7f, 6, 0.9f, Element::Physical, 4.f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.4f, 8, 0.9f, Element::Fire, 2.5f, 0}};
+      e.loot = {{"stone", 0.8f}, {"gold_ore", 0.3f}, {"rare_ore", 0.25f}, {"star_shard", 0.15f}}; e.weak = Element::Ice; e.gold = 120; }
+    // ---- the Iron Legion: garrisons of the enemy fortresses (region -1: never spawned by the chunks)
+    { auto& e = E("legion_soldier", "Légionnaire de Fer", "Légion de Fer", -1, 24, 460, 46, 26, 4.4f, Behavior::Melee, "Plastron noir, poing de fer peint sur l'écu. La Légion ne recule pas : elle se reforme.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x2a2a30, 0x8a1a1a, Helm::Iron, 191); e.hlook.metal = hexColor(0x3a3a42); e.hlook.cape = true;
+      e.weapon = WeaponType::Sword; e.offhand = WeaponType::Shield; e.poise = 70; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.2f, 1, 1.5f, 0.4f), melee(C_1H_A3, 2.3f, 1.3f, 3.5f, 0.5f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"legion_insignia", 0.45f}, {"iron_bar", 0.4f}, {"potion_heal", 0.2f}, {"shield_legion", 0.02f}}; e.gold = 60; }
+    { auto& e = E("legion_crossbow", "Arbalétrier de la Légion", "Légion de Fer", -1, 24, 320, 44, 16, 4.2f, Behavior::Ranged, "Il tire depuis les créneaux et recharge sans quitter sa cible des yeux.");
+      e.hlook = humanLook(Species::Human, Body::Chain, 0x2a2a30, 0x8a1a1a, Helm::Iron, 192); e.weapon = WeaponType::Crossbow;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 22, 1.2f, 2.4f, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"legion_insignia", 0.4f}, {"wood", 0.4f}, {"crossbow_legion", 0.02f}}; e.gold = 55; }
+    { auto& e = E("legion_pikeman", "Piquier de la Légion", "Légion de Fer", -1, 25, 480, 48, 24, 4.4f, Behavior::Melee, "Sa pique tient trois hommes à distance. Ou un cheval.");
+      e.hlook = humanLook(Species::Knight, Body::Chain, 0x2a2a30, 0x6a1414, Helm::Great, 193); e.hlook.metal = hexColor(0x34343c); e.weapon = WeaponType::Spear; e.poise = 80;
+      e.attacks = {melee(C_SP_A1, 3.f, 1, 1.5f, 0.4f), melee(C_SP_A2, 3.f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 8, 0.5f, Element::Physical, 2.f, 0}};
+      e.loot = {{"legion_insignia", 0.45f}, {"iron_bar", 0.4f}}; e.gold = 60; }
+    { auto& e = E("legion_knight", "Chevalier noir de la Légion", "Légion de Fer", -1, 27, 900, 56, 34, 4.f, Behavior::Tank, "Un capitaine de la Légion. Son armure a été forgée pour encaisser un rocher lancé par un troll.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x18181c, 0xa01818, Helm::Great, 194); e.hlook.metal = hexColor(0x26262c); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.bulk = 1.15f;
+      e.weapon = WeaponType::Longsword; e.scale = 1.12f; e.poise = 160;
+      e.attacks = {melee(C_2H_A1, 2.8f, 1, 2.f, 0.5f), melee(C_2H_A3, 2.9f, 1.5f, 4.5f, 0.7f), melee(C_2H_HEAVY, 3.2f, 1.8f, 8, 0.8f)};
+      e.loot = {{"legion_insignia", 1.f}, {"titan_steel", 0.4f}, {"potion_great", 0.3f}}; e.gold = 150; }
+    { auto& e = E("legion_warlord", "Seigneur de guerre de la Légion", "Légion de Fer", -1, 30, 3200, 64, 38, 4.2f, Behavior::Tank, "Il tient la forteresse au nom du Poing de Fer. Tant qu'il vit, la garnison se bat ; s'il tombe, elle se rend.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x141418, 0xc02020, Helm::Horned, 195); e.hlook.metal = hexColor(0x2a2228); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.bulk = 1.4f;
+      e.hlook.emissiveEyes = 1.5f; e.hlook.eyes = hexColor(0xff5030); e.hlook.glow = hexColor(0xff4020);
+      e.weapon = WeaponType::Axe; e.offhand = WeaponType::Shield; e.scale = 1.45f; e.radius = 0.75f; e.poise = 420; e.aggro = 26;
+      e.attacks = {melee(C_1H_A1, 2.8f, 1.1f, 1.6f, 0.45f), melee(C_1H_A3, 2.9f, 1.4f, 3.5f, 0.6f), melee(C_1H_HEAVY, 3.4f, 1.9f, 7, 0.8f), melee(C_SHIELD_BASH, 2.4f, 0.9f, 6, 0.35f),
+                   {C_SP_HEAVY, AttackType::Leap, 10, 1.7f, 9, 0.7f, Element::Fire, 3.5f, 0}, {C_ROAR_H, AttackType::Summon, 30, 0, 22, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"legion_insignia", 1.f}, {"titan_steel", 1.f}, {"potion_great", 1.f}}; e.xp = 2600; e.gold = 900; }
+    // ---- bosses of the three new dungeons
+    { auto& e = E("b_frost_wyrm", "Le Ver des Glaces", "Boss", R_TITANS, 26, 5200, 54, 24, 4.2f, Behavior::Boss, "Il a creusé le Gouffre en remontant des profondeurs, et la glace a gelé derrière lui.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0xb8d0e0); e.clook.c2 = hexColor(0xe8f4ff); e.clook.c3 = hexColor(0x4a6a8a); e.clook.glow = hexColor(0x9ae6ff);
+      e.scale = 4.6f; e.radius = 2.3f; e.poise = 600;
+      e.attacks = {melee(C_D_BITE, 6.f, 1, 2.2f, 0.6f), melee(C_D_TAIL, 7.f, 1.3f, 5, 0.6f), {C_D_BREATH, AttackType::Breath, 14, 0.45f, 8, 0.9f, Element::Ice, 3.f, 0}, {C_D_WING, AttackType::Area, 10.f, 0.8f, 10, 0.8f, Element::Ice, 10.f, 1}};
+      e.weak = Element::Fire; e.resist = Element::Ice; e.xp = 4200; e.gold = 1600; }
+    { auto& e = E("b_forgemaster", "Le Maître-Forge", "Boss", R_TITANS, 27, 5600, 58, 32, 3.8f, Behavior::Boss, "Il forgeait les armures de la Légion au cœur des mines. Il s'est forgé lui-même, plaque après plaque.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x3a3030, 0x1a1414, Helm::None, 196); e.hlook.glow = hexColor(0xff7a26); e.hlook.bulk = 1.9f; e.hlook.emissiveEyes = 2.5f; e.hlook.eyes = hexColor(0xffa040);
+      e.weapon = WeaponType::Hammer; e.scale = 2.6f; e.radius = 1.3f; e.poise = 650;
+      e.attacks = {melee(C_B_SWIPE, 4.5f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 5.f, 1.7f, 6, 0.9f, Element::Fire, 6.f, 0}, {C_B_THROW, AttackType::Projectile, 24, 1.4f, 7, 0.9f, Element::Fire, 3.f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.3f, 9, 0.9f, Element::Fire, 10.f, 1}};
+      e.weak = Element::Ice; e.resist = Element::Fire; e.xp = 4400; e.gold = 1800; }
+    { auto& e = E("b_giant_king", "Ymrir, le Roi-Géant", "Boss", R_TITANS, 29, 7200, 62, 30, 3.6f, Behavior::Boss, "Le dernier roi des géants qui ont donné leur nom aux montagnes. Son tombeau ne voulait pas de visiteurs.");
+      e.hlook = humanLook(Species::Troll, Body::Plate, 0x6a6a72, 0x3a3a44, Helm::Crown, 197); e.hlook.skin = hexColor(0x9aa0a8); e.hlook.bulk = 1.9f; e.hlook.emissiveEyes = 2.f; e.hlook.eyes = hexColor(0x9ad8ff); e.hlook.glow = hexColor(0x9ad8ff); e.hlook.beard = true;
+      e.weapon = WeaponType::Hammer; e.scale = 3.4f; e.radius = 1.7f; e.poise = 700;
+      e.attacks = {melee(C_B_SWIPE, 5.5f, 1, 2.6f, 0.6f), {C_B_SLAM, AttackType::Area, 6.f, 1.7f, 6, 1.f, Element::Lightning, 7.f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.3f, 9, 0.9f, Element::Lightning, 11.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 20, 0.6f, Element::Physical, 0, 1}};
+      e.weak = Element::Fire; e.resist = Element::Lightning; e.xp = 5600; e.gold = 2600; }
+}
+
+const std::vector<EnemyDef>& enemies() { std::call_once(gEnemiesOnce, buildEnemies); return gEnemies; }
+int enemyIndex(const std::string& id) { auto& e = enemies(); for (int i = 0; i < (int)e.size(); i++) if (e[i].id == id) return i; return -1; }
+
+const std::vector<BossDef>& bosses() {
+    static std::vector<BossDef> b;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        auto B = [&](const char* id, const char* name, const char* title, const char* enemy, const char* arena, int dungeon, std::vector<float> phases, std::vector<std::string> rewards, const char* shard, const char* intro, const char* outro) {
+            BossDef d; d.id = id; d.name = name; d.title = title; d.enemy = enemyIndex(enemy); d.arenaPoi = arena; d.dungeon = dungeon; d.phases = phases; d.rewards = rewards; d.shard = shard; d.intro = intro; d.outro = outro; d.music = "boss";
+            b.push_back(d);
+        };
+        B("root_guardian", "Le Gardien des Racines", "Premier Gardien d'Elderwood", "b_root_guardian", "root_glade", -1, {0.5f}, {"bow_elder", "sylvan_chest", "amulet_oak"}, "crown_shard",
+          "« Tu portes l'odeur d'Aldric… La forêt ne rendra pas ce qu'on lui a confié. »", "Les racines se détendent. Une voix ancienne murmure : « Merci… »");
+        B("skeleton_king", "Le Roi Squelette", "Souverain des catacombes", "b_skeleton_king", "graveyard", 1, {0.6f, 0.3f}, {"relic_kings_seal", "shield_iron", "ring_sapphire"}, "crown_shard",
+          "« Un roi ne s'agenouille pas. Pas même devant la mort. »", "La couronne d'os roule sur les dalles et se brise en poussière.");
+        B("ice_colossus", "Le Colosse de Glace", "Cœur du lac de Givre", "b_ice_colossus", "frozen_lake", -1, {0.5f}, {"longsword_frost", "frost_chest", "relic_jarl_horn"}, "crown_shard",
+          "La glace du lac craque. Quelque chose d'immense se redresse sous la neige.", "Le colosse se fend comme un iceberg au printemps.");
+        B("ash_dragon", "Le Dragon Cendré", "Fléau des Ashen Lands", "b_ash_dragon", "ash_nest", -1, {0.6f, 0.3f}, {"sword_ember", "dragon_scale", "ember_chest"}, "crown_shard",
+          "Un rugissement fait trembler le volcan. Des ailes de braise masquent le ciel.", "Le dragon s'effondre ; ses écailles s'éteignent une à une.");
+        B("spider_queen", "La Reine des Araignées", "Mère de l'Antre", "b_spider_queen", "spider_den", 2, {0.5f}, {"dagger_viper", "spider_silk", "shadow_feet"}, "crown_shard",
+          "Des milliers d'yeux s'allument dans l'obscurité. La toile frémit.", "La Reine se recroqueville. Le silence revient dans l'Antre.");
+        B("fallen_knight", "Le Chevalier Déchu", "Sire Corwin, Champion d'Aldric", "b_fallen_knight", "morneval", -1, {0.5f}, {"longsword_fallen", "mount_spectral", "shadow_chest"}, "",
+          "« Halte. J'ai juré de garder ce sceau jusqu'au retour du roi. Es-tu ce roi ? Prouve-le. »", "« Tu as… ses yeux. Pardonne-moi, mon roi. Le passage est à toi. »");
+        B("stone_titan", "Le Titan de Pierre", "La Montagne éveillée", "b_stone_titan", "titan_cirque", -1, {0.6f, 0.3f}, {"hammer_titan", "amulet_star", "crown_head"}, "crown_shard",
+          "Le cirque entier se met à gronder. La montagne ouvre les yeux.", "Le titan retourne à la pierre, apaisé.");
+        B("abyss_lord", "Le Seigneur des Abysses", "Malgrath, l'Affamé", "b_abyss_lord", "abyss", 5, {0.66f, 0.33f}, {"staff_abyss", "ring_abyss", "sword_aldric"}, "",
+          "« Trois siècles… Aldric a brisé sa couronne pour moi. Toi, tu vas briser ta vie. »", "L'Abîme hurle, puis se referme. La Couronne-Mère brille d'une lumière nouvelle.");
+        // ---- 2.0.0 Act II (indices 8..11)
+        B("scorpion_queen", "La Reine Scorpion", "Mère du Nid", "b_scorpion_queen", "scorpion_nest", -1, {0.6f, 0.3f}, {"amber_key", "staff_sun", "scorpion_venom"}, "",
+          "Le sable se soulève. Une carapace de la taille d'une maison émerge, ruisselante de grains d'or.", "La Reine se renverse, pattes en l'air. Entre ses pinces : une clé d'ambre.");
+        B("mareval", "Le Capitaine Mareval", "Corsaire maudit", "b_mareval", "storm_deck", -1, {0.5f}, {"sea_chart", "dagger_tide", "pirate_coin"}, "",
+          "« Une carte, voyageur ? J'en ai vendu mon équipage. Je ne l'échangerai pas contre toi. »", "Mareval s'effondre en eau salée. Dans la flaque, une carte marine, intacte.");
+        B("sun_king", "Sekhmar, le Roi-Soleil", "Souverain du temple", "b_sun_king", "sun_temple", 6, {0.66f, 0.33f}, {"sun_sigil", "sword_sun", "amulet_sun", "relic_sun_mask"}, "",
+          "« Un voyageur, dans ma maison. Tu as chaud ? Tant mieux. Ici, on ne meurt jamais de froid. »", "L'or se craquelle. Le roi sourit, enfin libre, et s'effrite en poussière claire.");
+        B("silence", "Le Silence", "Septième joyau", "b_silence", "silence_gate", 8, {0.66f, 0.33f}, {"silence_jewel", "sword_silence", "amulet_silence"}, "",
+          "Plus aucun son. Pas même ton propre souffle. Quelque chose te regarde dans le blanc.", "Le monde reprend sa voix : la mer, le vent, ton cœur. Le joyau tombe, tiède.");
+        // ---- 2.2.1 (index 12) the warden of the celestial realm
+        B("ether_warden", "Le Gardien de l'Éther", "Veilleur des îles du ciel", "b_ether_warden", "portal_ether", 9, {0.6f, 0.3f}, {"bow_ancestral", "amulet_star", "potion_great"}, "",
+          "« Tu as franchi le portail. Peu reviennent assez légers pour retraverser. »", "Le gardien se disperse en lumière d'étoile. Les îles, un instant, cessent de dériver.");
+        // ---- 3.0.0 (indices 13..15) the dungeons of the Titan Mountains
+        B("frost_wyrm", "Le Ver des Glaces", "Seigneur du Gouffre", "b_frost_wyrm", "gouffre_titans", 11, {0.6f, 0.3f}, {"spear_wyrm", "frost_crystal", "potion_great"}, "",
+          "Le sol de glace se soulève. Une tête plus large qu'une porte de ville sort de la crevasse.", "Le ver se fige, et la glace le reprend. Le Gouffre se tait.");
+        B("forgemaster", "Le Maître-Forge", "Forgeron de la Légion", "b_forgemaster", "mines_fer_noir", 12, {0.6f, 0.3f}, {"titan_steel", "titan_steel", "sword_titansteel", "shield_legion"}, "",
+          "Les soufflets s'arrêtent. L'enclume se redresse : ce n'était pas une enclume.", "Le métal refroidit en craquant. Les forges de la Légion s'éteignent pour de bon.");
+        B("giant_king", "Ymrir, le Roi-Géant", "Dernier roi des Titans", "b_giant_king", "tombe_geant", 13, {0.66f, 0.33f}, {"hammer_giant", "amulet_star", "ring_legion"}, "",
+          "« Petit homme. Les montagnes portent mon nom. Toi, tu porteras ma pierre tombale. »", "Le géant s'assoit sur son trône, ferme les yeux, et redevient montagne.");
+    });
+    return b;
+}
+
+// ============================================================================================ NPCs
+static HumanoidLook villagerLook(bool female, uint32_t c1, uint32_t hair, Hair hs, Body body, uint32_t seed, bool beard = false) {
+    HumanoidLook h; h.female = female; h.c1 = hexColor(c1); h.hairCol = hexColor(hair); h.hair = hs; h.body = body; h.seed = seed; h.beard = beard;
+    static const uint32_t skins[] = {0xe8c0a0, 0xd8a888, 0xc08868, 0x9a6a4a, 0x7a4f36, 0xf0d0b8};
+    h.skin = hexColor(skins[seed % 6]);
+    return h;
+}
+
+const std::vector<NpcDef>& npcs() {
+    static std::vector<NpcDef> n;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        auto N = [&](const char* id, const char* name, const char* title, NpcRole role, const char* home, HumanoidLook look, vec2 off, std::vector<std::string> greet, std::vector<std::string> lore, std::vector<std::string> shop = {}, int faction = -1) {
+            NpcDef d; d.id = id; d.name = name; d.title = title; d.role = role; d.home = home; d.look = look; d.offset = off; d.greetings = greet; d.lore = lore; d.shop = shop; d.faction = faction;
+            n.push_back(d);
+        };
+        // Brindlemere
+        { HumanoidLook l = villagerLook(true, 0x3f6a3a, 0xd8d0c8, Hair::Bun, Body::Robe, 3); l.c1 = hexColor(0x3f6a3a);
+          N("maelle", "Maëlle", "Doyenne de Brindlemere", NpcRole::Elder, "brindlemere", l, {6, 4}, {"Les vagues t'ont rendu à nous, Errant.", "Le vent tourne. Je le sens dans mes os."},
+            {"Il y a trois siècles, le Haut-Roi Aldric unifia six royaumes sous la Couronne-Mère.", "Quand l'Abîme s'ouvrit sous Morneval, Aldric brisa sa couronne pour sceller la faille. Six fragments, six gardiens.", "Les gardiens ont gardé les fragments… mais les fragments les ont changés."}, {}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x6a4a3a, 0xa04a2a, Hair::Braids, Body::Apron, 4); l.bulk = 1.15f;
+          N("hilda", "Hilda", "Forgeronne", NpcRole::Blacksmith, "brindlemere", l, {-10, 14}, {"L'acier ne ment jamais. Les hommes, si.", "Besoin d'une lame ? D'une réparation ?"},
+            {"Ma grand-mère disait que les épées d'Aldric chantaient au combat.", "Le meilleur fer vient de la Mine des Cimes. Le plus pur, de Cinderwatch."}, {"sword_iron", "axe_iron", "axe_lumber", "spear_iron", "shield_wood", "dagger_iron", "tool_pickaxe", "tool_woodaxe", "tool_shovel", "bomb", "chain_head", "cellar_hatch"}, FA_GREENHAVEN); }   // 3.7.0 + the lumber axe and the cellar hatch
+        { HumanoidLook l = villagerLook(true, 0x5a3a6a, 0x2a2a2a, Hair::Long, Body::Dress, 5);
+          N("ysolde", "Mère Ysolde", "Alchimiste", NpcRole::Alchemist, "brindlemere", l, {14, -8}, {"Les plantes savent soigner. Il suffit de les écouter.", "Une potion ? J'en ai toujours une qui mijote."},
+            {"Les champignons lumineux d'Elderwood décuplent la puissance des élixirs.", "Le lys de givre ne pousse que sous la neige de Frostheim."}, {"potion_minor", "potion_heal", "potion_mana", "potion_stamina", "herb"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x8a5a3a, 0x6a4a2a, Hair::Short, Body::Apron, 6, true); l.bulk = 1.3f;
+          N("bram", "Bram", "Aubergiste du Chaudron Doré", NpcRole::Innkeeper, "brindlemere", l, {-14, -6}, {"Bienvenue au Chaudron Doré ! Un lit, un ragoût ?", "Les voyageurs racontent des choses étranges sur Morneval."},
+            {"Les Écorcheurs rançonnent la route de Millbrook. Le capitaine Aubert n'a pas assez d'hommes.", "On dit que le Chevalier Déchu ne dort jamais."}, {"bread", "stew", "fish_grilled"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x3a5a2a, 0x8a6a3a, Hair::Ponytail, Body::Leather, 7);
+          N("tomas", "Tomas", "Chasseur", NpcRole::Hunter, "brindlemere", l, {18, 10}, {"Chut… tu entends ? Les loups sont nerveux ces temps-ci.", "Un bon chasseur sait quand ne pas tirer."},
+            {"Les loups gris ne s'approchaient jamais du village. Quelque chose les pousse hors des forêts.", "Le cuir des sangliers fait les meilleures bottes."}, {"bow_hunter", "leather", "meat", "leather_feet"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x2a4f7a, 0x3a2a1a, Hair::Short, Body::Chain, 8); l.helm = Helm::Iron; l.pauldrons = true;
+          N("aubert", "Capitaine Aubert", "Gardien de Greenhaven", NpcRole::Guard, "brindlemere", l, {0, 22}, {"Halte, voyageur. Ah, c'est toi.", "Brindlemere est sous ma protection."},
+            {"Fort Aldren tenait toute la région autrefois. Aujourd'hui, à peine la route.", "Les Gardiens recrutent quiconque sait tenir une épée."}, {}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0xc9a24a, 0xe8c87a, Hair::Long, Body::Dress, 9);
+          N("lise", "Lise", "Marchande", NpcRole::Merchant, "brindlemere", l, {10, 16}, {"Tout s'achète, tout se vend !", "J'ai des choses de Frostheim, et même d'Elderwood."},
+            {"Les marchands d'Ashen paient cher le minerai d'étoile.", "Une carte au trésor ? J'en vends parfois… certaines sont vraies."}, {"potion_minor", "bread", "berries", "apple", "honey_cake", "ring_copper", "amulet_oak", "tool_rod", "dye_royal", "dye_crimson", "dye_forest", "treasure_map"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x6a8a3a, 0xd8a050, Hair::Short, Body::Tunic, 10);
+          N("pip", "Pip", "Garnement", NpcRole::Child, "brindlemere", l, {-4, -12}, {"T'es un vrai chevalier ?!", "Je parie que je cours plus vite que toi !"},
+            {"Ma mère dit qu'il ne faut pas aller dans la Grotte des Murmures. Moi j'y suis allé. Presque.", "Les lucioles sortent seulement la nuit, près du lac Miroir."}); }
+        { HumanoidLook l = villagerLook(false, 0x6a5030, 0x4a3a2a, Hair::Short, Body::Leather, 11, true);
+          N("odo", "Odo", "Maître des écuries", NpcRole::Stablemaster, "brindlemere", l, {-24, 6}, {"Un cheval, c'est un ami qui porte tes bagages.", "Mes bêtes sont les plus rapides de Greenhaven."},
+            {"Un cheval te mènera d'un bout à l'autre du royaume sans jamais te demander pourquoi.", "Dans le nord, ils montent des loups géants. Des fous."}, {"mount_horse"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0xe8e0d0, 0x8a8a8a, Hair::Short, Body::Robe, 12);
+          N("anselme", "Frère Anselme", "Prêtre", NpcRole::Priest, "brindlemere", l, {-8, -20}, {"Que la Lumière guide tes pas.", "Les morts méritent le repos, eux aussi."},
+            {"La chapelle fut bâtie sur les fondations d'un sanctuaire elfique.", "L'Ordre de Highspire garde les archives du Haut-Roi."}); }
+        // Millbrook
+        { HumanoidLook l = villagerLook(false, 0x8a7a5a, 0x6a5a4a, Hair::Short, Body::Apron, 13, true); l.bulk = 1.2f;
+          N("gareth", "Gareth", "Meunier de Millbrook", NpcRole::Farmer, "millbrook", l, {8, -6}, {"La farine ne se moud pas toute seule !", "Si les bandits continuent, Brindlemere aura faim cet hiver."},
+            {"Le moulin a été bâti par mon arrière-grand-père. Il tourne depuis cent ans.", "Les Écorcheurs campent à l'est, près des ruines."}, {"bread", "berries"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x7a5a3a, 0xc08a4a, Hair::Braids, Body::Dress, 14);
+          N("margot", "Margot", "Fermière", NpcRole::Farmer, "millbrook", l, {-10, 8}, {"Fais attention aux sangliers, ils piétinent tout.", "Les citrouilles seront belles cette année."},
+            {"Une bête énorme rôde près des champs la nuit. On l'appelle la Bête de Millbrook."}, {"bread", "berries", "herb"}); }
+        // Frostvik
+        { HumanoidLook l = villagerLook(false, 0x6a5a4a, 0xd8c8a8, Hair::Braids, Body::Fur, 15, true); l.helm = Helm::Horned; l.bulk = 1.3f; l.pauldrons = true;
+          N("bjorn", "Jarl Bjorn", "Chef des clans", NpcRole::Elder, "frostvik", l, {6, 6}, {"Un sudiste ! Approche du feu avant de geler.", "Les clans honorent ceux qui se battent."},
+            {"Le lac de Givre ne gèle jamais vraiment. Il retient son souffle.", "Nos ancêtres juraient fidélité à Aldric. Les Draugr s'en souviennent encore."}, {}, FA_FROSTHEIM); }
+        { HumanoidLook l = villagerLook(true, 0x5a4a3a, 0xe8d8b8, Hair::Braids, Body::Fur, 16); l.bulk = 1.1f;
+          N("sigrun", "Sigrun", "Forgeronne des clans", NpcRole::Blacksmith, "frostvik", l, {-12, 10}, {"Le froid durcit l'acier. Et les hommes.", "Apporte-moi du cristal de givre et je te forgerai une merveille."},
+            {"L'acier trempé dans l'eau du lac de Givre ne rouille jamais."}, {"axe_iron", "longsword_iron", "hammer_iron", "shield_iron", "frost_head", "frost_feet", "elixir_frost"}, FA_FROSTHEIM); }
+        { HumanoidLook l = villagerLook(true, 0x8a8a8a, 0x2a2a2a, Hair::Ponytail, Body::Fur, 17);
+          N("eira", "Eira", "Dompteuse de loups", NpcRole::Hunter, "frostvik", l, {14, -10}, {"Fenra n'aime pas les étrangers. Elle t'observe.", "Les loups géants ne se domptent pas. Ils choisissent."},
+            {"Les loups des neiges deviennent fous. Ils attaquent même les meutes géantes."}, {"fur", "meat", "potion_stamina"}, FA_FROSTHEIM); }
+        { HumanoidLook l = villagerLook(false, 0x5a3a2a, 0xe8e8e8, Hair::Long, Body::Fur, 18, true);
+          N("hakon", "Vieux Hakon", "Scalde", NpcRole::Bard, "frostvik", l, {-6, -14}, {"Assieds-toi, je vais te chanter la saga du premier Jarl.", "Chaque cicatrice est un vers."},
+            {"Le premier Jarl a soufflé dans sa corne et cent clans ont répondu. La corne dort dans les Cavernes de Hrimgard.", "On raconte que le Colosse était un ami d'Aldric. Un géant de neige qui riait comme un enfant."}, {}, FA_FROSTHEIM); }
+        // Sylvarin
+        { HumanoidLook l = villagerLook(true, 0x2f6a5a, 0xe8e0f0, Hair::Long, Body::Robe, 19); l.species = Species::Elf; l.helm = Helm::Circlet; l.glow = hexColor(0x8ff0d8);
+          N("aelith", "Aelith", "Druidesse du Cercle", NpcRole::Elder, "sylvarin", l, {4, 6}, {"La forêt t'a laissé entrer. C'est rare.", "Écoute les arbres. Ils souffrent."},
+            {"Le Gardien des Racines était le plus doux d'entre nous. Le fragment l'a rendu fou.", "Les feux follets sont les âmes d'arbres abattus."}, {"mount_elk"}, FA_ELDERWOOD); }
+        { HumanoidLook l = villagerLook(false, 0x4a7a5a, 0xd8c890, Hair::Long, Body::Leather, 20); l.species = Species::Elf;
+          N("thalion", "Thalion", "Marchand sylvain", NpcRole::Merchant, "sylvarin", l, {-10, -8}, {"Les arcs elfiques sont les meilleurs. Je ne fais que dire la vérité.", "Que cherches-tu, enfant des hommes ?"},
+            {"Le Sanctuaire d'Aelindor fut le premier temple de la forêt."}, {"bow_hunter", "staff_apprentice", "sylvan_head", "sylvan_feet", "glowcap", "dye_ivory"}, FA_ELDERWOOD); }
+        { HumanoidLook l = villagerLook(true, 0x6a4a8a, 0x3a1a4a, Hair::Long, Body::Dress, 21); l.species = Species::Elf;
+          N("nyssa", "Nyssa", "Herboriste", NpcRole::Alchemist, "sylvarin", l, {12, -10}, {"Les champignons lumineux chantent la nuit.", "Ne mange pas tout ce qui brille."},
+            {"Une source magique coule au sud du village. Son eau guérit les blessures."}, {"potion_heal", "potion_mana", "glowcap", "herb", "potion_great"}, FA_ELDERWOOD); }
+        // Cinderwatch
+        { HumanoidLook l = villagerLook(false, 0x6a4a2a, 0x2a1a1a, Hair::Short, Body::Leather, 22, true); l.species = Species::Dwarf; l.bulk = 1.4f; l.helm = Helm::Leather;
+          N("dorn", "Contremaître Dorn", "Guilde des Mineurs", NpcRole::Elder, "cinderwatch", l, {6, 4}, {"Si tu n'es pas là pour creuser, tu es là pour te battre.", "Mes gars ont disparu dans la mine. Personne ne m'aide."},
+            {"Les Mines de Brasier plongent jusqu'au cœur du volcan.", "Le Dragon Cendré s'est réveillé le jour où on a percé la veine d'étoile."}, {}, FA_ASHEN); }
+        { HumanoidLook l = villagerLook(true, 0x4a3a2a, 0xd04a2a, Hair::Mohawk, Body::Apron, 23); l.bulk = 1.25f;
+          N("kara", "Kara", "Forgeronne de lave", NpcRole::Blacksmith, "cinderwatch", l, {-12, 8}, {"Ici, on forge à la chaleur du volcan.", "Ramène-moi des noyaux de braise, je te ferai une lame qui brûle."},
+            {"Le minerai d'étoile se fond seulement dans la lave."}, {"crossbow_iron", "hammer_iron", "chain_chest", "chain_feet", "iron_bar", "copper_bar"}, FA_ASHEN); }
+        { HumanoidLook l = villagerLook(false, 0x8a3a2a, 0x1a1a1a, Hair::Bun, Body::Robe, 24);
+          N("vesk", "Vesk", "Négociant", NpcRole::Merchant, "cinderwatch", l, {12, -10}, {"Chaleur, poussière, profit.", "Je t'achète tout ton minerai d'étoile. À bon prix. Presque."},
+            {"Les écailles de dragon valent une fortune à Highspire."}, {"potion_heal", "potion_stamina", "elixir_strength", "rare_ore", "dye_night", "mount_boar"}, FA_ASHEN); }
+        // Gravemoor
+        { HumanoidLook l = villagerLook(true, 0x2a2a3a, 0xd8d8d8, Hair::Bun, Body::Robe, 25);
+          N("agathe", "Mère Agathe", "Veilleuse de Gravemoor", NpcRole::Elder, "gravemoor", l, {5, 5}, {"Garde ta lanterne allumée, enfant.", "Les morts sont agités. Ils sentent le sceau faiblir."},
+            {"Le Château de Morneval était le siège d'Aldric. C'est là que l'Abîme s'est ouvert.", "Le Chevalier Déchu attend encore son roi."}, {}, FA_GRAVEMOOR); }
+        { HumanoidLook l = villagerLook(false, 0x3a3a30, 0x5a5a5a, Hair::Short, Body::Rags, 26, true);
+          N("silas", "Silas", "Fossoyeur", NpcRole::Villager, "gravemoor", l, {-10, 8}, {"Je creuse, ils ressortent. Un métier sans fin.", "Tu veux une pelle ? Non ? Dommage."},
+            {"Les catacombes passent sous tout le cimetière. Le Roi y dort. Enfin, il y était."}, {"bone"}, FA_GRAVEMOOR); }
+        { HumanoidLook l = villagerLook(true, 0x3a2a4a, 0x1a1a2a, Hair::Long, Body::Dress, 27); l.helm = Helm::Hood;
+          N("morwen", "Morwen", "Sorcière des marais", NpcRole::Alchemist, "gravemoor", l, {12, -8}, {"Mes potions sentent mauvais. Elles marchent d'autant mieux.", "L'essence d'ombre… apporte-m'en."},
+            {"Les araignées de l'Antre gardent un trésor : la Reine elle-même."}, {"potion_heal", "potion_mana", "elixir_strength", "potion_great", "dye_night"}, FA_GRAVEMOOR); }
+        // Highspire
+        { HumanoidLook l = villagerLook(false, 0x6a6aa0, 0xb0b0b0, Hair::None, Body::Robe, 28);
+          N("alaric", "Frère Alaric", "Archiviste de l'Ordre", NpcRole::Scholar, "highspire", l, {4, -8}, {"Les archives ont attendu ce jour pendant trois siècles.", "Le savoir est une lumière qui ne s'éteint pas."},
+            {"Seule la forge de l'Ordre peut réunir les fragments en une Couronne-Mère.", "Aldric avait une épouse, Elsa. Elle a disparu le jour de la Chute."}, {}, FA_HIGHCROWNS); }
+        { HumanoidLook l = villagerLook(true, 0xe8e0d0, 0xc8a050, Hair::Bun, Body::Robe, 29); l.helm = Helm::Circlet; l.glow = hexColor(0xffe0a0);
+          N("odile", "Sœur Odile", "Guérisseuse", NpcRole::Priest, "highspire", l, {-10, 6}, {"Viens, que je soigne ces blessures.", "La Lumière n'abandonne personne."},
+            {"L'Égide de Highspire fut forgée pour protéger le roi de l'ombre."}, {"potion_heal", "potion_great", "shield_aegis", "dye_gold"}, FA_HIGHCROWNS); }
+        { HumanoidLook l = villagerLook(false, 0x4a6a8a, 0x3a2a1a, Hair::Short, Body::Tunic, 30, true);
+          N("corvin", "Maître Corvin", "Intendant", NpcRole::Merchant, "highspire", l, {12, 12}, {"Highspire accueille les pèlerins. Et leur argent.", "Tout ce qu'il faut pour les cols."},
+            {"Les cols sont dangereux : golems, brigands, et pire."}, {"potion_heal", "potion_stamina", "spear_crown", "chain_hands", "ring_sapphire", "amulet_ember"}, FA_HIGHCROWNS); }
+        { HumanoidLook l = villagerLook(false, 0x3a3a6a, 0x8a8a9a, Hair::Long, Body::Robe, 31, true);
+          N("ilian", "Ilian", "Astronome", NpcRole::Scholar, "astronomer", l, {6, 4}, {"Les étoiles ont bougé le jour de la Chute.", "Regarde là-haut. Tu vois cette constellation ? La Couronne."},
+            {"Trois cristaux d'étoile sont tombés sur les cimes. Ils formaient la carte céleste d'Aldric."}, {}, FA_HIGHCROWNS); }
+
+        // ================================================================ 2.0.0 Act II
+        // Port-Azur
+        { HumanoidLook l = villagerLook(true, 0x1f4f6a, 0xb8b0a0, Hair::Braids, Body::Leather, 41); l.helm = Helm::Leather; l.hat = 0; l.cape = true; l.c2 = hexColor(0x2a3a4a);
+          N("orla", "Capitaine Orla", "Maîtresse du port", NpcRole::Elder, "port_azur", l, {6, 5}, {"Le vent a tourné ce matin. Il tourne toujours quand un étranger arrive.", "Port-Azur ne dort jamais. Les corsaires non plus."},
+            {"Avant, les voiles blanches de Port-Azur touchaient toutes les côtes. Maintenant les Corsaires du Pont du Tonnerre nous étranglent.", "Mareval était mon second. Il a vendu l'équipage pour une carte. La mer lui en veut encore.", "Kaede est née de l'autre côté de l'eau, à Shirokawa. Elle est partie à quinze ans. Elle n'a plus jamais regardé la mer en face."}, {}, FA_AZUR); }
+        { HumanoidLook l = villagerLook(false, 0x8a6a3a, 0x3a2a1a, Hair::Short, Body::Apron, 42, true); l.bulk = 1.1f;
+          N("brann", "Brann le Calfat", "Marchand du port", NpcRole::Merchant, "port_azur", l, {-9, 8}, {"Sel, goudron, cordages : tout ce qu'il faut pour tenir la mer.", "Une bouillabaisse avant de partir ? C'est la maison qui offre l'odeur."},
+            {"Le meilleur poisson se pêche à l'aube, dans les lagons de l'ouest.", "Les trois pièces d'or que tu perds en mer, tu les retrouves en rêve."}, {"fish_stew", "potion_heal", "potion_mana", "spear_trident", "bow_coral", "tool_rod", "coco", "ring_tide"}, FA_AZUR); }
+        { HumanoidLook l = villagerLook(true, 0x6a3a2a, 0x2a1a10, Hair::Ponytail, Body::Apron, 43); l.hat = 0;
+          N("noa", "Noa la Taverne", "Aubergiste", NpcRole::Innkeeper, "port_azur", l, {10, -6}, {"Une chambre, une soupe, une histoire. Les trois sont comprises.", "Les marins boivent pour oublier. Moi, je retiens tout."},
+            {"On parle d'un temple au sud-est, de l'autre côté du désert. Personne n'en est revenu avec le même visage.", "Le Pont du Tonnerre, c'est là qu'on a vu le fantôme du capitaine pour la dernière fois."}, {"bread", "fish_stew", "coco", "dates"}, FA_AZUR); }
+        // Corail-sur-Pilotis
+        { HumanoidLook l = villagerLook(true, 0x2a7a8a, 0x1a1a10, Hair::Long, Body::Dress, 44); l.hat = 0;
+          N("mina", "Mina la Pêcheuse", "Cheffe des pilotis", NpcRole::Farmer, "pilotis", l, {6, 6}, {"Les filets sont vides. Depuis des semaines. Les crabes ont pris la baie.", "On vit sur l'eau, mais l'eau commence à nous faire peur."},
+            {"Mon grand-père disait que la mer garde ce qu'on lui prend, et qu'elle prête à intérêt.", "Les perles de marée remontent quand la lune est basse. On dit qu'elles sont des souvenirs."}, {"fish", "fish_grilled", "tool_rod"}, FA_AZUR); }
+        { HumanoidLook l = villagerLook(true, 0xe8c040, 0x3a2a1a, Hair::Braids, Body::Tunic, 45); l.height = 0.72f; l.headSize = 1.15f;
+          N("lotte", "Lotte", "Enfant des pilotis", NpcRole::Child, "pilotis", l, {-7, 5}, {"Tu viens de la terre ? Il paraît que le sol ne bouge jamais !", "J'ai trouvé une cloche dans le sable. Elle sonne toute seule !"},
+            {"Maman dit qu'il ne faut pas aller à l'épave. Donc j'y vais."}, {}, FA_AZUR); }
+        // Shirokawa
+        { HumanoidLook l = villagerLook(false, 0xe8e0d0, 0xe0e0e0, Hair::None, Body::Robe, 46, true); l.c1 = hexColor(0xf0ece0); l.c2 = hexColor(0xa8281e); l.trim = hexColor(0xc8a050);
+          N("hanzo", "Maître Hanzo", "Gardien de Shirokawa", NpcRole::Scholar, "shirokawa", l, {5, 8}, {"Le silence n'est pas l'absence de bruit. C'est ce qui reste quand on a tout entendu.", "Kaede parlait de toi. Elle parle peu, donc je l'ai écoutée."},
+            {"La Couronne avait six joyaux. Le septième, le Silence, était trop lourd pour les mains d'un roi. Notre ordre l'a caché ici, sous le temple.", "Pour descendre au sanctuaire, il faut trois perles de marée, et le Sceau du Soleil. L'eau et le feu, côte à côte.", "Sekhmar, le Roi-Soleil, a tenté de voler le Silence. Il a perdu son royaume, mais il a gardé le sceau. Il l'attend, au cœur du désert."}, {}, FA_AZUR); }
+        { HumanoidLook l = villagerLook(true, 0x1a1a22, 0x14141c, Hair::Ponytail, Body::Leather, 47); l.c1 = hexColor(0x1a1a28); l.c2 = hexColor(0x2a2a3a); l.hat = 0; l.cape = true; l.glow = hexColor(0x8ae0ff);
+          N("kaede_s", "Kaede", "Ombre de Shirokawa", NpcRole::Scholar, "shirokawa", l, {-8, 8}, {"Tu as fini par venir. La mer te l'avait dit.", "Je ne reviens pas sur mes pas. Mais pour toi, je suis revenue."},
+            {"J'ai quitté Shirokawa parce que je ne supportais plus le silence. Je l'ai cherché ailleurs, dans le bruit. Il m'a retrouvée.", "Tu portes la marque d'Aldric. Moi, une cicatrice de marée. Nous sommes presque pareils."}, {}, FA_AZUR); }
+        // Solmar
+        { HumanoidLook l = villagerLook(true, 0x6a1a3a, 0x2a1810, Hair::Long, Body::Dress, 48); l.helm = Helm::Circlet; l.c1 = hexColor(0x8a1a3a); l.trim = hexColor(0xe8c050); l.glow = hexColor(0xffd080);
+          N("zahra", "Émira Zahra", "Reine des caravanes", NpcRole::Elder, "solmar", l, {7, 6}, {"Assieds-toi, voyageur. Le thé refroidit plus vite que la patience.", "Solmar a vu passer cent rois. Elle est toujours là, eux non."},
+            {"Sekhmar était un roi juste, avant le pacte. Il a voulu le soleil pour toujours, et le soleil a répondu : « Pour toujours, alors. »", "Mes caravanes disparaissent dans le Nid des Scorpions. Une Reine y dort, avec la clé du temple dans ses pinces.", "Le Silence est une porte, pas un trésor. Quelqu'un doit la refermer. Je crois que c'est toi."}, {}, FA_SOLMAR); }
+        { HumanoidLook l = villagerLook(false, 0xc89a3a, 0x2a1a10, Hair::None, Body::Tunic, 49, true); l.hat = 3; l.c1 = hexColor(0xc89a3a);
+          N("idris", "Idris le Marchand", "Épices et merveilles", NpcRole::Merchant, "solmar", l, {-10, 8}, {"Tout s'achète à Solmar, même le temps. Le temps coûte plus cher.", "Une datte ? Je ne vends jamais à crédit, mais j'offre beaucoup de dattes."},
+            {"Cette lame courbe ? Les caravaniers la baptisent « Soupir », parce qu'on n'a jamais le temps d'en dire plus."}, {"tea_mint", "dates", "potion_heal", "potion_mana", "scimitar_dune", "ring_scarab", "elixir_strength", "dye_gold"}, FA_SOLMAR); }
+        { HumanoidLook l = villagerLook(false, 0x4a3a2a, 0x2a1a10, Hair::Short, Body::Apron, 50, true); l.bulk = 1.2f;
+          N("hakim", "Hakim le Forgeron", "Maître d'ambre", NpcRole::Blacksmith, "solmar", l, {12, 12}, {"L'ambre et le fer, c'est comme le thé et le sucre.", "Trouve-moi de l'ambre pur, je te forge quelque chose de chaud."},
+            {"Le verre du désert est du sable foudroyé. Il garde la mémoire du feu."}, {"scimitar_dune", "sword_iron", "axe_iron", "chain_chest", "chain_head", "tool_pickaxe", "tool_shovel", "bomb"}, FA_SOLMAR); }
+        { HumanoidLook l = villagerLook(false, 0x6a4a2a, 0x2a1a10, Hair::Short, Body::Tunic, 51, true); l.hat = 3;
+          N("samir", "Samir", "Maître des montures", NpcRole::Stablemaster, "solmar", l, {-4, -12}, {"Un destrier d'ambre ne s'enfonce jamais dans le sable. Les chevaux de la plaine, si.", "Le désert se traverse à cheval, ou à genoux."},
+            {"Mes bêtes boivent une fois par jour et ne se plaignent jamais. Vous devriez les imiter."}, {}, FA_SOLMAR); }
+        // 2.4.0 Valdor (the Steppes) and Émeraude-sur-Lianes (the Jungle)
+        { HumanoidLook l = villagerLook(false, 0x5a3a20, 0x2a1a10, Hair::Long, Body::Leather, 141, true); l.beard = true; l.cape = true; l.c1 = hexColor(0x6a2a1a);
+          N("borya", "Borya", "Maître des hordes de Valdor", NpcRole::Elder, "valdor", l, {6, 8}, {"Ici, on mesure un homme à son cheval, et un cheval au vent.", "La steppe n'a pas de murs. Elle n'a que l'horizon, et les Cavaliers Noirs."},
+            {"Les Cavaliers Noirs ont pris les pâturages du sud. Ils volent nos poulains et brûlent les tentes.", "Le Tertre du Roi Cavalier : on dit que le premier khan y dort, avec son épée et son cheval de pierre."}, {}, -1); }
+        { HumanoidLook l = villagerLook(true, 0x2a7a4a, 0x1a1008, Hair::Braids, Body::Leather, 151); l.c1 = hexColor(0x2a7a4a); l.glow = hexColor(0x60ffb0); l.satchel = true;
+          N("itzel", "Itzel", "Gardienne des lianes", NpcRole::Alchemist, "emeraude", l, {-7, 7}, {"Chut… Écoute. La jungle te parle, si tu sais te taire.", "Les racines de braise soignent, si on les cueille au bon moment."},
+            {"Le Temple du Jaguar s'est réveillé. Ses gardiens de jade marchent la nuit.", "Les pilleurs de tombes creusent sous Tlaloc. Ils ne savent pas ce qu'ils réveillent."}, {"potion_heal", "potion_great", "potion_mana", "ember_tonic", "bandage", "potion_stamina"}, -1); }
+        // 2.8.0 Lumenhaven (the Lands of Aurora)
+        { HumanoidLook l = villagerLook(true, 0x60c8d0, 0xf0f0ff, Hair::Long, Body::Robe, 171); l.c1 = hexColor(0x3a8ab0); l.glow = hexColor(0x80fff0); l.satchel = true;
+          N("aila", "Aïla", "Cristallière de Lumenhaven", NpcRole::Merchant, "lumenhaven", l, {7, -6}, {"Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.", "Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter."},
+            {"Les cristaux d'aurore gardent la lumière du ciel. Taillés, ils font des armes qui éclairent la nuit.", "Les golems de cristal se réveillent quand on arrache trop de cristaux à la fois. Prudence.", "Sur chaque île du ciel, quelqu'un a laissé un coffre. On ne sait pas qui. On ne sait pas comment."},
+            {"potion_great", "potion_mana", "bandage", "crystal", "bomb", "potion_stamina"}, -1); }
+        // ================================================================ 3.9.0 Aldrenbourg, the market town of Greenhaven
+        { HumanoidLook l = villagerLook(false, 0x2a3f6a, 0x8a8478, Hair::Short, Body::Robe, 301, true); l.cape = true; l.trim = hexColor(0xd8b050);
+          N("gaspard", "Gaspard de Vaux", "Bourgmestre d'Aldrenbourg", NpcRole::Elder, "aldrenbourg", l, {7, -6}, {"Bienvenue à Aldrenbourg ! Le plus grand marché de Greenhaven, et le plus honnête… presque.", "La Foire approche, et rien n'est prêt. Rien !"},
+            {"Aldrenbourg est née d'un marché au pied de Fort Aldren. Les marchands ont bâti les remparts avec leurs propres deniers.", "Chaque automne, la Grande Foire attire les marchands de tout le royaume, jusqu'à Port-Azur.", "La fontaine de la place montre le Haut-Roi, l'épée levée. On dit qu'il a bu à cette source avant la Brisure."}, {}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0xc89a5a, 0x5a3a22, Hair::Bun, Body::Apron, 302);
+          N("colette", "Colette", "Boulangère", NpcRole::Merchant, "aldrenbourg", l, {-8, 5}, {"Pain chaud ! Sortie du four, la croûte qui chante !", "Goûte-moi ce gâteau au miel, et dis-moi qu'il y a mieux à Brindlemere."},
+            {"Mon four brûle du bois de hêtre. C'est le secret, et maintenant tu le connais : ne le répète pas."}, {"bread", "honey_cake", "apple", "stew", "mushroom_soup", "berries"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x7a2a4a, 0x2a1a10, Hair::Ponytail, Body::Tunic, 303);
+          N("fabien", "Fabien", "Drapier", NpcRole::Merchant, "aldrenbourg", l, {9, 7}, {"Du lin de Millbrook, des teintures de Solmar, du cuir de Frostheim. Touche, ça ne mord pas.", "Une couleur pour ta cape ? Le pourpre royal est revenu à la mode."},
+            {"Les teintures les plus chères viennent des coquillages de Port-Azur. Il en faut dix mille pour un manteau."}, {"dye_crimson", "dye_forest", "dye_gold", "dye_ivory", "dye_night", "dye_royal", "linen", "leather"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x3a2a5a, 0xd8c8a0, Hair::Long, Body::Dress, 304);
+          N("orane", "Orane", "Joaillière", NpcRole::Merchant, "aldrenbourg", l, {-6, -9}, {"Approche, mais garde les mains derrière le dos.", "Un saphir de Frostheim, taillé ici même. Il porte chance aux voyageurs."},
+            {"L'or de Solmar, l'argent des Titans, les perles de la côte : tout passe par mon établi un jour ou l'autre."}, {"ring_silver", "ring_gold", "ring_sapphire", "amulet_oak", "silver_bar", "gold_bar"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x5a5a62, 0x3a2a1a, Hair::Short, Body::Plate, 305, true); l.helm = Helm::None; l.metal = hexColor(0xb8bcc4);
+          N("garin", "Sergent Garin", "Guet d'Aldrenbourg", NpcRole::Guard, "aldrenbourg", l, {0, 12}, {"Le guet veille. Garde ta bourse près du cœur, voyageur : le marché grouille de tire-laine.", "Si tu cherches les ennuis, cherche-les hors des remparts."},
+            {"Quatre portes, vingt tours, et seulement douze hommes au guet. Les Écorcheurs le savent."}, {"potion_heal", "bandage", "shield_iron", "bomb"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x2a6a4a, 0xb04a2a, Hair::Braids, Body::Dress, 306);
+          N("melisande", "Mélisande", "Ménestrelle", NpcRole::Bard, "aldrenbourg", l, {12, -2}, {"Une chanson, voyageur ? Celle du Roi qui revint par la mer, peut-être ?", "Je cherche une histoire neuve pour la Foire. Tu en as une, toi, ça se voit."},
+            {"On chante ici que le Haut-Roi reviendra le jour où la fontaine débordera. Elle n'a jamais débordé.", "Les meilleures chansons parlent toujours de quelqu'un qui ne se souvient pas de son nom."}, {}, FA_GREENHAVEN); }
+        // ================================================================ 3.0.0 the Titan Mountains
+        { HumanoidLook l = villagerLook(true, 0x8a1f1f, 0x2a1a10, Hair::Braids, Body::Plate, 201); l.helm = Helm::None; l.cape = true; l.c2 = hexColor(0x3a3a44); l.metal = hexColor(0xc8ccd4);
+          N("heloise", "Capitaine Héloïse", "Commandante de Hautebrume", NpcRole::Guard, "hautebrume", l, {11, -8}, {"Hautebrume tient depuis mille ans. La Légion de Fer veut que ça s'arrête cette année.", "Vous avez l'air de savoir tenir une épée. J'ai trois forteresses à reprendre."},
+            {"La Légion de Fer s'est installée dans les vieilles forteresses des cols. Tant que leurs seigneurs de guerre vivent, les garnisons tiennent.", "Tuez le seigneur de guerre, et la garnison jette ses armes. Je l'ai vu de mes yeux à Fort Corbeau, il y a dix ans. Puis ils sont revenus.", "Une forteresse reprise paie son tribut à celui qui l'a prise. C'est la loi des montagnes."},
+            {"potion_great", "potion_stamina", "bandage", "shield_iron", "bomb"}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x3a3a6a, 0xc8c8d0, Hair::Long, Body::Robe, 202, true);
+          N("sibylle", "Sibylle", "Archiviste des Titans", NpcRole::Scholar, "hautebrume", l, {-10, 9}, {"Les montagnes portent le nom des géants. Personne ne se souvient pourquoi, sauf moi.", "Le Gouffre, le Tombeau, les Mines… Trois portes sous la montagne. Aucune ne s'ouvre pour rien."},
+            {"Ymrir fut le dernier roi des géants. On dit qu'il dort sous la vallée, au sud de Rochebrune, assis sur son trône.", "Le Gouffre des Titans s'est ouvert quand un ver de glace est remonté des profondeurs. Il y est toujours.", "Les géants n'ont pas disparu. Ils sont devenus les montagnes."}, {}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x5a3a2a, 0x8a4a2a, Hair::Short, Body::Apron, 203, true);
+          N("bjorn_forge", "Bjorn Ferrecœur", "Maître-forgeron de Rochebrune", NpcRole::Blacksmith, "rochebrune", l, {-11, 8}, {"L'acier-titan ne se forge qu'ici. Le reste du monde tape sur du fer mou.", "Rapporte-moi du minerai noir, je te fais une lame qui coupe la montagne."},
+            {"La Légion a pris nos meilleures mines. Leur Maître-Forge travaille au fond des Mines de Fer-Noir, à l'est.", "Les insignes de la Légion, je les fonds. Rapporte-les, ça fait de bons boucliers."},
+            {"titan_steel", "sword_titansteel", "shield_legion", "crossbow_legion", "iron_bar", "steel_bar", "potion_great"}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x4a5a3a, 0x3a2a1a, Hair::Short, Body::Fur, 204, true);
+          N("arno", "Arno", "Chasseur des cols", NpcRole::Hunter, "pied_lance", l, {8, 6}, {"Les loups des Titans descendent quand la neige monte.", "Un troll des cimes, ça ressemble à un rocher. Jusqu'au moment où ça n'en est plus un."},
+            {"Au-dessus de cent mètres, il neige même en été. Les wyvernes nichent sous les corniches."}, {"meat", "bandage", "potion_heal", "bow_hunter"}, -1); }
+        { HumanoidLook l = villagerLook(true, 0x6a4a2a, 0xd8c8a0, Hair::Bun, Body::Dress, 205);
+          N("maud", "Maud", "Aubergiste du Col", NpcRole::Innkeeper, "col_aigles", l, {9, -6}, {"Le dernier lit chaud avant les Titans. Après, c'est la pierre et le vent.", "Les caravanes de Valdor passent ici pour monter à Hautebrume."},
+            {"Hautebrume est au sud, en suivant la vallée. Une vraie ville, avec des remparts et quatre portes."}, {"bread", "meat", "potion_heal", "potion_stamina"}, -1); }
+        // Oasis de Kheft, Tamrak, Zafir
+        { HumanoidLook l = villagerLook(true, 0x3a7a5a, 0xe0e0d0, Hair::Bun, Body::Robe, 52); l.hat = 0;
+          N("nadira", "Nadira", "Guérisseuse de l'oasis", NpcRole::Alchemist, "kheft", l, {6, 7}, {"L'eau est un remède avant d'être un luxe.", "Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers."},
+            {"Les scorpions du Nid sécrètent un venin qui, bien dosé, soigne ce qu'il aurait tué."}, {"potion_heal", "potion_mana", "potion_great", "tea_mint", "elixir_sun", "potion_stamina"}, FA_SOLMAR); }
+        { HumanoidLook l = villagerLook(true, 0x7a3a2a, 0x2a1a10, Hair::Braids, Body::Leather, 53); l.hat = 3; l.satchel = true;
+          N("yara", "Yara", "Archiviste de Tamrak", NpcRole::Scholar, "tamrak", l, {5, -6}, {"Chaque grain de sable est une phrase que personne n'a lue.", "Karun, Tamrak, Solmar : trois noms pour la même soif."},
+            {"Karun était une cité avant d'être une ruine. Elle adorait le soleil, comme tout le monde ici.", "La Gardienne des Sables regarde vers l'est, vers le temple. On dit qu'elle pose une question à chaque passant."}, {}, FA_SOLMAR); }
+        { HumanoidLook l = villagerLook(false, 0x5a3a1a, 0x2a1a10, Hair::Short, Body::Fur, 54, true); l.hat = 3; l.satchel = true;
+          N("karim", "Karim", "Éclaireur de Zafir", NpcRole::Hunter, "zafir", l, {5, 4}, {"Chaque piste raconte quelque chose. La plupart du temps : « fuis ».", "Les chacals ne sont pas méchants. Ils sont juste affamés, et nombreux."},
+            {"Si tu croises un dragonnet des sables, n'essaie pas de le raisonner."}, {"potion_heal", "dates", "bow_hunter", "leather_chest"}, FA_SOLMAR); }
+        // Phare des Brumes
+        { HumanoidLook l = villagerLook(false, 0x4a4a5a, 0xe8e8e8, Hair::None, Body::Tunic, 55, true); l.hat = 0; l.helm = Helm::Leather; l.c1 = hexColor(0x3a4a6a);
+          N("ilmar", "Ilmar", "Gardien du phare", NpcRole::Villager, "phare", l, {6, 4}, {"La lumière est la seule chose que je sais dire aux navires.", "Le phare est éteint. La mer le sait. Elle attend."},
+            {"Le verre de la lentille s'est fendu. On n'en trouve que dans le désert : du verre foudroyé, du verre du désert."}, {}, FA_AZUR); }
+    });
+    return n;
+}
+int npcIndex(const std::string& id) { auto& n = npcs(); for (int i = 0; i < (int)n.size(); i++) if (n[i].id == id) return i; return -1; }
+
+// ============================================================================================ quests
+const std::vector<QuestDef>& quests() {
+    static std::vector<QuestDef> q;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        auto Q = [&](const char* id, const char* title, QuestType t, const char* giver, const char* desc, const char* offer, const char* progress, const char* done,
+                     std::vector<QuestStep> steps, int xp, int gold, std::vector<std::string> rewards, int faction = -1, int rep = 0, const char* req = "", int shards = 0) {
+            QuestDef d; d.id = id; d.title = title; d.type = t; d.giver = giver; d.desc = desc; d.offer = offer; d.progress = progress; d.done = done;
+            d.steps = steps; d.xp = xp; d.gold = gold; d.rewards = rewards; d.faction = faction; d.rep = rep; d.requires_ = req; d.minShards = shards;
+            q.push_back(d);
+        };
+        using K = StepKind;
+        // ---- Main story: La Chute des Couronnes
+        Q("m1", "Un réveil sur la grève", QuestType::Main, "", "Vous vous réveillez sur la plage de Greenhaven, sans souvenirs. Une marque en forme de couronne brûle sur votre poignet.", "", "", "",
+          {{"Parler à Maëlle, la doyenne de Brindlemere", K::Talk, "maelle", 1, "brindlemere"}}, 60, 10, {"potion_minor", "potion_minor"});
+        Q("m2", "Les Murmures", QuestType::Main, "maelle", "Maëlle pense que la Pierre d'écho, cachée dans la Grotte des Murmures, pourrait réveiller vos souvenirs.",
+          "Ta marque… Je l'ai vue sur les tapisseries du Haut-Roi. La Grotte des Murmures, au sud, garde une Pierre d'écho. Elle répète les voix du passé. Va la chercher.",
+          "La grotte est au sud du village. Méfie-toi des gobelins.", "La pierre… écoute. C'est la voix d'Aldric. Il parle des six fragments. Il parle de toi.",
+          {{"Explorer la Grotte des Murmures", K::Dungeon, "whisper_cave", 1, "whisper_cave"}, {"Rapporter la Pierre d'écho à Maëlle", K::Deliver, "echo_stone", 1, "brindlemere"}}, 220, 60, {"sword_iron", "leather_chest"}, FA_GREENHAVEN, 10, "m1");
+        Q("m3", "La Couronne brisée", QuestType::Main, "maelle", "Les fragments de la Couronne-Mère doivent être réunis. L'Ordre de Highspire saura comment les reforger.",
+          "Les six fragments sont entre les mains des gardiens corrompus. Mais d'abord, va voir Frère Alaric à Highspire, au nord-est. Les archives de l'Ordre te diront comment reforger la Couronne. Tiens, porte-lui cette lettre.",
+          "Highspire est au nord-est, au-delà de Millbrook. Suis la route des pèlerins.", "",
+          {{"Remettre la lettre de Maëlle à Frère Alaric (Highspire)", K::Deliver, "letter_maelle", 1, "highspire"}}, 300, 80, {"amulet_oak"}, FA_HIGHCROWNS, 10, "m2");
+        Q("m4", "Les Gardiens corrompus", QuestType::Main, "alaric", "Récupérez les six fragments auprès des gardiens corrompus, dans l'ordre de votre choix.",
+          "La lettre dit vrai : tu portes le sang d'Aldric. Six gardiens, six fragments : le Gardien des Racines à Elderwood, le Roi Squelette sous Gravemoor, le Colosse de Glace à Frostheim, le Dragon Cendré dans les Ashen Lands, la Reine des Araignées dans son Antre, et le Titan de Pierre ici, dans les cimes. Rapporte-les-moi. L'ordre t'appartient.",
+          "Combien de fragments ? Chacun te rapproche du sceau.", "Six. Les six fragments. Je n'aurais jamais cru vivre ce jour.",
+          {{"Réunir les fragments de Couronne", K::Collect, "crown_shard", 6, ""}}, 2500, 500, {"potion_great", "potion_great"}, FA_HIGHCROWNS, 30, "m3");
+        Q("m5", "La Couronne-Mère", QuestType::Main, "alaric", "Frère Alaric peut reforger la Couronne-Mère à la forge de l'Ordre.",
+          "Donne-moi les fragments. La forge de l'Ordre attend depuis trois siècles.", "La forge chauffe. Rapporte-moi les fragments.",
+          "Voilà. La Couronne-Mère. Elle est à vous, sire. Elle l'a toujours été. (Il sourit, et une vieille cicatrice blanchit sur son menton.)",
+          {{"Remettre les six fragments à Frère Alaric", K::Deliver, "crown_shard", 6, "highspire"}}, 800, 200, {"mother_crown", "amulet_crown"}, FA_HIGHCROWNS, 30, "m4");
+        Q("m6", "Le Chevalier Déchu", QuestType::Main, "alaric", "Alaric a fui vers Morneval avec son secret. Sire Corwin garde l'entrée de l'Abîme : il ne laissera passer que son roi.",
+          "Sire Corwin était le champion d'Aldric. Il garde encore le sceau. Il ne te laissera passer que s'il te reconnaît. Ou s'il tombe.",
+          "Morneval est au sud, au-delà de Gravemoor.", "",
+          {{"Vaincre le Chevalier Déchu à Morneval", K::KillBoss, "fallen_knight", 1, "morneval"}}, 1500, 300, {}, FA_GRAVEMOOR, 20, "m5");
+        Q("m7", "L'Abîme", QuestType::Main, "", "L'Abîme s'ouvre sous Morneval. Malgrath et Alaric attendent. Corwin l'a dit : la Couronne reforgée ouvre plus qu'elle ne ferme. À vous de décider de son sort.", "", "", "",
+          {{"Descendre dans l'Abîme et vaincre le Seigneur des Abysses", K::KillBoss, "abyss_lord", 1, "abyss"}}, 6000, 1500, {}, -1, 0, "m6");
+        // ---- Side quests
+        // ---- 3.9.0 Aldrenbourg
+        Q("al_oven", "Le four froid", QuestType::Side, "colette", "Le four de Colette s'est éteint : plus de bois de hêtre pour la fournée de la Foire.",
+          "Mon four est froid, et la Foire est dans trois jours ! Il me faut du bois, beaucoup de bois. Douze bûches, et je te nourris tout l'hiver.", "Le four attend toujours son bois…", "Ah ! Entends-tu ? Il ronfle déjà. Tiens, prends ça, c'est encore chaud.",
+          {{"Rapporter du bois à Colette", K::Deliver, "wood", 12, "aldrenbourg"}}, 180, 30, {"honey_cake", "honey_cake", "bread", "bread"}, FA_GREENHAVEN, 10);
+        Q("al_cutpurses", "Les tire-laine du marché", QuestType::Side, "garin", "Les Écorcheurs envoient des voleurs dans les rues d'Aldrenbourg. Le Sergent Garin veut frapper leur camp.",
+          "Les voleurs du marché viennent du Camp des Écorcheurs, à l'est. Mes hommes ne peuvent pas quitter les remparts. Toi, si. Six bandits, pas un de moins.", "Le camp des Écorcheurs tient toujours.", "Six ! Les étals dormiront tranquilles cette nuit. Le guet te doit une fière chandelle.",
+          {{"Vaincre des bandits", K::Kill, "bandit", 6, "bandit_camp"}, {"Revenir voir le Sergent Garin", K::Talk, "garin", 1, "aldrenbourg"}}, 320, 80, {"potion_heal", "shield_iron"}, FA_GREENHAVEN, 15);
+        Q("al_ring", "L'anneau de la mariée", QuestType::Side, "orane", "Orane doit livrer un anneau d'or pour un mariage pendant la Foire, mais son or n'est jamais arrivé.",
+          "Le convoi d'or de Solmar a été pillé. Une mariée m'attend, et je n'ai rien à fondre. Un lingot d'or suffirait. Tu sauras en trouver, j'en suis sûre.", "Toujours pas d'or ?", "Il chante sous le marteau. La mariée aura son anneau, et toi le mien : un saphir, pour la route.",
+          {{"Apporter un lingot d'or à Orane", K::Deliver, "gold_bar", 1, "aldrenbourg"}}, 260, 0, {"ring_sapphire"}, FA_GREENHAVEN, 10);
+        Q("al_fair", "La Grande Foire", QuestType::Side, "gaspard", "Le bourgmestre Gaspard veut que la Grande Foire d'Aldrenbourg ait lieu malgré tout. Il faut du miel pour les confiseurs et une chanson pour la place.",
+          "Le four de Colette chauffe, le guet tient les rues… Il manque le miel des confiseurs, et Mélisande cherche encore sa chanson. Aide-moi, et la Foire aura lieu !", "La Foire ne se fera pas sans miel ni chanson.", "Écoute ! Les tambours, les rires… La Grande Foire est ouverte, grâce à toi. Aldrenbourg ne l'oubliera pas.",
+          {{"Parler à Mélisande, la ménestrelle", K::Talk, "melisande", 1, "aldrenbourg"}, {"Apporter du miel au bourgmestre", K::Deliver, "honey", 3, "aldrenbourg"}}, 600, 200, {"ring_gold", "dye_royal", "honey_cake"}, FA_GREENHAVEN, 25, "al_oven");
+        Q("s_wolves", "Le loup de la lisière", QuestType::Side, "tomas", "Tomas veut éloigner les loups qui rôdent près de Brindlemere.",
+          "Les loups gris s'approchent trop du village. Abats-en cinq et je te paierai en cuir et en or.", "Encore des loups dans les bois…", "Bon travail. Les enfants pourront de nouveau jouer près de la lisière.",
+          {{"Tuer des loups gris", K::Kill, "wolf", 5, ""}}, 150, 40, {"leather_head", "potion_minor"}, FA_GREENHAVEN, 10);
+        Q("s_bandits", "Farine et fléaux", QuestType::Side, "gareth", "Les Écorcheurs pillent les convois de farine de Millbrook.",
+          "Les Écorcheurs volent ma farine ! Leur camp est à l'est. Chasse-les, je t'en prie.", "Ils sont toujours là-bas, à l'est du moulin.", "Le moulin tourne de nouveau sans crainte. Merci !",
+          {{"Vaincre des bandits", K::Kill, "bandit", 4, "bandit_camp"}, {"Vaincre des bandits archers", K::Kill, "bandit_archer", 2, "bandit_camp"}}, 260, 90, {"shield_iron", "bread", "bread"}, FA_GREENHAVEN, 15);
+        // ---- hero quests (1.8.0): each one unlocks a hero of the wheel
+        Q("h_kaede", "La lame des brumes", QuestType::Side, "tomas", "Une ombre traque les Écorcheurs. Tomas dit qu'elle ne laisse pas de traces, seulement des bandits endormis.",
+          "Il y a quelqu'un dans les bois, voyageur. Rapide. Silencieux. Elle chasse les Écorcheurs à l'est, seule. Aide-la, ou elle finira comme les autres naufragés.",
+          "Elle t'attend près des Ruines de Vael. Elle n'attend jamais longtemps.",
+          "Elle s'appelle Kaede. Elle dit qu'elle vient d'un archipel que personne ne connaît, et que la mer l'a rejetée comme toi. Elle marchera à tes côtés.",
+          {{"Vaincre des Écorcheurs avec l'ombre", K::Kill, "bandit", 4, "bandit_camp"}, {"Rejoindre l'ombre aux Ruines de Vael", K::Discover, "vael_ruins", 1, "vael_ruins"}, {"Revenir voir Tomas", K::Talk, "tomas", 1, "brindlemere"}},
+          320, 80, {"potion_minor", "potion_minor"}, FA_GREENHAVEN, 10);
+        Q("h_astra", "L'étoile tombée", QuestType::Side, "ilian", "Ilian l'astronome a vu une étoile quitter sa place et tomber sur les Cimes.",
+          "Une étoile est tombée près de la Mine des Cimes. Les étoiles ne tombent pas, voyageur. Elles descendent. Va voir ce qui est descendu.",
+          "Les dragonnets tournent autour du cratère. Quelque chose les attire.",
+          "Elle s'appelle Astra. Elle dit qu'elle gardait le ciel au-dessus de la Couronne, et que le sceau l'a appelée, comme il t'a appelé. Elle vole. Je l'ai vue. Elle vole !",
+          {{"Trouver le lieu de la chute, près de la Mine des Cimes", K::Discover, "crown_mine", 1, "crown_mine"}, {"Chasser les dragonnets du cratère", K::Kill, "drakeling", 3, "crown_mine"}, {"Revenir voir Ilian", K::Talk, "ilian", 1, "astronomer"}},
+          700, 200, {"potion_heal"}, -1, 0);
+        // ---- 1.9.0: the heroes' stories go on, and life around Brindlemere
+        Q("h_kaede2", "Le septième fragment", QuestType::Side, "tomas", "Kaede a laissé un mot à Tomas : le temple de Shirokawa gardait un fragment qu'aucune chronique ne nomme.",
+          "Ta ninja est passée cette nuit. Elle n'a rien dit, elle a juste laissé ça : « Le septième dort là où les elfes ont prié. » Le Sanctuaire d'Aelindor, à l'ouest. Les araignées y ont fait leur nid.",
+          "Aelith, la druidesse de Sylvarin, connaît les vieilles prières du sanctuaire. Elle saura lire ce que Kaede cherche.",
+          "Un septième fragment… Aelith dit que les elfes l'appelaient le Silence : le seul joyau que la Couronne n'a jamais porté. Kaede ne l'a pas trouvé. Mais maintenant, toi aussi, tu le cherches.",
+          {{"Fouiller le Sanctuaire d'Aelindor", K::Discover, "elven_ruins", 1, "elven_ruins"}, {"Chasser les araignées du sanctuaire", K::Kill, "forest_spider", 4, "elven_ruins"},
+           {"Demander à Aelith ce qu'est le Silence", K::Talk, "aelith", 1, "sylvarin"}},
+          520, 140, {"potion_heal", "potion_heal"}, -1, 0, "h_kaede");
+        Q("h_astra2", "Ce que l'étoile n'a pas pardonné", QuestType::Side, "ilian", "Astra refuse de parler d'Aldric. Ilian pense que les archives de Highspire diront pourquoi.",
+          "Elle regarde Highspire comme on regarde une tombe. Les archives de l'Ordre gardent les nuits de la Chute. Va les lire, et parle à l'archiviste, Frère Alaric. Mais garde l'œil ouvert : les chevaliers corrompus rôdent près des murs.",
+          "Frère Alaric est aux archives. Il sait tout. Il sait peut-être trop.",
+          "Astra avait conseillé au roi de ne pas briser la Couronne. Il l'a brisée quand même, et un novice à la cicatrice tenait les tenailles. Alaric m'a souri en me le racontant. Il n'a pas une ride, voyageur. Pas une seule.",
+          {{"Monter à Highspire", K::Discover, "highspire", 1, "highspire"}, {"Vaincre des chevaliers corrompus", K::Kill, "dark_knight", 2, "highspire"},
+           {"Interroger Frère Alaric", K::Talk, "alaric", 1, "highspire"}, {"Revenir voir Ilian", K::Talk, "ilian", 1, "astronomer"}},
+          900, 240, {"potion_heal"}, -1, 0, "h_astra");
+        Q("s_pip", "La carte au trésor de Pip", QuestType::Side, "pip", "Pip a dessiné une carte au trésor. Elle passe par la Ferme des Aulnes et la Pierre de Brindlemere.",
+          "Regarde ma carte ! Une croix à la ferme des Aulnes, une croix à la grande pierre, et le trésor au bout ! Tu vas le chercher ? Moi j'ai pas le droit de sortir du village.",
+          "La ferme d'abord, puis la pierre ! C'est écrit sur la carte !",
+          "Tu l'as trouvé ? C'était… une pomme de pin ? Bon. C'est un trésor quand même. Tiens, pour la peine, je te donne ma pièce porte-bonheur.",
+          {{"Suivre la carte jusqu'à la Ferme des Aulnes", K::Discover, "farm_west", 1, "farm_west"}, {"Trouver la grande pierre", K::Discover, "ws_green", 1, "ws_green"},
+           {"Rapporter le « trésor » à Pip", K::Talk, "pip", 1, "brindlemere"}},
+          90, 15, {"bread"}, FA_GREENHAVEN, 5);
+        Q("s_night_watch", "Ronde de nuit", QuestType::Side, "aubert", "Des gobelins sortent de la Grotte des Murmures la nuit et rôdent autour des champs.",
+          "Mes gardes ne sont pas assez nombreux pour tenir les champs la nuit. Les gobelins de la Grotte des Murmures volent les poules et mettent le feu aux meules. Fais-leur passer l'envie de revenir.",
+          "Leur chaman les rend hardis. Commence par lui.",
+          "Les meules ne brûleront pas cette nuit. Brindlemere te doit une nuit de sommeil, voyageur.",
+          {{"Vaincre des gobelins pillards", K::Kill, "goblin", 5, "whisper_cave"}, {"Vaincre leur chaman", K::Kill, "goblin_shaman", 1, "whisper_cave"}, {"Faire ton rapport au capitaine Aubert", K::Talk, "aubert", 1, "brindlemere"}},
+          180, 45, {"shield_iron"}, FA_GREENHAVEN, 15);
+        Q("s_iron", "Le fer de Hilda", QuestType::Side, "hilda", "Hilda manque de minerai de fer pour sa forge.",
+          "Mon stock de fer est vide. Rapporte-moi cinq minerais de fer, et je t'apprendrai à forger.", "Cinq minerais, pas un de moins.", "Parfait ! Voilà de quoi te défendre. La forge t'est ouverte.",
+          {{"Rapporter du minerai de fer", K::Deliver, "iron_ore", 5, "brindlemere"}}, 120, 30, {"axe_iron", "iron_bar", "iron_bar"}, FA_GREENHAVEN, 10);
+        Q("s_herbs", "Les herbes de Mère Ysolde", QuestType::Side, "ysolde", "Ysolde a besoin d'herbes médicinales.",
+          "Mes réserves d'herbes s'épuisent. Cueilles-en six dans les prairies, veux-tu ?", "Six herbes, mon enfant.", "Merci ! Prends ces potions. La table d'alchimie t'est ouverte.",
+          {{"Récolter des herbes médicinales", K::Deliver, "herb", 6, "brindlemere"}}, 110, 20, {"potion_heal", "potion_heal"}, FA_GREENHAVEN, 10);
+        Q("s_jarl", "Le Jarl et la tempête", QuestType::Side, "bjorn", "Bjorn veut prouver la valeur de l'étranger.",
+          "Tu veux l'aide des clans ? Prouve ta valeur. Abats deux trolls des glaces et rapporte leur peau.", "Les trolls rôdent au nord du village.", "Ha ! Les clans te saluent, frère d'armes.",
+          {{"Vaincre des trolls des glaces", K::Kill, "frost_troll", 2, ""}}, 600, 150, {"axe_nordic", "frost_head"}, FA_FROSTHEIM, 25);
+        Q("s_crystals", "Glace éternelle", QuestType::Side, "sigrun", "Sigrun veut forger une lame dans la glace éternelle.",
+          "Quatre cristaux de givre. Les élémentaires en portent dans leur cœur.", "Il me faut encore des cristaux.", "Magnifique. Regarde comme ils chantent sur l'enclume.",
+          {{"Rapporter des cristaux de givre", K::Deliver, "frost_crystal", 4, "frostvik"}}, 450, 120, {"frost_feet", "elixir_frost"}, FA_FROSTHEIM, 15);
+        Q("s_fenra", "Le choix de Fenra", QuestType::Side, "eira", "Eira veut savoir si son loup géant vous accepterait.",
+          "Fenra est inquiète : les loups des neiges menacent sa meute. Chasse-en cinq. Si elle t'accepte, elle te portera.", "Fenra t'observe encore.", "Fenra pose sa tête contre ta main. Elle t'a choisi.",
+          {{"Tuer des loups des neiges", K::Kill, "snow_wolf", 5, ""}}, 500, 0, {"mount_wolf"}, FA_FROSTHEIM, 20);
+        Q("s_spirits", "Le chant des esprits", QuestType::Side, "aelith", "Les feux follets attirent les voyageurs vers la mort.",
+          "Les feux follets sont des âmes perdues. Libères-en six, puis visite le Sanctuaire d'Aelindor.", "Les esprits pleurent encore.", "Le chant de la forêt est redevenu clair. Merci, Errant.",
+          {{"Libérer des feux follets", K::Kill, "wisp", 6, ""}, {"Visiter le Sanctuaire d'Aelindor", K::Discover, "elven_ruins", 1, "elven_ruins"}}, 520, 120, {"sylvan_hands", "staff_apprentice"}, FA_ELDERWOOD, 25);
+        Q("s_glowcaps", "Graines de lumière", QuestType::Side, "nyssa", "Nyssa a besoin de champignons lumineux.",
+          "Cinq champignons lumineux. Ils poussent au pied des arbres-mères.", "Ils brillent la nuit, c'est plus facile.", "Merci. Tiens, cet élixir t'aidera.",
+          {{"Rapporter des champignons lumineux", K::Deliver, "glowcap", 5, "sylvarin"}}, 300, 60, {"potion_great", "potion_mana"}, FA_ELDERWOOD, 10);
+        Q("s_miners", "Les mineurs disparus", QuestType::Side, "dorn", "Les mineurs de Dorn ont disparu dans les Mines de Brasier.",
+          "Mes gars sont descendus il y a trois jours. Personne n'est remonté. Trouve-les. Ou ce qu'il en reste.", "Les mines sont à l'est.", "Tu as trouvé l'insigne de Harg… Au moins, on sait. La Guilde te doit une dette.",
+          {{"Explorer les Mines de Brasier", K::Dungeon, "ember_mines", 1, "ember_mines"}, {"Rapporter l'insigne du contremaître", K::Deliver, "miners_badge", 1, "cinderwatch"}}, 800, 250, {"crossbow_iron", "relic_miner_lamp"}, FA_ASHEN, 30);
+        Q("s_embers", "Le cœur de braise", QuestType::Side, "kara", "Kara veut des noyaux de braise pour sa forge.",
+          "Les élémentaires de braise ont un cœur qui ne s'éteint pas. Apporte-m'en trois.", "Trois noyaux, et je te forge quelque chose d'unique.", "Ha, regarde-les briller ! Prends ça.",
+          {{"Rapporter des noyaux de braise", K::Deliver, "ember_core", 3, "cinderwatch"}}, 650, 160, {"ember_hands", "ember_feet"}, FA_ASHEN, 15);
+        Q("s_restless", "Les morts sans repos", QuestType::Side, "agathe", "Les squelettes de Morneval sortent du cimetière.",
+          "Les morts se lèvent chaque nuit. Rends à huit d'entre eux le repos.", "La nuit, ils sont plus nombreux.", "Gravemoor dormira mieux. Que la lumière te garde.",
+          {{"Vaincre des squelettes", K::Kill, "skeleton", 8, ""}}, 480, 120, {"grave_lantern", "potion_heal"}, FA_GRAVEMOOR, 20);
+        Q("s_shadow", "Essence d'ombre", QuestType::Side, "morwen", "Morwen veut de l'essence d'ombre.",
+          "Trois essences d'ombre. Les spectres en sont faits.", "Les spectres rôdent la nuit, près du cimetière.", "Hé hé. Excellente cueillette. Tiens, une babiole qui te plaira.",
+          {{"Rapporter de l'essence d'ombre", K::Deliver, "shadow_essence", 3, "gravemoor"}}, 520, 140, {"ring_wolf", "shadow_hands"}, FA_GRAVEMOOR, 15);
+        Q("s_stars", "Les étoiles de l'astronome", QuestType::Side, "ilian", "Ilian veut reconstituer la carte céleste d'Aldric.",
+          "Trois cristaux sont tombés sur les cimes. Rapporte-les et je te montrerai la carte d'Aldric.", "Les cristaux brillent sur les hauteurs.", "La carte céleste… elle montre l'Abîme sous Morneval. Prends cette larme d'étoile.",
+          {{"Rapporter des cristaux", K::Deliver, "crystal", 3, "astronomer"}}, 700, 200, {"amulet_star", "star_chart"}, FA_HIGHCROWNS, 20);
+        Q("s_golems", "Le pont du pèlerin", QuestType::Side, "corvin", "Des golems bloquent les cols des pèlerins.",
+          "Les golems de pierre se sont réveillés sur les cols. Brise-en trois.", "Les cols sont au nord.", "Les pèlerins reviennent. L'Ordre te remercie.",
+          {{"Briser des golems de pierre", K::Kill, "stone_golem", 3, ""}}, 900, 260, {"spear_crown", "chain_hands"}, FA_HIGHCROWNS, 25);
+        Q("s_ice", "La corne du premier Jarl", QuestType::Side, "hakon", "La corne légendaire dort dans les Cavernes de Hrimgard.",
+          "La corne du premier Jarl dort dans les Cavernes de Hrimgard. Rapporte-la et ta saga sera chantée.", "Les cavernes sont à l'ouest du village.", "La corne… Elle sonne encore ! Ton nom sera dans la saga.",
+          {{"Explorer les Cavernes de Hrimgard", K::Dungeon, "ice_caves", 1, "ice_caves"}}, 900, 200, {"ring_wolf"}, FA_FROSTHEIM, 30);
+        // ---- Hunting contracts
+        Q("h_beast", "Contrat : la Bête de Millbrook", QuestType::Hunt, "margot", "Un sanglier énorme saccage les champs la nuit.", "Il est énorme. Ses défenses sont comme des faux. Tue-le.", "Il vient la nuit, près des champs.", "Enfin ! Les champs sont saufs.",
+          {{"Tuer des sangliers furieux", K::Kill, "boar", 3, ""}}, 200, 80, {"leather_feet"});
+        Q("h_spiders", "Contrat : la toile d'Elderwood", QuestType::Hunt, "thalion", "Les araignées sylvestres infestent la route.", "Quatre araignées. Brûle leurs toiles si tu peux.", "Elles se cachent dans les branches.", "La route est libre. Bien joué.",
+          {{"Tuer des araignées sylvestres", K::Kill, "forest_spider", 4, ""}}, 420, 120, {"spider_silk", "spider_silk"});
+        Q("h_bears", "Contrat : les ours de cendre", QuestType::Hunt, "vesk", "Les ours de cendre attaquent les caravanes.", "Deux ours. Leur fourrure vaut de l'or.", "Ils fument, tu ne peux pas les rater.", "Voilà ta prime.",
+          {{"Tuer des ours de cendre", K::Kill, "ash_bear", 2, ""}}, 700, 300, {"elixir_strength"});
+        Q("h_drakes", "Contrat : dragonnets des cimes", QuestType::Hunt, "corvin", "Les dragonnets terrorisent les bergers.", "Deux dragonnets. Méfie-toi de leur souffle.", "Ils nichent sur les hauteurs.", "Les bergers te bénissent.",
+          {{"Tuer des dragonnets des cimes", K::Kill, "drakeling", 2, ""}}, 1000, 400, {"dragon_scale"});
+        // ---- Treasure hunts
+        Q("t_vael", "Le trésor de Vael", QuestType::Treasure, "lise", "Une carte indique un trésor dans les Ruines de Vael.", "Cette carte vient d'un vieux marin. Le X est sur les Ruines de Vael, à l'est.", "", "",
+          {{"Trouver le trésor des Ruines de Vael", K::Discover, "vael_ruins", 1, "vael_ruins"}}, 180, 150, {"ring_sapphire"});
+        Q("t_bastion", "Les coffres du Bastion", QuestType::Treasure, "vesk", "Les défenseurs du Bastion Calciné cachaient leur solde.", "La solde du Bastion n'a jamais été retrouvée. Elle est à toi si tu oses.", "", "",
+          {{"Fouiller le Bastion Calciné", K::Discover, "ashen_ruins", 1, "ashen_ruins"}}, 600, 500, {"amulet_ember"});
+        // ---- Hidden quests (start when discovered)
+        Q("x_harp", "La harpe oubliée", QuestType::Hidden, "", "Une harpe vibre seule dans le Sanctuaire d'Aelindor.", "", "", "",
+          {{"Explorer le Sanctuaire d'Aelindor", K::Discover, "elven_ruins", 1, "elven_ruins"}}, 300, 0, {"relic_elven_harp"});
+        Q("x_stones", "Les sept pierres", QuestType::Hidden, "", "Les pierres de passage semblent liées entre elles.", "", "", "",
+          {{"Visiter les pierres de passage", K::Discover, "waystones", 6, ""}}, 900, 300, {"relic_star_glass", "dye_gold"});
+        Q("x_ring", "L'alliance d'Aldric", QuestType::Hidden, "", "Une alliance gravée gît dans les ruines de Morneval.", "", "", "",
+          {{"Explorer le Château de Morneval", K::Discover, "morneval", 1, "morneval"}}, 400, 0, {"relic_aldric_ring"});
+        // ---- Faction
+        Q("f_guard", "Le serment des Gardiens", QuestType::Faction, "aubert", "Le capitaine Aubert recrute pour les Gardiens de Greenhaven.", "Les Gardiens ont besoin de toi. Nettoie la Grotte des Murmures et chasse six gobelins.", "Les gobelins sont au sud.", "Bienvenue chez les Gardiens. Porte ces couleurs avec honneur.",
+          {{"Tuer des gobelins", K::Kill, "goblin", 6, ""}}, 300, 100, {"chain_chest", "dye_royal"}, FA_GREENHAVEN, 40, "m2");
+
+        // ================================================================================================
+        // 2.0.0 ACT II -- "L'Héritage du Septième": the Crown had a seventh jewel, the Silence, hidden at Shirokawa
+        // ================================================================================================
+        Q("n1", "Le message de la marée", QuestType::Main, "maelle", "Un coquillage est arrivé à Brindlemere, porté par un pêcheur de la côte sud. Il contient une voix : celle de Kaede, qui t'appelle à Port-Azur.",
+          "Un pêcheur a remonté ceci de la côte sud. C'est la voix de ta ninja, voyageur. Elle dit : « Le septième ne dort pas à Aelindor. Retrouve-moi à Port-Azur, avant que la marée tourne. » Le port est tout au sud, après Gravemoor.",
+          "Port-Azur est au bout de la route du sud, là où la terre s'arrête.", "Orla… Oui, je connais ce nom. Elle dirige le port d'une main de fer.",
+          {{"Rejoindre Port-Azur, sur la côte du sud", K::Discover, "port_azur", 1, "port_azur"}, {"Parler à la capitaine Orla", K::Talk, "orla", 1, "port_azur"}}, 1800, 300, {"potion_great", "coco", "coco"}, FA_AZUR, 20, "m7");
+        Q("n2", "Les voiles du Tonnerre", QuestType::Main, "orla", "Les Corsaires du Pont du Tonnerre étranglent Port-Azur. Leur capitaine, Mareval, détient une carte marine qui mène à un temple oublié.",
+          "Kaede est partie vers Shirokawa il y a trois jours, sans attendre. Elle a laissé ce mot : « Ne la cherche pas, Orla. Fais tomber Mareval. » Mareval tient la carte du temple. Il tient aussi le Pont du Tonnerre, avec ses hommes. Dégage la crique, puis rapporte-moi cette carte.",
+          "Les corsaires campent à la Crique, à l'ouest du port. Leur capitaine est un peu plus loin, sur le Pont du Tonnerre.", "Cette carte… Elle montre Shirokawa, et un passage sous le temple. Merci, voyageur. Port-Azur te doit sa mer.",
+          {{"Vaincre des écumeurs de la Crique", K::Kill, "pirate", 6, "pirate_cove"}, {"Vaincre des arbalétriers corsaires", K::Kill, "pirate_gunner", 3, "pirate_cove"},
+           {"Vaincre le Capitaine Mareval", K::KillBoss, "mareval", 1, "storm_deck"}, {"Rapporter la carte marine à Orla", K::Deliver, "sea_chart", 1, "port_azur"}},
+          3000, 700, {"spear_trident", "fish_stew", "fish_stew"}, FA_AZUR, 40, "n1");
+        Q("n3", "Les trois perles", QuestType::Main, "hanzo", "Pour ouvrir le sanctuaire sous le temple, Maître Hanzo exige trois perles de marée : l'eau d'abord, le feu ensuite.",
+          "Tu es celui dont Kaede m'a parlé. Je suis Hanzo. Sous ce temple dort le Silence, et la porte demande trois perles de marée, des souvenirs de la mer. Il y en a dans la Grotte des Marées, et les crabes, les noyés et les sirènes en portent parfois. Rapporte-m'en trois.",
+          "Trois perles. La Grotte des Marées est à l'ouest de Port-Azur.", "Trois perles, claires comme des yeux. L'eau est prête. Reste le feu.",
+          {{"Explorer la Grotte des Marées", K::Dungeon, "tide_cave", 1, "tide_cave"}, {"Réunir trois perles de marée", K::Collect, "tide_pearl", 3, ""}, {"Remettre les trois perles à Maître Hanzo", K::Deliver, "tide_pearl", 3, "shirokawa"}},
+          3400, 600, {"bow_coral", "potion_great"}, FA_AZUR, 30, "n2");
+        Q("n4", "La voie des sables", QuestType::Main, "hanzo", "L'autre moitié de la clé est le Sceau du Soleil, que Sekhmar tient dans son temple, au cœur des Sables d'Ambre. Il faut rejoindre Solmar, et l'émira Zahra.",
+          "Le feu, maintenant. Le Sceau du Soleil est chez Sekhmar, au cœur du désert. Tu n'y arriveras pas seul : demande à l'émira Zahra, à Solmar. Elle a vu mourir assez de caravanes pour savoir où ne pas aller. Suis la route de l'est, ou celle de Cinderwatch.",
+          "Solmar est au sud-est, dans les Sables d'Ambre. Prends la route des caravanes.", "Zahra… Oui. Elle te recevra. Elle reçoit tout le monde, avec du thé.",
+          {{"Rejoindre Solmar, dans les Sables d'Ambre", K::Discover, "solmar", 1, "solmar"}, {"Parler à l'émira Zahra", K::Talk, "zahra", 1, "solmar"}},
+          3600, 500, {"scimitar_dune", "tea_mint", "tea_mint"}, FA_SOLMAR, 25, "n3");
+        Q("n5", "La clé d'ambre", QuestType::Main, "zahra", "La route du temple traverse le Nid des Scorpions. Leur Reine garde la clé d'ambre, qui ouvre le temple de Sekhmar. Il faut d'abord éclaircir les pilleurs et les scorpions.",
+          "Le temple est scellé par une clé d'ambre. Une Reine Scorpion la porte dans ses pinces. Mes caravanes sont tombées en essayant de lui échapper. Elle a des alliés : les Pilleurs de dunes campent près du temple, et des scorpions couvrent les crêtes. Commence par eux.",
+          "Le Nid des Scorpions est à l'est de Solmar. Les pilleurs campent plus au sud.", "La clé… Il y a trente ans qu'on la cherche. Merci, voyageur. Les caravanes passeront de nouveau.",
+          {{"Vaincre des pilleurs de dunes", K::Kill, "dust_raider", 6, "dune_raiders"}, {"Vaincre des scorpions des sables", K::Kill, "sand_scorpion", 5, ""},
+           {"Vaincre la Reine Scorpion", K::KillBoss, "scorpion_queen", 1, "scorpion_nest"}, {"Rapporter la clé d'ambre à l'émira Zahra", K::Deliver, "amber_key", 1, "solmar"}},
+          4500, 900, {"staff_sun", "elixir_sun", "elixir_sun"}, FA_SOLMAR, 40, "n4");
+        Q("n6", "Le Temple du Soleil Mort", QuestType::Main, "zahra", "Le Roi-Soleil Sekhmar attend dans son temple, avec le Sceau du Soleil. La clé d'ambre en ouvre les portes.",
+          "Le temple s'ouvre. Va, et rapporte-moi le Sceau, ou rien. Sekhmar a été mon ancêtre, voyageur. Il était bon, avant. Dis-lui que Solmar lui a pardonné.",
+          "Le temple est au sud-est, après les Colonnades de Karun.", "Le Sceau… Il est encore chaud. Dis à Hanzo que le feu est prêt.",
+          {{"Descendre dans le Temple du Soleil Mort et vaincre Sekhmar, le Roi-Soleil", K::KillBoss, "sun_king", 1, "sun_temple"}, {"Rapporter le Sceau du Soleil", K::Collect, "sun_sigil", 1, ""}},
+          6000, 1200, {"amulet_sun", "mount_dune"}, FA_SOLMAR, 50, "n5");
+        Q("n7", "Retour à Shirokawa", QuestType::Main, "hanzo", "L'eau et le feu sont réunis. Hanzo peut ouvrir le sanctuaire.",
+          "Le Sceau du Soleil, et trois perles de marée. L'eau et le feu côte à côte, comme on me l'avait enseigné. Donne-le-moi, que j'ouvre la porte.",
+          "Le temple de Shirokawa est au sud, au bord du lagon.", "La porte est ouverte. Descends, et ne laisse rien parler à ta place.",
+          {{"Remettre le Sceau du Soleil à Maître Hanzo", K::Deliver, "sun_sigil", 1, "shirokawa"}}, 2000, 400, {"potion_great", "potion_great"}, FA_AZUR, 30, "n6");
+        Q("n8", "Le Silence", QuestType::Main, "hanzo", "Sous le temple de Shirokawa, le septième joyau attend. Il a pris la voix de tous ceux qui l'ont gardé.",
+          "Tu l'entendras avant de le voir, ou plutôt tu ne l'entendras plus du tout. Si une voix te parle, ne réponds pas. Si ton nom résonne, ne le reconnais pas. Prends le joyau, et refermons cette porte pour de bon.",
+          "Le sanctuaire est sous le temple, au sud du lagon.", "Le monde reprend sa voix. Merci. Va montrer le joyau à Kaede.",
+          {{"Descendre au Sanctuaire du Silence et vaincre le Silence", K::KillBoss, "silence", 1, "silence_gate"}, {"Rapporter le joyau du Silence", K::Collect, "silence_jewel", 1, ""}},
+          8000, 2000, {"dagger_tide", "elixir_sun"}, FA_AZUR, 60, "n7");
+        Q("n9", "L'héritage", QuestType::Main, "kaede_s", "Kaede attend, devant la mer, avec la dernière question.",
+          "Il est là. Je le sens, même sans le toucher. Donne-le-moi. Pas pour le garder : pour l'enterrer là où personne n'ira. La mer est assez grande pour ça.",
+          "Elle regarde la mer, sans la voir.", "Voilà. C'est fini. Pour la première fois, je n'entends plus que la marée. Ça, tu peux le garder.",
+          {{"Remettre le Silence à Kaede", K::Deliver, "silence_jewel", 1, "shirokawa"}}, 10000, 3000, {"ring_abyss", "mount_wolf"}, -1, 0, "n8");
+
+        // ---- Act II side quests
+        Q("s_crabs", "Les filets vides", QuestType::Side, "mina", "Les crabes géants ont pris la baie de Pilotis, et les filets sortent vides.",
+          "Les crabes ont pris la baie. Je n'ose plus lancer un filet. Débarrasse-nous de six d'entre eux, et on mangera ce soir.", "Ils sortent des récifs au pied des pilotis.", "Le filet est plein ! Six crabes de moins, et une bouillabaisse de plus.",
+          {{"Vaincre des crabes géants", K::Kill, "sea_crab", 6, ""}}, 900, 160, {"fish_stew", "coco", "coco"}, FA_AZUR, 20);
+        Q("s_drowned", "Les noyés de la crique", QuestType::Side, "orla", "Quand la marée tourne, des noyés remontent de la Crique des Corsaires.",
+          "Les équipages que Mareval a vendus remontent, quand la lune est basse. Qu'ils se reposent, voyageur. Six d'entre eux, ça suffira pour ce mois-ci.", "Surtout la nuit, près de la crique.", "Que la mer les garde, cette fois.",
+          {{"Apaiser des noyés", K::Kill, "drowned", 6, "pirate_cove"}}, 1100, 220, {"potion_great", "ring_tide"}, FA_AZUR, 25, "n1");
+        Q("s_sirens", "Le chant de la baie", QuestType::Side, "orla", "Des sirènes attirent les barques sur les récifs.",
+          "Trois barques de pêcheurs ont disparu, en entendant un chant. Les sirènes des récifs. Fais-les taire, pour que la mer redevienne une route.", "Elles chantent sur les récifs du sud.", "Les barques sont de retour, en silence. Merci.",
+          {{"Faire taire des sirènes", K::Kill, "siren", 3, ""}}, 1300, 260, {"potion_great", "relic_sea_bell"}, FA_AZUR, 25, "n1");
+        Q("s_lens", "La lentille fendue", QuestType::Side, "ilmar", "La lentille du Phare des Brumes est fendue. Il faut du verre du désert pour la remplacer.",
+          "La lentille est fendue depuis la dernière tempête. Il n'y a que le verre du désert pour la remplacer. Les spectres des sables en portent, dit-on, dans leur drap de poussière.", "Deux morceaux de verre, du désert d'Ambre.", "La lumière est rallumée ! Les marins te bénissent.",
+          {{"Rapporter du verre du désert au gardien du phare", K::Deliver, "sand_glass", 2, "phare"}}, 1200, 250, {"ring_tide", "potion_great"}, FA_AZUR, 25);
+        Q("s_bell", "La cloche de l'épave", QuestType::Side, "lotte", "Lotte a entendu une cloche sonner toute seule sur l'épave du Léviathan.",
+          "Y a une cloche à l'épave ! Elle sonne quand la marée monte ! Tu peux aller voir ? Moi j'ai pas le droit… enfin, j'ai le droit mais Maman dit non.", "L'épave est à l'ouest de Port-Azur, sur la plage.", "Tu l'as trouvée ! Elle sonne beaucoup trop fort. J'adore.",
+          {{"Explorer l'épave du Léviathan", K::Discover, "wreck", 1, "wreck"}, {"Retourner voir Lotte", K::Talk, "lotte", 1, "pilotis"}}, 600, 80, {"relic_sea_bell"}, FA_AZUR, 10);
+        // 2.4.0 the new lands
+        Q("s_riders", "Contrat : les Cavaliers Noirs", QuestType::Hunt, "borya", "Les Cavaliers Noirs rançonnent les pâturages de Valdor.",
+          "Cinq Cavaliers Noirs, et les pâturages respireront. Ils campent au sud, près des collines de pierre. Méfie-toi de leurs lances.", "Leur camp est au sud de Valdor.", "Les poulains galopent de nouveau. Valdor ne l'oubliera pas.",
+          {{"Vaincre des Cavaliers Noirs", K::Kill, "steppe_rider", 5, ""}}, 2200, 420, {"sword_steel", "potion_great"}, -1, 0);
+        Q("s_kurgan", "Le Roi Cavalier", QuestType::Side, "borya", "Le tertre du premier khan a été ouvert.",
+          "Quelqu'un a ouvert le Tertre du Roi Cavalier. Va voir ce qu'il en reste, et reviens me le dire. Les morts de la steppe n'aiment pas qu'on les dérange.", "Le tertre est à l'est, sur la plus haute colline.", "Alors le roi dort encore. Bien. Prends ceci, il l'aurait voulu.",
+          {{"Explorer le Tertre du Roi Cavalier", K::Discover, "kurgan", 1, "kurgan"}, {"Retourner voir Borya", K::Talk, "borya", 1, "valdor"}}, 1800, 300, {"ring_silver"}, -1, 0);
+        // 2.8.0 the Lands of Aurora
+        Q("s_crystals", "Lumière captive", QuestType::Side, "aila", "Aïla a besoin de cristaux d'aurore.",
+          "Six cristaux d'aurore, et je pourrai rallumer la grande lanterne de Lumenhaven. Ils poussent dans les prairies, et parfois sur les îles du ciel. Un coup de pioche, et ils se détachent.", "Les cristaux d'aurore brillent dans les prairies autour de Lumenhaven.", "Regarde : la lanterne se rallume. Garde ce cœur de cristal, il bat pour toi maintenant.",
+          {{"Rapporter des cristaux d'aurore à Aïla", K::Deliver, "aurora_crystal", 6, "lumenhaven"}}, 2600, 450, {"amulet_aurora"}, -1, 0);
+        Q("s_golems", "Contrat : golems de cristal", QuestType::Hunt, "aila", "Des golems de cristal menacent les cueilleurs.",
+          "Trois golems de cristal se sont levés près du Cratère Cristallin. Ils écrasent tout ce qui bouge. Le feu les fait craquer.", "Au sud-est de Lumenhaven, vers le Cratère Cristallin.", "Les cueilleurs peuvent retourner aux prairies. Merci.",
+          {{"Vaincre des golems de cristal", K::Kill, "crystal_golem", 3, ""}}, 3000, 520, {"potion_great", "potion_great"}, -1, 0);
+        Q("s_skyisles", "Les îles du ciel", QuestType::Side, "aila", "Des coffres attendent sur les îles qui flottent.",
+          "Sur chaque île du ciel, il y a un coffre et, dedans, un éclat du ciel. Rapporte-m'en trois. Pour monter, marche dans la source jaillissante au pied de l'île : elle te lancera là-haut.", "Les îles flottent au-dessus des prairies. Cherche la source lumineuse à leur pied.", "Trois éclats du ciel… Avec eux, je peux tailler une lame comme on n'en a pas vu depuis mille ans. Elle est à toi.",
+          {{"Trouver des éclats du ciel", K::Collect, "sky_shard", 3, ""}}, 3400, 600, {"sword_aurora"}, -1, 0);
+        // ---- 3.0.0 the Titan Mountains and the Iron Legion
+        Q("t_citadel", "Le Poing de Fer", QuestType::Side, "heloise", "Reprendre la Citadelle de Fer-Noir à la Légion.",
+          "La Citadelle de Fer-Noir, à l'est de Hautebrume, au bout de la vallée. Dix légionnaires, des arbalétriers sur les remparts, et un seigneur de guerre devant le donjon. Tuez-le, et la citadelle est à vous. Emmenez des soldats si vous en avez.", "La citadelle est à l'est de la porte est de Hautebrume.", "La citadelle est à vous. Ce soir, Hautebrume dormira tranquille. Prenez ceci : vous l'avez mérité.",
+          {{"Conquérir la Citadelle de Fer-Noir (vaincre son seigneur de guerre)", K::Discover, "conq_citadelle_fer", 1, "citadelle_fer"}}, 6000, 1200, {"ring_legion", "potion_great"}, -1, 0);
+        Q("t_corbeau", "Le Fort aux Corbeaux", QuestType::Side, "heloise", "Reprendre Fort Corbeau, au sud-est de Rochebrune.",
+          "Fort Corbeau garde la route des mines. Sa garnison est plus petite, mais elle est bien placée. Même méthode : le seigneur de guerre d'abord.", "Fort Corbeau est au sud-est de Rochebrune, après les Mines de Fer-Noir.", "Deux forteresses. La Légion va devoir compter avec vous.",
+          {{"Conquérir Fort Corbeau", K::Discover, "conq_fort_corbeau", 1, "fort_corbeau"}}, 5000, 1000, {"potion_great", "potion_great"}, -1, 0, "t_citadel");
+        Q("t_kharvos", "La forteresse des steppes", QuestType::Side, "heloise", "La Légion tient aussi Khar-Vos, dans les steppes de Valdor.",
+          "La Légion a une forteresse dans les steppes, Khar-Vos, sur la route entre Valdor et la jungle. Elle pille les caravanes. Reprenez-la et les routes du sud seront libres.", "Khar-Vos est au sud de Valdor, sur la route d'Émeraude.", "Plus une seule forteresse de la Légion debout. Les bardes vont avoir du travail.",
+          {{"Conquérir la Forteresse de Khar-Vos", K::Discover, "conq_khar_vos", 1, "khar_vos"}}, 5000, 1000, {"axe_steel", "potion_great"}, -1, 0, "t_corbeau");
+        Q("t_steel", "L'acier des Titans", QuestType::Side, "bjorn_forge", "Bjorn veut de l'acier-titan.",
+          "Fonds-moi trois lingots d'acier-titan à la forge : du minerai de fer, du charbon et un peu d'or. Les montagnes en sont pleines. Rapporte-les-moi, je t'apprends ce qu'on en fait.", "Le minerai de fer, le charbon et l'or se trouvent partout dans les Monts Titans. Forge l'acier-titan à une forge.", "Bel acier. Tiens, voilà ce qu'on en fait quand on sait s'y prendre.",
+          {{"Rapporter de l'acier-titan à Bjorn", K::Deliver, "titan_steel", 3, "rochebrune"}}, 4200, 600, {"sword_titansteel"}, -1, 0);
+        Q("t_forge", "Les forges éteintes", QuestType::Side, "bjorn_forge", "Abattre le Maître-Forge au fond des Mines de Fer-Noir.",
+          "Le Maître-Forge fabrique les armures de la Légion au fond des Mines de Fer-Noir. Tant qu'il travaille, la Légion aura de l'acier. Éteins sa forge.", "Les Mines de Fer-Noir sont à l'est de Rochebrune.", "Plus une étincelle là-dessous. Les forges de Rochebrune vont pouvoir respirer.",
+          {{"Vaincre le Maître-Forge (Mines de Fer-Noir)", K::KillBoss, "forgemaster", 1, "mines_fer_noir"}}, 7000, 1500, {"shield_legion"}, -1, 0, "t_steel");
+        Q("t_wyrm", "Le Gouffre des Titans", QuestType::Side, "sibylle", "Le ver de glace du Gouffre.",
+          "Au nord du Col-des-Aigles, une gorge mène au Gouffre des Titans. Le ver qui l'a creusé dort au fond. Ses écailles valent plus que tout ce que j'ai lu.", "Le Gouffre est au nord du Col-des-Aigles, au bout de la gorge.", "Tu l'as vu de près… Raconte-moi tout. Non, attends, je prends des notes.",
+          {{"Vaincre le Ver des Glaces (Gouffre des Titans)", K::KillBoss, "frost_wyrm", 1, "gouffre_titans"}}, 7000, 1400, {"potion_great", "potion_great"}, -1, 0);
+        Q("t_giant", "Le Roi sous la montagne", QuestType::Side, "sibylle", "Le tombeau d'Ymrir, le dernier Roi-Géant.",
+          "Le Tombeau du Roi-Géant est au sud de Rochebrune. Ceux qui y sont entrés ne sont pas ressortis. Si quelqu'un peut voir le trône d'Ymrir et revenir, c'est toi.", "Le Tombeau est au sud de Rochebrune, au bout de la route.", "Il s'est rendormi… Pour de bon, cette fois. Les montagnes te doivent quelque chose.",
+          {{"Vaincre Ymrir, le Roi-Géant (Tombeau du Roi-Géant)", K::KillBoss, "giant_king", 1, "tombe_geant"}}, 9000, 2200, {"potion_great", "amulet_star"}, -1, 0, "t_wyrm");
+        Q("t_hunt", "Contrat : les bêtes des cols", QuestType::Hunt, "arno", "Les loups et les trolls des cimes menacent les troupeaux.",
+          "Cinq loups des Titans et trois trolls des cimes. Après ça, les bergers pourront remonter aux alpages.", "Partout dans les vallées des Monts Titans, surtout la nuit pour les loups.", "Les alpages sont à nouveau à nous. Tiens, c'est la paye.",
+          {{"Vaincre des loups des Titans", K::Kill, "titan_wolf", 5, ""}, {"Vaincre des trolls des cimes", K::Kill, "rock_troll", 3, ""}}, 4800, 800, {"potion_great"}, -1, 0);
+        Q("s_jaguar", "Le réveil du Jaguar", QuestType::Side, "itzel", "Le Temple du Jaguar s'est réveillé.",
+          "Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.", "Le temple est au sud-est d'Émeraude, sous les grands arbres.", "Le temple dort de nouveau. Merci, voyageur.",
+          {{"Explorer le Temple du Jaguar", K::Dungeon, "jaguar", 1, "temple_jaguar"}, {"Retourner voir Itzel", K::Talk, "itzel", 1, "emeraude"}}, 3000, 500, {"amulet_pearl", "ember_tonic"}, -1, 0);
+        Q("s_spiders", "Contrat : mygales de jade", QuestType::Hunt, "itzel", "Les mygales de jade envahissent les sentiers.",
+          "Quatre mygales, pas plus, pas moins : la jungle a besoin d'elles, mais pas si près du village.", "Elles tissent entre les arbres, autour d'Émeraude.", "Les sentiers sont libres. La soie servira aux enfants.",
+          {{"Chasser des mygales de jade", K::Kill, "jungle_spider", 4, ""}}, 2000, 380, {"bandage", "bandage", "potion_great"}, -1, 0);
+        Q("s_venom", "Venin d'oasis", QuestType::Side, "nadira", "Nadira prépare un antidote avec du venin de scorpion.",
+          "Un venin bien dosé soigne ce qu'il aurait tué. Rapporte-m'en trois fioles : les scorpions des dunes en ont plein, et ils n'aiment pas qu'on leur en prenne.", "Les scorpions couvrent les crêtes à l'est de Kheft.", "Merci. Ce soir, trois caravaniers seront en vie, grâce à toi.",
+          {{"Rapporter du venin de scorpion", K::Deliver, "scorpion_venom", 3, "kheft"}}, 1200, 240, {"potion_great", "potion_great", "elixir_sun"}, FA_SOLMAR, 20);
+        Q("s_amber", "Ambre de forge", QuestType::Side, "hakim", "Hakim ne forge qu'à l'ambre brut, et il en manque.",
+          "L'ambre se travaille à chaud, et le fer à froid. Je veux les deux. Rapporte-moi quatre morceaux d'ambre brut, golems de grès, scorpions, momies, tous en ont.", "Quatre morceaux, pas un de moins.", "Regarde comme il chante ! Cette lame s'appellera comme toi.",
+          {{"Rapporter de l'ambre brut", K::Deliver, "amber", 4, "solmar"}}, 1500, 300, {"scimitar_dune", "dye_gold"}, FA_SOLMAR, 25, "n4");
+        Q("s_jackals", "Contrat : les chacals de Zafir", QuestType::Hunt, "karim", "Les chacals suivent les caravanes de trop près.",
+          "Six chacals. Ils ne sont pas méchants, juste affamés et nombreux. Mais Zafir ne vit que de ses caravanes.", "Ils rôdent sur les dunes autour du caravansérail.", "La route est libre, et les chamelles dorment.",
+          {{"Chasser des chacals des dunes", K::Kill, "dune_jackal", 6, ""}}, 900, 240, {"elixir_strength", "dates", "dates"}, FA_SOLMAR, 15);
+        Q("s_drakes", "Contrat : dragonnets des sables", QuestType::Hunt, "karim", "Des dragonnets des sables brûlent les convois.",
+          "Deux dragonnets des sables. Leur souffle fond le verre, et il en reste. Je préfère les voir de loin.", "Ils couvent dans les dunes du sud-est.", "Deux de moins. Les caravanes te doivent une soirée de thé.",
+          {{"Chasser des dragonnets des sables", K::Kill, "sand_drake", 2, ""}}, 1500, 500, {"dragon_scale", "elixir_sun"}, FA_SOLMAR, 25, "n4");
+        Q("s_ruins", "Les colonnades de Karun", QuestType::Side, "yara", "Yara voudrait savoir ce que gardent les ruines de Karun et le sphinx.",
+          "Va voir Karun, puis la Gardienne des Sables. Reviens me dire ce qu'elle t'a demandé. Elle pose une question à chaque passant, il paraît. Personne ne se souvient de la réponse.", "Karun est au sud de Solmar, et la Gardienne au nord-ouest.", "Une question sans réponse… Elle me plaît encore plus.",
+          {{"Visiter les Colonnades de Karun", K::Discover, "karun_ruins", 1, "karun_ruins"}, {"Rencontrer la Gardienne des Sables", K::Discover, "sphinx", 1, "sphinx"}, {"Retourner voir Yara", K::Talk, "yara", 1, "tamrak"}},
+          1100, 220, {"ring_scarab", "relic_sphinx_eye"}, FA_SOLMAR, 15);
+        Q("s_ledger", "Le registre de la caravane", QuestType::Side, "zahra", "Une caravane de l'émira a été pillée avec son registre. Il contient la liste des marchands disparus.",
+          "Le registre est tombé aux mains des pilleurs. Il contient les noms de tous mes marchands disparus. Je veux les noms, pas la vengeance.", "Les pilleurs campent près du temple.", "Les noms… tous. Je les graverai sur le mur de Solmar. Merci.",
+          {{"Récupérer le registre auprès des pilleurs", K::Deliver, "caravan_ledger", 1, "solmar"}}, 1000, 300, {"elixir_strength", "tea_mint"}, FA_SOLMAR, 20, "n4");
+        Q("s_golems2", "Les statues qui marchent", QuestType::Side, "zahra", "Des statues de grès se sont levées près du temple.",
+          "Les statues du temple marchent. Brise-en quatre, avant qu'elles atteignent la route.", "Elles gardent le voisinage du temple.", "Le désert est de nouveau silencieux.",
+          {{"Briser des golems de grès", K::Kill, "sandstone_golem", 4, ""}}, 1600, 400, {"amulet_ember", "elixir_sun"}, FA_SOLMAR, 25, "n5");
+        Q("s_coins", "Doublons", QuestType::Side, "brann", "Brann rachète les doublons corsaires pour les fondre.",
+          "Un doublon corsaire, ça se fond, ça se refrappe, ça se rachète. Apporte-m'en douze, je te les paie plus cher que le port.", "Douze doublons, frappés d'un crâne.", "Douze ! Voilà de l'or propre, pour de l'or sale.",
+          {{"Rapporter des doublons corsaires", K::Deliver, "pirate_coin", 12, "port_azur"}}, 800, 450, {"bow_coral"}, FA_AZUR, 15);
+        Q("s_serpents", "Contrat : serpents des récifs", QuestType::Hunt, "mina", "Les serpents des récifs mordent les pêcheuses.",
+          "Cinq serpents des récifs. Turquoise et jaune, tu ne les rateras pas. Ils mordent.", "Dans les herbes, près des lagons.", "Les récifs sont sûrs. Pour combien de temps ?",
+          {{"Chasser des serpents des récifs", K::Kill, "reef_serpent", 5, ""}}, 950, 200, {"leather_chest", "potion_great"}, FA_AZUR, 15);
+        // ---- Act II treasure hunts and hidden quests
+        Q("t_karun", "Le butin de Karun", QuestType::Treasure, "idris", "Idris détient la moitié d'une carte vers les Colonnades de Karun.", "Cette moitié de carte mène à Karun. L'autre moitié… dans ma poche, mais je préfère que tu fouilles.", "", "",
+          {{"Fouiller les Colonnades de Karun", K::Discover, "karun_ruins", 1, "karun_ruins"}}, 900, 500, {"ring_sapphire", "amber"});
+        Q("t_wreck", "L'or du Léviathan", QuestType::Treasure, "noa", "On dit que l'épave du Léviathan cache la solde de son équipage.", "L'équipage du Léviathan avait trois mois de solde dans la cale. Personne ne l'a retrouvée. La marée, peut-être.", "", "",
+          {{"Fouiller l'épave du Léviathan", K::Discover, "wreck", 1, "wreck"}}, 800, 600, {"ring_wolf"});
+        Q("x_sphinx", "L'énigme de la Gardienne", QuestType::Hidden, "", "La Gardienne des Sables a regardé le voyageur sans cligner.", "", "", "",
+          {{"Rencontrer la Gardienne des Sables", K::Discover, "sphinx", 1, "sphinx"}}, 700, 0, {"relic_sphinx_eye"});
+        Q("x_phare", "Le feu de la mer", QuestType::Hidden, "", "Le Phare des Brumes est éteint. Le gardien dit que la mer écoute.", "", "", "",
+          {{"Découvrir le Phare des Brumes", K::Discover, "phare", 1, "phare"}}, 400, 0, {"coco", "coco"});
+        Q("f_azur", "Le serment de Port-Azur", QuestType::Faction, "orla", "Orla recrute pour la Garde des Marins de Port-Azur.", "Les Marins ont besoin de bras. Huit écumeurs, et tu portes notre pavillon.", "Les corsaires sont à l'ouest.", "Bienvenue chez les Marins de Port-Azur. Porte ce pavillon avec honneur.",
+          {{"Vaincre des écumeurs", K::Kill, "pirate", 8, ""}}, 1000, 300, {"chain_chest", "dye_royal"}, FA_AZUR, 40, "n1");
+        Q("f_solmar", "Le serment des Caravanes", QuestType::Faction, "zahra", "Zahra recrute des gardes pour les caravanes de Solmar.", "Les caravanes ont besoin de gardes. Cinq pilleurs, cinq chacals, et ton nom est dans mon registre.", "Les dunes sont à l'est et au sud.", "Bienvenue parmi les Caravaniers de Solmar.",
+          {{"Vaincre des pilleurs", K::Kill, "dust_raider", 5, ""}, {"Chasser des chacals", K::Kill, "dune_jackal", 5, ""}}, 1100, 350, {"chain_head", "dye_gold"}, FA_SOLMAR, 40, "n4");
+    });
+    return q;
+}
+int questIndex(const std::string& id) { auto& q = quests(); for (int i = 0; i < (int)q.size(); i++) if (q[i].id == id) return i; return -1; }
+
+const std::vector<MountDef>& mounts() {
+    static std::vector<MountDef> m;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        CreatureLook horse; horse.kind = 3; horse.c1 = hexColor(0x6a4a30); horse.c2 = hexColor(0x8a6a4a); horse.saddle = true; horse.girth = 1.1f; horse.mane = false;
+        m.push_back({"horse", "Cheval de Brindlemere", "Robuste et fidèle.", horse, 2.0f, 9.f, 12.5f, 120, 600});
+        CreatureLook wolf; wolf.kind = 6; wolf.c1 = hexColor(0xb0b4bc); wolf.c2 = hexColor(0xe8ecf0); wolf.mane = true; wolf.saddle = true; wolf.girth = 1.2f; wolf.glow = hexColor(0x80d0ff);
+        m.push_back({"wolf", "Fenra, loup géant", "Agile et infatigable dans la neige.", wolf, 2.4f, 10.f, 13.5f, 150, 0});
+        CreatureLook elk; elk.kind = 7; elk.c1 = hexColor(0x5a4a3a); elk.c2 = hexColor(0xd8d0c0); elk.horns = true; elk.saddle = true; elk.crystal = true; elk.glow = hexColor(0x8ffff0);
+        m.push_back({"elk", "Cerf sylvain", "Le plus élégant des coursiers.", elk, 2.1f, 10.5f, 14.f, 130, 900});
+        CreatureLook boar; boar.kind = 1; boar.c1 = hexColor(0x4a3a30); boar.c2 = hexColor(0x6a5040); boar.c3 = hexColor(0x2a2018); boar.tusks = true; boar.armored = true; boar.saddle = true; boar.girth = 1.3f;
+        m.push_back({"boar", "Sanglier de guerre", "Lent à démarrer, impossible à arrêter.", boar, 2.0f, 8.5f, 12.f, 200, 800});
+        CreatureLook sp; sp.kind = 3; sp.c1 = hexColor(0x2a2238); sp.c2 = hexColor(0x6a50a0); sp.saddle = true; sp.crystal = true; sp.glow = hexColor(0xc070ff); sp.armored = true;
+        m.push_back({"spectral", "Destrier spectral", "Le destrier de Sire Corwin. Il ne touche presque pas le sol.", sp, 2.1f, 11.5f, 15.5f, 180, 0});
+        CreatureLook dn; dn.kind = 3; dn.c1 = hexColor(0xc89a58); dn.c2 = hexColor(0xf0dcb0); dn.saddle = true; dn.girth = 1.0f; dn.legLen = 1.1f; dn.mane = true; dn.glow = hexColor(0xffc060);
+        m.push_back({"dune", "Destrier d'ambre", "Léger sur le sable, il court sans jamais enfoncer.", dn, 2.0f, 11.f, 14.5f, 160, 1100});
+    });
+    return m;
+}
+
+const std::vector<DungeonDef>& dungeons() {
+    static std::vector<DungeonDef> d = {
+        {"whisper_cave", "Grotte des Murmures", "whisper_cave", R_GREENHAVEN, 101, 6, {"goblin", "goblin", "goblin_shaman"}, -1, 0, "echo_stone"},
+        {"catacombs", "Catacombes des Rois", "graveyard", R_SHADOWS, 202, 8, {"skeleton", "skeleton_archer", "ghoul"}, 1, 1, ""},
+        {"spider_den", "Antre de la Reine", "spider_den", R_SHADOWS, 303, 7, {"giant_spider", "forest_spider"}, 4, 2, ""},
+        {"ember_mines", "Mines de Brasier", "ember_mines", R_ASHEN, 404, 8, {"ember_elemental", "salamander", "ash_knight"}, -1, 3, "miners_badge"},
+        {"ice_caves", "Cavernes de Hrimgard", "ice_caves", R_FROSTHEIM, 505, 7, {"draugr", "frost_elemental", "snow_wolf"}, -1, 4, "relic_jarl_horn"},
+        {"abyss", "L'Abîme", "abyss", R_SHADOWS, 606, 9, {"specter", "dark_knight", "ghoul"}, 7, 5, ""},
+        // 2.0.0 (indices 6..8, referenced by the POIs of World.cpp)
+        {"sun_temple", "Temple du Soleil Mort", "sun_temple_door", R_AMBER, 707, 9, {"mummy", "sand_wraith", "sandstone_golem", "sun_guard"}, 10, 6, ""},
+        {"tide_cave", "Grotte des Marées", "tide_cave", R_CORAL, 808, 7, {"drowned", "sea_crab", "reef_serpent"}, -1, 7, "tide_pearl"},
+        {"silence", "Sanctuaire du Silence", "silence_gate", R_CORAL, 909, 9, {"drowned", "coral_golem", "siren"}, 11, 7, ""},
+        // 2.2.1 (index 9): beyond the portal of Lac Miroir, an archipelago floating in the sky
+        {"ether", "Le Royaume Céleste", "portal_ether", R_HIGHCROWNS, 1010, 9, {"wisp", "specter", "drakeling"}, 12, 8, "relic_star_glass"},
+        // 2.4.0 (index 10): under the Jaguar Temple of the Emerald Jungle
+        {"jaguar", "Temple du Jaguar", "jaguar_door", R_JUNGLE, 1111, 9, {"tlaloc_warrior", "jade_golem", "jungle_spider", "jaguar"}, -1, 6, "amulet_pearl"},
+        // 3.0.0 (indices 11..13): the Titan Mountains
+        {"gouffre", "Gouffre des Titans", "gouffre_titans", R_TITANS, 1212, 9, {"frost_elemental", "draugr", "rock_troll", "titan_wolf"}, 13, 4, ""},
+        {"mines_fer", "Mines de Fer-Noir", "mines_fer_noir", R_TITANS, 1313, 9, {"legion_soldier", "legion_crossbow", "ember_elemental", "legion_pikeman"}, 14, 3, ""},
+        {"tombe_geant", "Tombeau du Roi-Géant", "tombe_geant", R_TITANS, 1414, 10, {"draugr", "specter", "skeleton", "rock_troll"}, 15, 1, ""},
+        // 3.0.0 (index 14): the domain's own dungeon, under the crypt the player builds (no world POI: entered from the crypt)
+        {"domaine", "Donjon du domaine", "", R_GREENHAVEN, 1515, 8, {"skeleton", "ghoul", "dark_knight", "legion_soldier", "specter", "giant_spider"}, -1, 1, ""},
+        // 3.2.0 (index 15): through the Star Observatory of the Titan Mountains, into space: asteroids over the planet
+        {"cosmos", "Les Confins stellaires", "portal_stars", R_TITANS, 1616, 10, {"aurora_wraith", "crystal_golem", "crystal_spider", "wisp"}, -1, 10, "relic_comet"},
+    };
+    return d;
+}
+
+const std::vector<LoreDef>& lore() {
+    // 1.7.0: the Chronicles. Ids l1..l6 are kept (older saves); new pages are unlocked by the prologue, relics,
+    // discovering regions (r_*) and defeating the Guardians (mem_*: memories of Aldric).
+    static std::vector<LoreDef> l = {
+        // ---- the legend
+        {"l1", "La Couronne-Mère", "Six joyaux, six royaumes, un seul roi. Aldric fit forger la Couronne-Mère au cœur de Highspire, avec le feu de l'Ashen et la glace de Frostheim, pour que plus jamais les royaumes ne se fassent la guerre. On dit qu'elle chantait la nuit, et que celui qui la portait entendait battre le cœur de chaque sujet."},
+        {"l2", "La Chute", "La nuit de la Chute, la terre s'ouvrit sous Morneval. Le ciel devint violet, les morts se levèrent dans les marais, et pendant sept jours le soleil ne réchauffa plus personne. Ce qui sortit de la faille n'avait pas de nom. Seulement une faim."},
+        {"l3", "Le sacrifice", "Pour refermer la faille, Aldric brisa la Couronne-Mère sur l'enclume de Highspire. Chaque fragment devint un verrou ; chaque Gardien, une clé vivante. Puis le roi entra dans l'Abîme, seul, et lia sa propre âme au sceau. On ne retrouva jamais son corps."},
+        {"l4", "Sire Corwin", "Le champion du roi jura de garder la porte de l'Abîme « jusqu'au retour du roi ». Trois siècles plus tard, il attend encore, dans une armure que la rouille n'ose plus toucher. Ceux qui l'ont croisé disent qu'il ne parle qu'à une seule personne : quelqu'un qui n'est jamais revenu."},
+        {"l5", "La reine Elsa", "La reine disparut le jour de la Chute. Certains disent qu'elle s'est enfuie par la mer, portant l'héritier du trône. Les bardes chantent encore le retour de « l'enfant de la couronne ». Les érudits de Highspire, eux, ne chantent pas : ils cherchent."},
+        {"l6", "Les Errants", "Les marins parlent de naufragés marqués d'une couronne, que la mer rend toujours à Greenhaven. Aucun ne se souvient de son nom. La plupart meurent dans l'année. Un seul, dit-on, a survécu assez longtemps pour poser la question qui fait trembler l'Ordre : « Pourquoi la marque me brûle-t-elle quand je regarde vers Morneval ? »"},
+        {"l7", "Malgrath", "Il était le plus brillant des mages d'Aldric, son élève, presque son frère. Il lisait les étoiles et comptait les années qui lui restaient. Un soir, il compta trop bas. Alors il chercha sous la terre ce que le ciel lui refusait, et trouva une voix qui promettait l'éternité. Il ne demanda pas le prix."},
+        {"l8", "L'Abîme", "Ce n'est pas un lieu, disent les moines : c'est une blessure. Ce qui en monte ressemble à de l'ombre, mais a faim comme une bête. Les créatures d'ombre ne saignent pas ; elles se défont. Et dans leur silence, ceux qui écoutent trop longtemps entendent des promesses."},
+        {"l9", "Les six Gardiens", "L'Esprit des Racines dans l'Elderwood. Le Sénéchal, devenu Roi Squelette, à Gravemoor. Le Colosse sous le Lac de Givre. Le Dragon Cendré au Nid de Cendres. La Reine des Araignées dans son antre. Le Titan de Pierre au Cirque des Titans. Six gardiens, six fragments. Trois siècles de murmures ont suffi à les corrompre tous."},
+        {"l10", "L'Ordre de Highspire", "Les moines de Highspire gardent les archives du royaume et la clé de la forge où fut faite la Couronne-Mère. Ils portent le bleu et l'argent, et ne vieillissent pas plus vite que les autres hommes. Presque tous."},
+        {"l11", "La marque-couronne", "Une couronne à six branches, sous la peau du poignet, qui brûle quand un fragment est proche. Les vieux grimoires l'appellent « le sceau du porteur ». Aucun grimoire n'explique comment un naufragé sans nom peut porter le sceau d'un roi mort."},
+        // ---- the regions (unlocked on discovery)
+        {"r_0", "Greenhaven", "Le cœur doux du royaume : blé, moulins, routes pavées. Brindlemere y garde la tapisserie de la Couronne, que la doyenne Maëlle refuse de montrer aux étrangers. Depuis quelques lunes, les loups sortent des bois la nuit, et ils ont les yeux violets."},
+        {"r_1", "Frostheim", "Les clans du nord n'ont jamais plié le genou que devant Aldric. Ils racontent que le Colosse dort sous le Lac de Givre et que la glace chante quand il rêve. Cet hiver, la glace hurle."},
+        {"r_2", "Ashen Lands", "Une terre de cendre au pied du volcan, où les mineurs de Cinderwatch arrachent le fer à la lave. Le Dragon Cendré y couve un fragment de couronne comme un œuf, et la montagne fume plus fort chaque année."},
+        {"r_3", "Elderwood", "La forêt la plus ancienne du monde. Les druides du Cercle disent qu'Aldric y planta l'arbre-mère avec son champion, le jour de son sacre. Les racines remuent la nuit, et les clairières ne guérissent plus."},
+        {"r_4", "Royaume des Ombres", "Ce fut le plus riche des six royaumes ; c'est aujourd'hui un marais de brume, de tombes et de cloches qui sonnent seules. Le château de Morneval domine la faille. Personne n'y entre. Quelque chose en sort."},
+        {"r_5", "High Crowns", "Les cimes couronnées, où le ciel est si proche qu'on y voit les étoiles en plein jour. Le monastère de Highspire y garde la forge sacrée, et l'astronome de la tour prétend que les étoiles se sont déplacées."},
+        {"r_10", "Terres d'Aurore", "Une île au sud de la Côte de Corail, que les marins croyaient maudite à cause des lumières qui y dansent la nuit. Les cristaux y poussent comme des arbres, et des sources jaillissent assez fort pour lancer un homme jusqu'aux îles qui flottent dans le ciel. Les Lumins y vivent depuis toujours et disent que l'aurore est un être vivant."},   // 2.8.0
+        {"r_11", "Monts Titans", "La grande chaîne de l'est. Les géants y vivaient avant les hommes ; leurs tombes sont des montagnes. On dit que l'Observatoire des étoiles, sur un col oublié, ouvre une porte vers le ciel d'au-delà du ciel."},   // 3.3.0
+        {"r_12", "Canyons Écarlates", "Au sud de la jungle, la terre devient rouge. Le vent a sculpté des plateaux en escaliers, des gorges profondes et des aiguilles de pierre. Les nomades disent que la roche se souvient du feu qui l'a faite, et qu'elle s'éveille parfois sous la forme d'un colosse."},   // 3.3.0
+        // ---- memories of Aldric (one per defeated Guardian)
+        {"mem_root", "Souvenir : l'arbre-mère", "Tu te souviens de la terre noire sous tes ongles. D'un jeune chevalier qui riait en tenant la pousse : « Elle verra nos petits-enfants, sire. » Corwin. Tu connais ce nom. Tu as planté cet arbre. Tu."},
+        {"mem_king", "Souvenir : le serment du sénéchal", "Un homme agenouillé dans la salle du trône, la main sur l'épée. « Ma vie pour la couronne, ma mort pour le roi. » Le Roi Squelette a gardé son serment trois siècles. Avant de s'effondrer, il t'a appelé « sire »."},
+        {"mem_ice", "Souvenir : l'hiver noir", "La neige rouge, les clans du nord en ligne, et l'armée d'ombre qui avance sans bruit. Tu as levé ton épée et des milliers d'hommes ont crié ton nom. Tu ne te souviens pas de ce nom. Mais tu te souviens du cri."},
+        {"mem_ash", "Souvenir : l'élève", "Un jeune homme penché sur une carte du ciel. « Maître, combien de temps vivent les étoiles ? » Tu lui as répondu, et tu as vu la peur entrer dans ses yeux. C'était Malgrath. C'est toi qui lui as appris à compter les années."},
+        {"mem_spider", "Souvenir : le jeune moine", "La forge de Highspire, la nuit où la Couronne fut brisée. Dans l'ombre, un novice qui tenait les tenailles : cheveux noirs, regard vif, une cicatrice au menton. Tu as déjà vu ce visage. Hier. Il n'a pas pris une ride."},
+        {"mem_titan", "Souvenir : la clé de la forge", "Tu as confié la clé de la forge à l'Ordre en disant : « Que personne ne puisse jamais la reforger. » Le prieur a juré. Derrière lui, le novice à la cicatrice souriait."},
+        {"mem_knight", "Souvenir : le champion", "Corwin, à genoux devant la porte de l'Abîme, et toi qui entres sans te retourner. « Attends-moi. » C'est le dernier mot que tu lui as dit. Il a attendu. Il attend encore. Ou il t'a enfin reconnu."},
+        // ---- 3.10.0 the Amber: the reflection where Malgrath got his eternity
+        {"ambre_0", "L'Ambre", "Malgrath voulait l'éternité. Dans un reflet du royaume, il l'a eue. Là-bas, Aldric n'a jamais brisé la Couronne : il a hésité une seconde de trop, et le mage a posé la main sur les six joyaux en disant « Que rien ne finisse ». Depuis, rien ne finit. Le soleil reste bas sur l'horizon, la poussière ne retombe pas, l'eau a la couleur du miel. Les gens marchent encore, faits d'ambre, sans savoir vers où. La brèche du ciel ouvre sur ce monde-là. Les failles du sol aussi."},
+        {"ambre_1", "Souvenir d'ambre I : la seconde de trop", "La forge de Highspire, la même nuit, la même enclume. Aldric lève le marteau au-dessus de la Couronne. Ici, dans ce monde, il l'a abattu. Là-bas, il a pensé à sa fille, à ses six peuples, à tout ce qu'une couronne brisée allait coûter. Une seconde. Malgrath n'en demandait pas plus."},
+        {"ambre_2", "Souvenir d'ambre II : les Figés", "Une boulangère de Brindlemere pétrit la même pâte depuis trois cents ans. Elle ne sait plus pourquoi. Quand quelqu'un passe, elle lève les yeux et oublie aussitôt. Les Figés ne sont pas méchants. Ils défendent la seule chose qui leur reste : que rien ne change. Un étranger qui marche, c'est déjà un changement."},
+        {"ambre_3", "Souvenir d'ambre III : le novice à la cicatrice", "Le mage de l'Ambre n'a pas d'ombre, le temps ne le touche plus. Il a trouvé la première faille bien avant la brèche, et il est passé de notre côté. Un novice aux cheveux noirs, une cicatrice au menton, debout dans la forge la nuit où notre Couronne fut brisée. Il n'a pas pris une ride. Il ne venait pas empêcher Aldric. Il venait voir où partiraient les fragments."},
+        {"ambre_4", "Souvenir d'ambre IV : ce que craint l'éternité", "Dans l'Ambre, une seule chose peut finir : ce qui touche le Silence, le septième joyau, celui qui retire au lieu de donner. Le mage le sait. C'est pour cela qu'un temple a brûlé au-delà de la mer la nuit où le sceau a craqué. Kaede croit qu'on a volé le Silence pour s'en servir. On l'a volé pour que personne ne s'en serve."},
+        {"ambre_5", "Souvenir d'ambre V : la voix sur la grève", "« Tu es revenu… trop tard. » Tu as cru entendre un dieu, ou la mer. C'était lui : l'Aldric de l'Ambre, figé au milieu de son geste, le marteau toujours levé. Par la brèche, il voit ce que tu aurais pu être. Il ne t'en veut pas. Il t'envie."},
+        {"ambre_heraut", "Le Héraut figé", "Le capitaine de la garde d'Aldric, dans l'Ambre. Il gardait la porte de la forge la nuit où son roi a hésité. Il a vu la main du mage se poser sur les joyaux, il a voulu crier, et le cri est resté dans sa gorge pendant trois cents ans. Quand tu l'as brisé, l'ambre a gardé la forme de sa bouche ouverte. Dans les éclats, on a retrouvé sa lame."},
+        {"ambre_6", "Souvenir d'ambre VI : ce que veut la faille", "La brèche n'est pas une blessure, c'est une porte que l'Ambre pousse de l'autre côté. Quand les deux mondes se toucheront tout à fait, l'éternité coulera chez nous comme du miel sur une table. Six fragments tiennent encore la porte fermée. Le mage les cherche depuis trois siècles. Toi, tu en portes la marque au poignet."},
+        // ---- heroes of the wheel (1.8.0)
+        {"hero_wanderer", "Le Naufragé", "Le premier Errant à survivre plus d'une lune. Une épée rouillée, une marque au poignet, et cette façon de regarder Morneval comme on regarde une maison qu'on a quittée. Il ne le sait pas encore : il est l'âme d'Aldric."},
+        {"hero_kaede", "Kaede, Lame des Brumes", "Elle vient de l'archipel de Shirokawa, que les cartes du royaume ne connaissent pas. Elle était la dernière gardienne d'un temple qui veillait sur un septième fragment, celui qu'Aldric n'a jamais nommé. La nuit où le sceau a craqué, le temple a brûlé, et la mer l'a portée jusqu'ici. Elle se bat avec deux lames, des étoiles d'acier et la fumée. Elle ne dit jamais ce qu'elle cherche. Elle le cherche quand même."},
+        {"domain", "L'étendard du Naufragé", "Les Errants ne possèdent rien : la mer leur a tout pris. Celui-ci a planté un étendard dans la terre sauvage. Les anciens rois faisaient pareil, avant que les six royaumes n'aient des noms. Un feu, un mur, des gens qui restent. C'est ainsi que commencent les couronnes."},
+        {"kaede_silence", "Le Silence, septième joyau", "Les elfes d'Aelindor priaient un joyau qu'aucun roi n'a porté. Ils l'appelaient le Silence. Il ne donne pas de pouvoir : il en retire. Aldric l'aurait confié à un temple au-delà de la mer, pour le jour où la Couronne devrait être défaite, et non reforgée. Kaede en était la dernière gardienne. Le temple a brûlé. Quelqu'un savait où chercher."},
+        {"astra_grudge", "Ce que l'étoile n'a pas pardonné", "La Sentinelle avait parlé au roi la veille de la Chute : « Ne la brise pas. Ce qui est brisé peut être ramassé. » Aldric l'a brisée quand même, pour sauver son peuple. Un novice tenait les tenailles, une cicatrice au sourcil. Astra ne pardonne pas le geste. Elle se souvient surtout du sourire du novice."},
+        {"hero_astra", "Astra, l'Étoile tombée", "Les anciens rois savaient qu'une étoile veillait sur la Couronne-Mère. Ils l'appelaient la Sentinelle. Quand le sceau a commencé à mourir, la Sentinelle a quitté le ciel pour le suivre. Ilian l'a vue descendre au-dessus des Cimes. Astra vole, frappe comme une comète et brûle comme une aube. Elle se souvient d'Aldric. Elle ne se souvient pas de lui comme d'un ami."},
+        {"mem_abyss", "Souvenir : la voix", "Au fond de l'Abîme, une voix qui connaît ton vrai nom. « Tu es revenu, Aldric. Mais pas pour sceller. Pour choisir. » Tu sais maintenant qui tu es. Il te reste à décider ce que tu feras de la couronne."},
+    };
+    return l;
+}
+
+// ---------------------------------------------------------------------------------------- heroes (1.8.0)
+const std::vector<HeroDef>& heroes() {
+    static std::vector<HeroDef> h;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        HeroDef w;
+        w.id = "wanderer"; w.name = "Le Naufragé"; w.title = "L'âme d'Aldric"; w.model = "hero";
+        w.look.hair = Hair::Ponytail; w.look.hairCol = hexColor(0x3a2418); w.look.c1 = hexColor(0x5a3a2a); w.look.seed = 7;
+        w.lore = "hero_wanderer"; w.color = hexColor(0xe8c070);
+        h.push_back(w);
+
+        HeroDef k;
+        k.id = "kaede"; k.name = "Kaede"; k.title = "Lame des Brumes"; k.model = "hero_ninja";
+        k.look.female = true; k.look.body = Body::Leather; k.look.helm = Helm::Hood; k.look.hair = Hair::Ponytail; k.look.hairCol = hexColor(0x14121a);
+        k.look.c1 = hexColor(0x1d2236); k.look.c2 = hexColor(0x2a2638); k.look.c3 = hexColor(0x15131c); k.look.trim = hexColor(0xb03040);
+        k.look.skin = hexColor(0xe2b896); k.look.bulk = 0.9f; k.look.gauntlets = true; k.look.seed = 41;
+        k.weapon = WeaponType::Dagger; k.fixedWeapon = true; k.hpMul = 0.85f; k.atkMul = 1.1f; k.speedMul = 1.18f; k.doubleJump = true;
+        k.powers[0] = {HeroPower::Shuriken, "Shuriken", "i_sp_missiles", 2.5f, 10, 0, 0.7f};
+        k.powers[1] = {HeroPower::ShadowStep, "Pas de l'ombre", "i_sp_shadowstep", 6.f, 20, 0, 2.2f};
+        k.powers[2] = {HeroPower::SmokeBomb, "Bombe fumigène", "i_sp_souldrain", 14.f, 25, 0, 0.5f};
+        k.unlockQuest = "h_kaede"; k.unlockHint = "Quête « La lame des brumes » : parlez à Tomas, le chasseur de Brindlemere.";
+        k.lore = "hero_kaede"; k.color = hexColor(0x8a70ff);
+        h.push_back(k);
+
+        HeroDef a;
+        a.id = "astra"; a.name = "Astra"; a.title = "L'Étoile tombée"; a.model = "hero_angel";   // 3.10.6 the angel warrior (the player's model)
+        a.look.female = true; a.look.body = Body::Plate; a.look.hair = Hair::Long; a.look.hairCol = hexColor(0xf0d890);
+        a.look.c1 = hexColor(0x2a4fd0); a.look.c2 = hexColor(0x1e2f80); a.look.c3 = hexColor(0xd8b040); a.look.metal = hexColor(0x3a62e8); a.look.trim = hexColor(0xf0c850);
+        a.look.cape = false; a.look.gauntlets = true; a.look.greaves = true; a.look.skin = hexColor(0xf0caa8); a.look.eyes = hexColor(0x60c0ff); a.look.seed = 77;   // 3.10.6 wings, no cape
+        a.weapon = WeaponType::None; a.fixedWeapon = true; a.hpMul = 1.1f; a.atkMul = 1.05f; a.canFly = true;
+        a.powers[0] = {HeroPower::StarBeam, "Rayon stellaire", "i_sp_holylight", 4.f, 0, 12, 1.6f};
+        a.powers[1] = {HeroPower::MeteorStrike, "Frappe météore", "i_sp_fireball", 9.f, 0, 20, 2.6f};
+        a.powers[2] = {HeroPower::SolarWave, "Onde solaire", "i_sp_arcanenova", 15.f, 0, 25, 1.2f};
+        a.unlockQuest = "h_astra"; a.unlockHint = "Quête « L'étoile tombée » : parlez à Ilian, l'astronome de la tour.";
+        a.lore = "hero_astra"; a.color = hexColor(0xffd060);
+        h.push_back(a);
+    });
+    return h;
+}
+int heroIndex(const std::string& id) { auto& h = heroes(); for (int i = 0; i < (int)h.size(); i++) if (h[i].id == id) return i; return -1; }
+
+// ---------------------------------------------------------------------------------------- mods (1.7.0)
+// The tables are built once into static non-const storage; mods patch them at startup, before any use.
+ItemDef* itemMutable(const std::string& id) { return const_cast<ItemDef*>(item(id)); }
+EnemyDef* enemyMutable(const std::string& id) { int i = enemyIndex(id); return i < 0 ? nullptr : const_cast<EnemyDef*>(&enemies()[i]); }
+NpcDef* npcMutable(const std::string& id) { for (auto& n : npcs()) if (n.id == id) return const_cast<NpcDef*>(&n); return nullptr; }
+std::vector<LoreDef>& loreMutable() { return const_cast<std::vector<LoreDef>&>(lore()); }
+
+static std::string trimStr(const std::string& s) {
+    size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
+    return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+}
+
+DigTuning& digTuning() { static DigTuning t; return t; }
+GameTuning& gameTuning() { static GameTuning t; return t; }
+
+// 3.1.1 mods 2.0 ------------------------------------------------------------------------------------------
+static bool modIdOk(const std::string& id) {
+    if (id.empty() || id.size() > 40) return false;
+    for (char ch : id) if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_')) return false;
+    return true;
+}
+static bool parseHexColor(const std::string& v0, vec3& out) {
+    std::string v = v0; if (!v.empty() && v[0] == '#') v = v.substr(1);
+    if (v.size() != 6) return false;
+    char* end = nullptr; unsigned long h = std::strtoul(v.c_str(), &end, 16);
+    if (*end) return false;
+    out = hexColor((uint32_t)h); return true;
+}
+static int regionFromName(const std::string& v0) {
+    std::string v = v0; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+    static const char* n[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans", "canyons"};
+    for (int i = 0; i < R_COUNT; i++) if (v == n[i]) return i;
+    char* end = nullptr; long k = std::strtol(v.c_str(), &end, 10);
+    if (end != v.c_str() && !*end && k >= 0 && k < R_COUNT) return (int)k;
+    return -1;
+}
+static std::vector<std::string> splitBar(const std::string& v) {
+    std::vector<std::string> out; size_t a = 0;
+    while (true) { size_t b = v.find('|', a); out.push_back(trimStr(v.substr(a, b == std::string::npos ? std::string::npos : b - a))); if (b == std::string::npos) break; a = b + 1; }
+    return out;
+}
+
+bool applyModDataLine(const std::string& raw, std::string& err) {
+    std::string line = trimStr(raw);
+    if (line.empty() || line[0] == '#') return true;
+    size_t eq = line.find('=');
+    if (eq == std::string::npos) { err = "il manque « = »"; return false; }
+    std::string key = trimStr(line.substr(0, eq)), val = trimStr(line.substr(eq + 1));
+    if (val.size() > 2000) { err = "texte trop long"; return false; }
+    auto num = [&](float& out, float lo, float hi) {
+        char* end = nullptr;
+        float v = std::strtof(val.c_str(), &end);
+        if (end == val.c_str() || !std::isfinite(v)) { err = "nombre attendu : " + val; return false; }
+        out = clampf(v, lo, hi);
+        return true;
+    };
+    {   // 2.4.0 digging / bombs
+        DigTuning& t = digTuning();
+        if (key == "dig.radius") return num(t.digRadius, 0.6f, 4.f);
+        if (key == "dig.depth") return num(t.digDepth, 0.1f, 3.f);
+        if (key == "bomb.radius") return num(t.bombRadius, 1.f, 12.f);
+        if (key == "bomb.depth") return num(t.bombDepth, 0.2f, 10.f);
+        if (key == "bomb.damage") return num(t.bombDamage, 0.f, 2000.f);
+        if (key == "bomb.fuse") return num(t.bombFuse, 0.3f, 10.f);
+        GameTuning& g = gameTuning();   // 2.6.0
+        if (key == "game.enemy_hp") return num(g.enemyHp, 0.2f, 10.f);
+        if (key == "game.enemy_atk") return num(g.enemyAtk, 0.2f, 10.f);
+        if (key == "game.xp") return num(g.xp, 0.1f, 10.f);
+        if (key == "game.gold") return num(g.gold, 0.1f, 10.f);
+        if (key == "game.player_speed") return num(g.playerSpeed, 0.5f, 2.5f);
+        if (key == "game.stamina_regen") return num(g.staminaRegen, 0.2f, 5.f);
+        if (key == "game.gravity") return num(g.gravity, 0.15f, 3.f);         // 2.7.0
+        if (key == "game.jump") return num(g.jump, 0.5f, 3.f);
+        if (key == "game.time_speed") return num(g.timeSpeed, 0.f, 20.f);     // 0 = time stands still
+        if (key == "game.mount_speed") return num(g.mountSpeed, 0.5f, 3.f);
+        if (key == "game.enemy_scale") return num(g.enemyScale, 0.4f, 3.f);
+        if (key == "game.hour") return num(g.hour, 0.f, 23.99f);              // the clock stays at this hour
+        if (key == "game.weather") {
+            static const char* names[] = {"clair", "nuageux", "pluie", "orage", "neige", "brouillard", "cendres", "sable"};
+            std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+            if (v == "normal" || v == "auto") { g.weather = -1; return true; }
+            for (int i = 0; i < 8; i++) if (v == names[i]) { g.weather = i; return true; }
+            err = "météo inconnue : " + val + " (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal)"; return false;
+        }
+    }
+    // 3.1.1 mods 2.0: new creatures and new items, cloned from an existing one, then patched with the usual fields
+    if (key == "enemy.add") {   // enemy.add = id | base | Nom
+        auto f = splitBar(val);
+        if (f.size() < 3) { err = "format : enemy.add = id | ennemi de base | Nom"; return false; }
+        if (!modIdOk(f[0])) { err = "identifiant invalide (a-z, 0-9, _) : " + f[0]; return false; }
+        int bi = enemyIndex(f[1]);
+        if (bi < 0) { err = "ennemi de base inconnu : " + f[1]; return false; }
+        if (enemies()[bi].behavior == Behavior::Boss) { err = "un boss ne peut pas servir de base : " + f[1]; return false; }
+        auto& E = const_cast<std::vector<EnemyDef>&>(enemies());
+        int ex = enemyIndex(f[0]);
+        EnemyDef d = E[bi]; d.id = f[0]; d.name = f[2]; d.modded = true; d.hunter = false;
+        if (f.size() > 3 && !f[3].empty()) d.desc = f[3];
+        if (ex >= 0) { if (!E[ex].modded) { err = "cet identifiant existe déjà dans le jeu : " + f[0]; return false; } E[ex] = d; }
+        else { if (E.size() >= 500) { err = "trop de créatures"; return false; } E.push_back(d); }
+        return true;
+    }
+    if (key == "item.add") {   // item.add = id | base | Nom
+        auto f = splitBar(val);
+        if (f.size() < 3) { err = "format : item.add = id | objet de base | Nom"; return false; }
+        if (!modIdOk(f[0])) { err = "identifiant invalide (a-z, 0-9, _) : " + f[0]; return false; }
+        const ItemDef* b = item(f[1]);
+        if (!b) { err = "objet de base inconnu : " + f[1]; return false; }
+        ItemDef d = *b; d.id = f[0]; d.name = f[2];
+        if (f.size() > 3 && !f[3].empty()) d.desc = f[3];
+        auto it = gItemIdx.find(d.id);
+        if (it != gItemIdx.end()) { if (it->second < gBaseItemCount) { err = "cet identifiant existe déjà dans le jeu : " + f[0]; return false; } gItems[it->second] = d; }
+        else { if (gItems.size() >= 4000) { err = "trop d'objets"; return false; } gItems.push_back(d); gItemIdx[d.id] = (int)gItems.size() - 1; }
+        return true;
+    }
+    if (key == "game.start_item") {   // game.start_item = id | nombre
+        auto f = splitBar(val);
+        if (!item(f[0])) { err = "objet inconnu : " + f[0]; return false; }
+        int n = f.size() > 1 ? std::max(1, std::min(999, std::atoi(f[1].c_str()))) : 1;
+        gameTuning().startItems.push_back({f[0], n}); return true;
+    }
+    if (key == "game.start_weapon") { if (!item(val) || item(val)->weapon == WeaponType::None) { err = "arme inconnue : " + val; return false; } gameTuning().startWeapon = val; return true; }
+    if (key == "game.all_heroes") {   // 3.9.6
+        std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+        if (v == "1" || v == "oui" || v == "yes" || v == "true") { gameTuning().allHeroes = true; return true; }
+        if (v == "0" || v == "non" || v == "no" || v == "false") { gameTuning().allHeroes = false; return true; }
+        err = "valeur attendue : 1 ou 0"; return false;
+    }
+    if (key == "game.start_gold") { float v; if (!num(v, 0, 1e7f)) return false; gameTuning().startGold = (int)v; return true; }
+    if (key == "lore.add") {   // lore.add = id | Titre | Texte
+        size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);
+        if (p2 == std::string::npos) { err = "format : lore.add = id | Titre | Texte"; return false; }
+        LoreDef d{trimStr(val.substr(0, p1)), trimStr(val.substr(p1 + 1, p2 - p1 - 1)), trimStr(val.substr(p2 + 1))};
+        if (d.id.empty() || d.title.empty()) { err = "id ou titre vide"; return false; }
+        auto& L = loreMutable();
+        for (auto& l : L) if (l.id == d.id) { l = d; return true; }
+        L.push_back(d);
+        return true;
+    }
+    size_t d1 = key.find('.'), d2 = d1 == std::string::npos ? d1 : key.find('.', d1 + 1);
+    if (d2 == std::string::npos) { err = "clé attendue : type.id.champ"; return false; }
+    std::string type = key.substr(0, d1), id = key.substr(d1 + 1, d2 - d1 - 1), field = key.substr(d2 + 1);
+    if (type == "item") {
+        ItemDef* it = itemMutable(id);
+        if (!it) { err = "objet inconnu : " + id; return false; }
+        if (field == "name") { it->name = val; return true; }
+        if (field == "desc") { it->desc = val; return true; }
+        if (field == "atk") return num(it->atk, 0, 9999);
+        if (field == "def") return num(it->def, 0, 9999);
+        if (field == "hp") return num(it->hp, 0, 99999);
+        if (field == "mp") return num(it->mp, 0, 99999);
+        if (field == "crit") return num(it->crit, 0, 1);
+        if (field == "speed") return num(it->speed, -0.5f, 1.f);
+        if (field == "value") { float v; if (!num(v, 0, 1e7f)) return false; it->value = (int)v; return true; }
+        if (field == "stamina") return num(it->stamina, 0, 99999);              // 3.1.1
+        if (field == "heal") return num(it->heal, 0, 99999);
+        if (field == "mana") return num(it->mana, 0, 99999);
+        if (field == "elem_dmg") return num(it->elemDmg, 0, 9999);
+        if (field == "color") { if (!parseHexColor(val, it->color)) { err = "couleur attendue : #rrggbb"; return false; } return true; }
+        if (field == "rarity") {
+            static const char* n[] = {"commun", "rare", "epique", "legendaire", "mythique", "ancestral"};
+            std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+            for (int i = 0; i < 6; i++) if (v == n[i]) { it->rarity = (Rarity)i; return true; }
+            err = "rareté : commun, rare, epique, legendaire, mythique, ancestral"; return false;
+        }
+        err = "champ d'objet inconnu : " + field; return false;
+    }
+    if (type == "enemy") {
+        EnemyDef* e = enemyMutable(id);
+        if (!e) { err = "ennemi inconnu : " + id; return false; }
+        if (field == "name") { e->name = val; return true; }
+        if (field == "desc") { e->desc = val; return true; }
+        if (field == "hp") return num(e->hp, 1, 1e6f);
+        if (field == "atk") return num(e->atk, 0, 9999);
+        if (field == "def") return num(e->def, 0, 9999);
+        if (field == "speed") return num(e->speed, 0.2f, 20.f);
+        if (field == "scale") return num(e->scale, 0.3f, 6.f);
+        if (field == "aggro") return num(e->aggro, 1, 80);
+        // 3.1.1 mods 2.0
+        if (field == "tint") { if (!parseHexColor(val, e->tint)) { err = "couleur attendue : #rrggbb"; return false; } return true; }
+        if (field == "region") { int r = regionFromName(val); if (r < 0) { err = "région inconnue : " + val + " (greenhaven, frostheim, ashen, elderwood, ombres, highcrowns, ambre, corail, steppes, jungle, aurore, titans)"; return false; } e->region = r; return true; }
+        if (field == "spawn") return num(e->spawnWeight, 0.f, 20.f);
+        if (field == "level") { float v; if (!num(v, 1, 99)) return false; e->level = (int)v; return true; }
+        if (field == "xp") { float v; if (!num(v, 0, 1e6f)) return false; e->xp = (int)v; return true; }
+        if (field == "gold") { float v; if (!num(v, 0, 1e6f)) return false; e->gold = (int)v; return true; }
+        if (field == "group") { float v; if (!num(v, 1, 8)) return false; e->group = (int)v; return true; }
+        if (field == "night") { e->night = val == "1" || val == "oui" || val == "true"; return true; }
+        if (field == "loot") {   // enemy.X.loot = objet | chance (0..1)
+            auto f = splitBar(val);
+            if (!item(f[0])) { err = "objet inconnu : " + f[0]; return false; }
+            float ch = f.size() > 1 ? clampf((float)std::atof(f[1].c_str()), 0.f, 1.f) : 0.5f;
+            e->loot.push_back({f[0], ch}); return true;
+        }
+        err = "champ d'ennemi inconnu : " + field; return false;
+    }
+    if (type == "npc") {
+        NpcDef* n = npcMutable(id);
+        if (!n) { err = "PNJ inconnu : " + id; return false; }
+        if (field == "name") { n->name = val; return true; }
+        if (field == "title") { n->title = val; return true; }
+        if (field == "greet") { n->greetings.push_back(val); return true; }
+        if (field == "greet.replace") { n->greetings = {val}; return true; }
+        if (field == "lore") { n->lore.push_back(val); return true; }
+        err = "champ de PNJ inconnu : " + field; return false;
+    }
+    err = "type inconnu : " + type + " (item, enemy, npc, game, lore.add, enemy.add, item.add)";
+    return false;
+}
+
+}  // namespace lk

@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+"""LOST KINGDOM — import an AI-generated humanoid (GLB, T-pose, unrigged) into the game.
+
+The generated models (Tripo, Meshy...) are static meshes. This tool:
+  1. normalises the mesh (height in metres, feet on the ground, body axis at x = z = 0, facing +Z);
+  2. finds the joints from the mesh itself (arm line, wrist, shoulders, hips, knees, ankles, neck);
+  3. computes skin weights (2 bones per vertex) against the game's humanoid skeleton
+     (same bones and hierarchy as game/Characters.cpp, so every existing animation plays on it);
+  4. lowers the arms from the T-pose into the game's rest pose (arms down) with those weights;
+  5. writes assets/models/<name>.lkm (compact binary, see engine/gfx/Model.h) and <name>.jpg.
+
+Usage: python3 tools/import_character.py model.glb hero [--height 1.8] [--tex 1024] [--preview out.png]
+"""
+import argparse, io, json, os, struct, sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.join(HERE, "..")
+
+# Game humanoid skeleton (game/Characters.h enum HB) ---------------------------------------------
+NAMES = ["root", "spine", "chest", "neck", "head", "shL", "uarmL", "larmL", "handL", "shR", "uarmR", "larmR", "handR",
+         "thighL", "shinL", "footL", "thighR", "shinR", "footR", "propR", "propL"]
+PARENT = [-1, 0, 1, 2, 3, 2, 5, 6, 7, 2, 9, 10, 11, 0, 13, 14, 0, 16, 17, 12, 8]
+B = {n: i for i, n in enumerate(NAMES)}
+
+
+def load_glb(path):
+    b = open(path, "rb").read()
+    if b[:4] != b"glTF":
+        sys.exit("not a GLB file")
+    off, ch = 12, []
+    while off < len(b):
+        cl, ct = struct.unpack("<I4s", b[off:off + 8]); ch.append((ct, b[off + 8:off + 8 + cl])); off += 8 + cl
+    j = json.loads(ch[0][1]); binc = ch[1][1] if len(ch) > 1 else b""
+
+    def acc(i):
+        a = j["accessors"][i]; bv = j["bufferViews"][a["bufferView"]]
+        n = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[a["type"]]
+        dt = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8}[a["componentType"]]
+        o = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+        stride = bv.get("byteStride", 0)
+        if stride and stride != n * np.dtype(dt).itemsize:
+            raw = np.frombuffer(binc, dtype=np.uint8, count=stride * a["count"], offset=o).reshape(a["count"], stride)
+            r = raw[:, :n * np.dtype(dt).itemsize].copy().view(dt).reshape(a["count"], n)
+        else:
+            r = np.frombuffer(binc, dtype=dt, count=a["count"] * n, offset=o).reshape(a["count"], n)
+        return r if n > 1 else r[:, 0]
+
+    Ps, Ns, UVs, Is, base = [], [], [], [], 0
+    tex = None
+    # 2.9.0 node transforms (and their parents) are applied: FBX conversions put a -90 deg X turn and a x100 scale on
+    # the mesh node. Skinned meshes follow the same rule here (their bind pose is the rest pose for these models).
+    nodes = j.get("nodes", [])
+    parent = {}
+    for pi, nd in enumerate(nodes):
+        for c in nd.get("children", []): parent[c] = pi
+    def local(nd):
+        if "matrix" in nd: return np.array(nd["matrix"], dtype=np.float64).reshape(4, 4).T
+        t = np.array(nd.get("translation", [0, 0, 0]), dtype=np.float64); x, y, z, w = nd.get("rotation", [0, 0, 0, 1]); s = np.array(nd.get("scale", [1, 1, 1]), dtype=np.float64)
+        R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)], [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)], [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+        M = np.eye(4); M[:3, :3] = R * s[None, :]; M[:3, 3] = t; return M
+    def world(i):
+        M = local(nodes[i])
+        while i in parent: i = parent[i]; M = local(nodes[i]) @ M
+        return M
+    for ni, node in enumerate(nodes):
+        if "mesh" not in node:
+            continue
+        Wm = local(node)   # the mesh node's own transform only (parents hold armature offsets that the skin already cancels)
+        for pr in j["meshes"][node["mesh"]]["primitives"]:
+            at = pr["attributes"]
+            P = acc(at["POSITION"]).astype(np.float64)
+            N = acc(at["NORMAL"]).astype(np.float64) if "NORMAL" in at else np.zeros_like(P)
+            if not np.allclose(Wm, np.eye(4)):
+                P = P @ Wm[:3, :3].T + Wm[:3, 3]
+                Ninv = np.linalg.inv(Wm[:3, :3]).T; N = N @ Ninv.T; N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
+            UV = acc(at["TEXCOORD_0"]).astype(np.float64) if "TEXCOORD_0" in at else np.zeros((len(P), 2))
+            I = acc(pr["indices"]).astype(np.int64) if "indices" in pr else np.arange(len(P))
+            Ps.append(P); Ns.append(N); UVs.append(UV); Is.append(I + base); base += len(P)
+            if tex is None and "material" in pr:
+                m = j["materials"][pr["material"]]
+                t = m.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+                if t is not None:
+                    img = j["images"][j["textures"][t["index"]]["source"]]
+                    bv = j["bufferViews"][img["bufferView"]]
+                    o = bv.get("byteOffset", 0)
+                    tex = Image.open(io.BytesIO(binc[o:o + bv["byteLength"]])).convert("RGB")
+    if not Ps:
+        sys.exit("no mesh in file")
+    P = np.concatenate(Ps); N = np.concatenate(Ns); UV = np.concatenate(UVs); I = np.concatenate(Is).reshape(-1, 3)
+    return P, N, UV, I, tex
+
+
+def seg_dist(p, a, b):
+    ab = b - a
+    t = np.clip(((p - a) @ ab) / max(ab @ ab, 1e-9), 0, 1)
+    return np.linalg.norm(p - (a + t[:, None] * ab), axis=1)
+
+
+def rot_z(angle):
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("glb"); ap.add_argument("name")
+    ap.add_argument("--height", type=float, default=1.8)
+    ap.add_argument("--tex", type=int, default=1024)
+    ap.add_argument("--preview", default="")
+    ap.add_argument("--yaw", type=float, default=0.0, help="turn the source model about the vertical axis first (degrees), e.g. 90 for a model facing +X")
+    ap.add_argument("--anat", default="", help="3.10.6 JSON: joints given by hand for a model standing arms down (A-pose) "
+                    "{joints:{bone:[x,y,z]} in units of the height, wings:{behind_z, outside_x, above_y}, halo_y} -> no T-pose detection, no arm lowering")
+    a = ap.parse_args()
+
+    P, N, UV, I, tex = load_glb(a.glb)
+    if a.yaw:   # 2.9.0 models delivered facing another way (Tripo rigged gallery models face +X)
+        c, s_ = np.cos(np.radians(a.yaw)), np.sin(np.radians(a.yaw))
+        R = np.array([[c, 0, s_], [0, 1, 0], [-s_, 0, c]])
+        P = P @ R.T; N = N @ R.T
+    # ---- normalise: feet on the ground, target height, body axis centred ------------------------
+    P[:, 1] -= P[:, 1].min()
+    H0 = P[:, 1].max()
+    P *= a.height / H0
+    H = a.height
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    legs = (y > 0.05 * H) & (y < 0.22 * H)
+    P[:, 0] -= 0.5 * (x.max() + x.min())          # T-pose is symmetric: centre on the bounding box
+    P[:, 2] -= np.median(z[legs])
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
+
+    anat = json.load(open(a.anat)) if a.anat else None
+    # ---- landmarks --------------------------------------------------------------------------------
+    maxX = np.abs(x).max()
+    if anat:   # 3.10.6 A-pose model: the arm "line" is the wrist height, maxX is where the fists end
+        maxX = max(abs(anat["joints"]["handL"][0]) + 0.04, 0.2) * H
+    if maxX < 0.6 * H * 0.5:
+        print("warning: arms do not look horizontal (T-pose expected); weights may be poor")
+    armBand = np.abs(x) > 0.55 * maxX
+    yArm = np.median(y[armBand]); zArm = np.median(z[armBand])
+    # torso edge: first |x| slice (from the centre) that contains nothing far below the arm line
+    xEdge = maxX
+    for xs in np.arange(0.05 * H, maxX, 0.01):
+        m = (np.abs(x) >= xs) & (np.abs(x) < xs + 0.02)
+        if m.sum() and y[m].min() > yArm - 0.12 * H:
+            xEdge = xs; break
+    chestBand = (y > yArm - 0.17 * H) & (y < yArm - 0.07 * H)
+    shoulderX = min(xEdge * 0.85, np.percentile(np.abs(x[chestBand]), 95) + 0.02 * H)
+    wristX = maxX - 0.085 * H
+    elbowX = shoulderX + 0.5 * (wristX - shoulderX)
+    lower = (y > 0.08 * H) & (y < 0.3 * H)
+    legX = np.median(np.abs(x[lower])); legZ = np.median(z[lower])
+    hipY, kneeY, ankleY = 0.51 * H, 0.27 * H, 0.06 * H
+    rootY = hipY + 0.02 * H
+    bodyZ = 0.5 * zArm + 0.5 * legZ               # spine axis between the arm line and the legs
+
+    J = np.zeros((21, 3))
+    J[B["root"]] = (0, rootY, bodyZ)
+    J[B["spine"]] = (0, rootY + 0.065 * H, bodyZ)
+    J[B["chest"]] = (0, rootY + 0.17 * H, bodyZ)
+    J[B["neck"]] = (0, max(yArm + 0.05 * H, rootY + 0.28 * H), bodyZ - 0.01 * H)
+    J[B["head"]] = (0, J[B["neck"]][1] + 0.055 * H, bodyZ)
+    for s, side in ((1, "L"), (-1, "R")):
+        J[B["sh" + side]] = (s * 0.045 * H, yArm + 0.02 * H, zArm * 0.5 + bodyZ * 0.5)
+        J[B["uarm" + side]] = (s * shoulderX, yArm, zArm)
+        J[B["larm" + side]] = (s * elbowX, yArm, zArm)
+        J[B["hand" + side]] = (s * wristX, yArm, zArm)
+        J[B["thigh" + side]] = (s * legX * 0.9, hipY, legZ)
+        J[B["shin" + side]] = (s * legX, kneeY, legZ)
+        J[B["foot" + side]] = (s * legX, ankleY, legZ - 0.01 * H)
+    J[B["propL"]] = J[B["handL"]] + (0.04 * H, 0, 0.01 * H)
+    J[B["propR"]] = J[B["handR"]] + (-0.04 * H, 0, 0.01 * H)
+    if anat:
+        for n, v in anat["joints"].items():
+            J[B[n]] = np.array(v) * H
+        for n in list(anat["joints"].keys()):   # mirror the left side when the right is not given
+            if n.endswith("L") and (n[:-1] + "R") in B and (n[:-1] + "R") not in anat["joints"]:
+                v = np.array(anat["joints"][n]) * H; J[B[n[:-1] + "R"]] = (-v[0], v[1], v[2])
+        J[B["propL"]] = J[B["handL"]] + (0, -0.05 * H, 0.02 * H)   # arms hang: the grip is below the wrist
+        J[B["propR"]] = J[B["handR"]] + (0, -0.05 * H, 0.02 * H)
+        yArm = J[B["uarmL"]][1]; shoulderX = abs(J[B["uarmL"]][0])
+        hipY = J[B["thighL"]][1]; kneeY = J[B["shinL"]][1]; rootY = J[B["root"]][1]; bodyZ = J[B["spine"]][2]
+    for n in NAMES:
+        print(f"  {n:7s} {np.round(J[B[n]], 3)}")
+
+    # ---- bone segments (T-pose) and skin weights ---------------------------------------------------
+    tips = {B["head"]: J[B["head"]] + (0, 0.12 * H, 0),
+            B["handL"]: np.array([maxX, yArm, zArm]), B["handR"]: np.array([-maxX, yArm, zArm]),
+            B["footL"]: J[B["footL"]] + (0, -0.04 * H, 0.09 * H), B["footR"]: J[B["footR"]] + (0, -0.04 * H, 0.09 * H)}
+    child = {B["root"]: B["spine"], B["spine"]: B["chest"], B["chest"]: B["neck"], B["neck"]: B["head"],
+             B["shL"]: B["uarmL"], B["uarmL"]: B["larmL"], B["larmL"]: B["handL"], B["shR"]: B["uarmR"], B["uarmR"]: B["larmR"], B["larmR"]: B["handR"],
+             B["thighL"]: B["shinL"], B["shinL"]: B["footL"], B["thighR"]: B["shinR"], B["shinR"]: B["footR"]}
+    skinBones = [i for i in range(21) if i not in (B["propL"], B["propR"])]
+    D = np.full((len(P), 21), 1e9)
+    for bi in skinBones:
+        end = J[child[bi]] if bi in child else tips[bi]
+        D[:, bi] = seg_dist(P, J[bi], end)
+    # region rules ------------------------------------------------------------------------------
+    big = 1e9
+    left, right = x > 0, x <= 0
+    armL = ["shL", "uarmL", "larmL", "handL"]; armR = ["shR", "uarmR", "larmR", "handR"]
+    legL = ["thighL", "shinL", "footL"]; legR = ["thighR", "shinR", "footR"]
+    for n in armL + legL: D[right, B[n]] = big
+    for n in armR + legR: D[left, B[n]] = big
+    if anat:   # arms hang beside the body: the hand bone ends below the wrist, the arm band runs down to the fists
+        tips[B["handL"]] = J[B["handL"]] + (0.005 * H, -0.07 * H, 0.01 * H); tips[B["handR"]] = J[B["handR"]] + (-0.005 * H, -0.07 * H, 0.01 * H)
+        for bi in (B["handL"], B["handR"]): D[:, bi] = seg_dist(P, J[bi], tips[bi])
+        armHeight = (y > J[B["handL"]][1] - 0.09 * H) & (y < yArm + 0.04 * H)
+        inArm = (np.abs(x) > anat.get("arm_inner_x", 0.11) * H) & armHeight
+    else:
+        armHeight = y > yArm - 0.2 * H                   # T-pose arms are horizontal: only there
+        inArm = (np.abs(x) > shoulderX + 0.02 * H) & armHeight
+    for n in ["root", "spine", "neck", "head"] + legL + legR: D[inArm, B[n]] = big
+    notArm = ((np.abs(x) < anat.get("arm_inner_x", 0.11) * H - 0.01 * H) | ~armHeight) if anat else ((np.abs(x) < shoulderX - 0.03 * H) | ~armHeight)
+    for n in ["larmL", "handL", "larmR", "handR"]: D[notArm, B[n]] = big
+    for n in ["uarmL", "uarmR"]: D[np.abs(x) < (anat.get("arm_inner_x", 0.11) * H - 0.01 * H if anat else shoulderX - 0.07 * H), B[n]] = big
+    belowHips = y < hipY - 0.04 * H
+    for n in ["chest", "neck", "head"] + armL + armR: D[belowHips, B[n]] = big
+    aboveHips = y > rootY + 0.06 * H
+    for n in legL + legR: D[aboveHips, B[n]] = big
+    # cape / long coat behind the body: follows the torso, never the legs
+    cape = (z < bodyZ - 0.075 * H) & (y > kneeY - 0.05 * H) & ~inArm
+    for n in legL + legR + armL[1:] + armR[1:]: D[cape, B[n]] = big
+    # 3.10.6 wings and halo (A-pose anatomy file): the wings ride the chest (never an arm or a leg), the halo the head
+    wingMask = np.zeros(len(P), bool)
+    if anat and "wings" in anat:
+        wg = anat["wings"]
+        wingMask = (y > wg.get("above_y", 0.3) * H) & ((z < wg["behind_z"] * H) | (np.abs(x) > wg["outside_x"] * H))
+        for bi in skinBones:
+            if bi != B["chest"]: D[wingMask, bi] = big
+        D[wingMask, B["chest"]] = seg_dist(P[wingMask], J[B["chest"]], J[B["neck"]])
+        print(f"  wings: {int(wingMask.sum())} vertices ride the chest")
+    if anat and "halo_y" in anat:
+        hm = (y > anat["halo_y"] * H) & (z < anat.get("halo_z", -0.03) * H) & ~wingMask
+        for bi in skinBones:
+            if bi != B["head"]: D[hm, bi] = big
+        D[hm, B["head"]] = seg_dist(P[hm], J[B["head"]], J[B["head"]] + np.array([0, 0.1 * H, 0]))
+        print(f"  halo: {int(hm.sum())} vertices ride the head")
+    # safety net: a vertex excluded from every bone falls back to its nearest bone (no rule)
+    allMasked = (D >= big / 2).all(1)
+    if allMasked.any():
+        print(f"  warning: {int(allMasked.sum())} vertices matched no rule, using nearest bone")
+        for bi in skinBones:
+            end = J[child[bi]] if bi in child else tips[bi]
+            D[allMasked, bi] = seg_dist(P[allMasked], J[bi], end)
+    # ---- geodesic assignment ------------------------------------------------------------------------
+    # Straight-line distance binds capes, skirts and tabards to the legs (they hang next to them), which
+    # stretches those faces into "plates" between and under the feet when walking. Instead, each bone
+    # claims the surface around it (seeds close to the bone) and influence spreads ALONG the mesh surface:
+    # a cape is reached from the shoulders, a tabard from the belt, never from the legs.
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    key = np.round(P / 1e-5).astype(np.int64)                     # weld UV-seam duplicates for connectivity
+    _, weld = np.unique(key, axis=0, return_inverse=True); weld = weld.reshape(-1)
+    nW = weld.max() + 1
+    Pw = np.zeros((nW, 3)); Pw[weld] = P
+    e = np.concatenate([I[:, [0, 1]], I[:, [1, 2]], I[:, [2, 0]]]); e = weld[e]
+    e = e[e[:, 0] != e[:, 1]]
+    lens = np.linalg.norm(Pw[e[:, 0]] - Pw[e[:, 1]], axis=1)
+    graph = coo_matrix((np.concatenate([lens, lens]), (np.concatenate([e[:, 0], e[:, 1]]), np.concatenate([e[:, 1], e[:, 0]]))), shape=(nW, nW)).tocsr()
+    Dw = np.full((nW, 21), big); np.minimum.at(Dw, weld, D)          # region-masked Euclidean distance per welded node
+    nearest = Dw.argmin(1); dnear = Dw.min(1)
+    limb = set(B[n] for n in armL + armR + legL + legR) - {B["shL"], B["shR"]}
+    G = np.full((nW, 21), np.inf)
+    for bi in skinBones:
+        r = 0.045 * H if bi in limb else (0.07 * H if bi in (B["shL"], B["shR"]) else 0.13 * H)
+        seeds = np.where((nearest == bi) & (dnear < r))[0]
+        if len(seeds) == 0:
+            seeds = np.where(nearest == bi)[0][:1]
+        if len(seeds) == 0:
+            continue
+        G[:, bi] = dijkstra(graph, indices=seeds, min_only=True)
+    G[Dw >= big / 2] = np.inf                                       # keep the side / region rules
+    unreached = ~np.isfinite(G).any(1)                              # floating parts with no seed: Euclidean
+    G[unreached] = Dw[unreached]
+    G = G[weld]
+    order = np.argsort(G, axis=1)[:, :2]
+    g0 = G[np.arange(len(P)), order[:, 0]]; g1 = G[np.arange(len(P)), order[:, 1]]
+    blend = 0.05 * H                                                # width of the soft zone around joints
+    w1 = np.where(np.isfinite(g1), 0.5 * np.clip(1 - (g1 - g0) / blend, 0, 1), 0)
+    W0 = 1 - w1
+    b0, b1 = order[:, 0], np.where(np.isfinite(g1), order[:, 1], order[:, 0])
+    print(f"  skinning: {nW} welded nodes, {int(unreached.sum())} without surface path")
+    if os.environ.get("LK_DEBUG_SKIN"):
+        bad = np.where((P[:, 1] < 0.15 * H) & (b0 == B["root"]))[0][:6]
+        for v in bad:
+            print("   dbg v", v, np.round(P[v], 3), "G foot/shin/root:", [round(float(G[v, B[n]]), 3) for n in ("footL", "footR", "shinL", "shinR", "root")],
+                  "D:", [round(float(D[v, B[n]]), 3) for n in ("footL", "footR", "shinL", "shinR", "root")], "unreached", bool(unreached[weld[v]]))
+
+    # ---- T-pose -> rest pose (arms down) using the weights -------------------------------------------
+    angle = 0.0 if anat else np.pi / 2 - 0.08   # 3.10.6 an A-pose model already hangs its arms
+    R = {B[n]: rot_z(-angle) for n in ["uarmL", "larmL", "handL", "propL"]}
+    R.update({B[n]: rot_z(angle) for n in ["uarmR", "larmR", "handR", "propR"]})
+    pivot = {}
+    for s in "LR":
+        for n in ["uarm", "larm", "hand", "prop"]:
+            pivot[B[n + s]] = J[B["uarm" + s]]
+
+    def pose(points, normals, bones):
+        outP, outN = points.copy(), normals.copy()
+        for bi, Rm in R.items():
+            m = bones == bi
+            if m.any():
+                outP[m] = (points[m] - pivot[bi]) @ Rm.T + pivot[bi]
+                outN[m] = normals[m] @ Rm.T
+        return outP, outN
+
+    P0, N0 = pose(P, N, b0)
+    P1, N1 = pose(P, N, b1)
+    Pb = P0 * W0[:, None] + P1 * (1 - W0[:, None])
+    Nb = N0 * W0[:, None] + N1 * (1 - W0[:, None])
+    Nb /= np.maximum(np.linalg.norm(Nb, axis=1, keepdims=True), 1e-9)
+    Jb = J.copy()
+    for bi in R:
+        Jb[bi] = (J[bi] - pivot[bi]) @ R[bi].T + pivot[bi]
+
+    # ---- write -------------------------------------------------------------------------------------------
+    outDir = os.path.join(ROOT, "assets", "models"); os.makedirs(outDir, exist_ok=True)
+    path = os.path.join(outDir, a.name + ".lkm")
+    nv, ni = len(Pb), I.size
+    with open(path, "wb") as f:
+        f.write(b"LKM2"); f.write(struct.pack("<IIIf", nv, ni, 21, H))
+        f.write(Jb.astype("<f4").tobytes())
+        f.write(Pb.astype("<f4").tobytes())
+        f.write(np.clip(np.round(Nb * 127), -127, 127).astype(np.int8).tobytes())
+        uv16 = np.clip(np.round(np.stack([UV[:, 0] % 1.0001, UV[:, 1] % 1.0001], 1) * 65535), 0, 65535).astype("<u2")
+        f.write(uv16.tobytes())
+        # flags byte: 255 = cloth (cape, tabard / skirt) -> never shaded as metal
+        torsoBone = np.isin(b0, [B["root"], B["spine"], B["chest"]])
+        backSide = torsoBone & (z < bodyZ - 0.025 * H) & (y > kneeY - 0.1 * H) & (y < yArm + 0.05 * H)   # cape covers the back
+        cloth = cape | backSide | ((b0 == B["root"]) & (y < rootY - 0.03 * H))
+        f.write(np.stack([b0, b1, np.round(W0 * 255), np.where(cloth, 255, 0)], 1).astype(np.uint8).tobytes())
+        f.write(I.astype("<u4").reshape(-1).tobytes())
+    print(f"wrote {path}: {nv} vertices, {ni // 3} triangles, {os.path.getsize(path) / 1e6:.2f} MB")
+    if tex is not None:
+        tp = os.path.join(outDir, a.name + ".jpg")
+        tex.resize((a.tex, a.tex), Image.LANCZOS).save(tp, quality=88, optimize=True)
+        print(f"wrote {tp}: {a.tex}px, {os.path.getsize(tp) / 1e6:.2f} MB")
+
+    if a.preview:
+        # front & side views of the rest pose, coloured by dominant bone, with joints
+        rng = np.random.default_rng(3); pal = (rng.random((21, 3)) * 200 + 40).astype(int)
+        S = 520; img = Image.new("RGB", (S * 2, S), (30, 30, 36)); d = ImageDraw.Draw(img)
+        for vi, (ax, sgn) in enumerate(((0, 1), (2, -1))):
+            def to2(p): return (vi * S + S / 2 + sgn * p[..., ax] * S / H * 0.9, S - 20 - p[..., 1] * S / H * 0.9)
+            depth = Pb[I].mean(1)[:, 2 if ax == 0 else 0] * (1 if ax == 0 else -1)
+            for t in np.argsort(depth):
+                tri = I[t]; X, Y = to2(Pb[tri])
+                c = pal[np.bincount(b0[tri], minlength=21).argmax()]
+                d.polygon(list(zip(X, Y)), fill=tuple(int(v) for v in c))
+            for i in range(21):
+                X, Y = to2(Jb[i]); d.ellipse([X - 3, Y - 3, X + 3, Y + 3], fill=(255, 255, 255))
+                if PARENT[i] >= 0:
+                    X2, Y2 = to2(Jb[PARENT[i]]); d.line([X, Y, X2, Y2], fill=(255, 255, 0), width=2)
+        img.save(a.preview); print("preview", a.preview)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,9 @@
+# Méga-bombes (mod livré avec LOST KINGDOM 2.6.0)
+bomb.radius = 8
+bomb.depth = 6
+bomb.damage = 220
+bomb.fuse = 3
+dig.radius = 2.4
+dig.depth = 1.2
+item.bomb.name = Méga-bombe
+item.bomb.desc = Une bombe de mineur nain. Reculez. Beaucoup.

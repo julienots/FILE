@@ -1,0 +1,7 @@
+# Apocalypse (mod livré avec LOST KINGDOM 2.7.0)
+game.weather = orage
+game.enemy_scale = 1.35
+game.enemy_hp = 1.6
+game.enemy_atk = 1.5
+game.gold = 2.5
+game.xp = 1.8

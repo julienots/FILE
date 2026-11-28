@@ -1,0 +1,1703 @@
+# LOST KINGDOM
+
+*A world waiting to be discovered.* Created by **SUPERESSENCE STUDIO**, powered by **AGR ENGINE**.
+
+<p align="center"><img src="branding/key_art.png" width="720" alt="LOST KINGDOM, key art"/></p>
+
+LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
+
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.9.0 (versionCode 63), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.8.1 : elle s'installe par-dessus). SHA-256 : `dfa91468eda925a68a61047d333bccf91662851bd6512e4587118b006e4c4595`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+  - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
+  - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+  - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
+- **Langue du jeu** : français.
+
+> **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.9.0 (Aldrenbourg, la grande ville du marché, et la Grande Foire)
+
+- **Aldrenbourg, la Ville du Marché**. Une grande ville fortifiée de Greenhaven, au nord de Brindlemere, entre Fort Aldren et les Ruines de Vael :
+  - remparts à 20 tours et 4 portes ;
+  - rues pavées sinueuses et ruelles ;
+  - plus de 100 maisons ;
+  - une trentaine d'habitants qui vont et viennent ;
+  - une pierre de voyage devant la porte sud.
+  - Des routes la relient à Brindlemere, Fort Aldren et Vael.
+- **4 nouveaux bâtiments** :
+  - **fontaine** de la place, avec le Haut-Roi l'épée levée ;
+  - **halle de marché** couverte : piliers de chêne, étals garnis, tentures, caisses et sacs ;
+  - **mairie** : arcades de pierre, étage à colombages en encorbellement, beffroi avec horloge, bannières de la couronne ;
+  - **maison de ville à colombages** : rez-de-chaussée de pierre avec boutique et auvent, étage en saillie sur la rue, lucarne, enseigne.
+  - Dans Aldrenbourg, ces maisons de ville bordent les rues avec les maisons existantes, et la chapelle est plus grande.
+- **6 nouveaux personnages**, avec leurs scènes de dialogue :
+  - Gaspard de Vaux, le bourgmestre ;
+  - Colette, la boulangère (pain, gâteaux au miel, soupes) ;
+  - Fabien, le drapier (toutes les teintures, lin, cuir) ;
+  - Orane, la joaillière (anneaux, amulette, lingots) ;
+  - le Sergent Garin, du guet ;
+  - Mélisande, la ménestrelle.
+- **4 nouvelles quêtes** :
+  - *Le four froid* ;
+  - *Les tire-laine du marché* ;
+  - *L'anneau de la mariée* ;
+  - *La Grande Foire* : elle se termine par une scène où Mélisande chante l'histoire du naufragé sans nom. Ensuite, la place se pare de mâts et de guirlandes de fanions qui flottent au vent.
+- **Ambiance sonore de ville** (nouveau son `amb_town`) : brouhaha du marché, pas sur les pavés, forge lointaine, rires.
+- **Corrections** :
+  - l'ambiance de village ne s'entendait qu'à moins de 70 m du centre, donc pas dans les rues des grandes villes ;
+  - hors des remparts, un moulin ou un enclos pouvait être posé sur une route qui sort de la ville (une borne se retrouvait dans le moulin) ;
+  - en intérieur, la caméra des dialogues se rapproche pour ne pas traverser les murs.
+- Tests : nouveau scénario `town` (bâtiments, habitants, rencontre du bourgmestre, quête du four, la Foire).
+- Les modèles 3D du Drive ne sont pas encore intégrés : les fichiers font 58 à 63 Mo, au-delà de la limite de 10 Mo du connecteur. Ils le seront dès qu'une version allégée sera déposée.
+
+### Nouveautés 3.8.1 (un cheval qui bouge comme un vrai cheval, et un cavalier qui le ressent)
+
+- **Trois vraies allures**, avec des seuils calés sur les vitesses réellement atteintes :
+  - **pas** au joystick à moitié poussé ;
+  - **trot** à l'allure normale ;
+  - **galop** en éperonnant (sprint).
+  - Auparavant, le cheval trottait presque toujours.
+- **Le corps du cheval porte le mouvement**. Le dos monte, descend, tangue et roule selon l'allure :
+  - **pas** : balancement à quatre temps ;
+  - **trot** : deux secousses sèches par foulée ;
+  - **galop** : bascule avant-arrière à chaque bond.
+  - Le cheval s'incline dans les virages et suit la pente.
+  - L'encolure joue le balancier : grand hochement au pas, tête stable au trot, ample au galop.
+- **Le cavalier est assis sur ce dos en mouvement** (sa position est calculée sur la selle inclinée) et il réagit :
+  - au pas, les hanches suivent le balancement ;
+  - au trot, il fait le trot enlevé : il se lève dans les étriers une foulée sur deux, genoux qui s'ouvrent, avec un petit choc quand il se rassoit ;
+  - au galop, il passe en équilibre, penché en avant au-dessus de la selle, et ses mains suivent l'encolure ;
+  - il se penche dans les virages, est rejeté en arrière quand le cheval accélère et vers l'avant quand il freine (ressort avec léger rebond) ;
+  - la tête reste stable, le regard à l'horizon, avec un petit retard sur les secousses.
+- **On le ressent** :
+  - la caméra suit une partie des secousses, adoucies ;
+  - poussière soulevée au galop.
+- **Nouveaux sons** :
+  - chaque sabot est entendu au moment où il touche le sol (4 temps au pas, 2 au trot, 3-4 au galop) ;
+  - éclaboussures dans l'eau ;
+  - grincement du cuir et tintement de la selle ;
+  - ébrouements du cheval.
+- Tests : nouveau scénario `ride` (pas, trot, galop filmés de profil). Il vérifie que chaque allure est atteinte, que le dos du cheval bouge à chaque allure, que le galop tangue plus que le pas et que le trot est enlevé.
+
+### Nouveautés 3.8.0 (une histoire racontée en vraies scènes de dialogue, animations de conversation)
+
+- **Dialogues complets de l'histoire** (`game/Conversations.cpp`). Chaque tournant des actes I et II était une seule phrase. C'est maintenant une vraie conversation, réplique par réplique, entre le héros et son interlocuteur :
+  - première rencontre avec Maëlle, Alaric, Orla, Hanzo, Zahra et Kaede (qui ils sont, ce qu'ils savent) ;
+  - proposition des quêtes principales m2 à m6 et n1 à n9 ;
+  - scène de fin de chaque quête (la Pierre d'écho qui parle avec la voix d'Aldric, la Couronne reforgée, le pardon de Solmar, le joyau rendu à la mer…).
+  - Le héros répond enfin : ses répliques s'affichent à droite, sous son nom, avec son portrait.
+  - La scène de fin d'une quête se joue à la prochaine discussion avec la personne concernée, avant le chapitre cinématique. Elle est conservée dans la sauvegarde.
+- **Conversations filmées** :
+  - bandes noires de cinéma ;
+  - plan par-dessus l'épaule de celui qui écoute, qui glisse depuis la caméra de jeu et change de côté selon qui parle (sans franchir l'axe) ;
+  - les deux personnages se tournent l'un vers l'autre ;
+  - le HUD disparaît.
+- **Animations de dialogue** :
+  - six nouveaux gestes, choisis par l'humeur de chaque réplique :
+    - chaleureux (paumes ouvertes, petit hochement) ;
+    - grave (main sur le cœur, tête baissée) ;
+    - ferme (poing, puis doigt pointé) ;
+    - émerveillé (bras qui s'ouvrent, tête levée) ;
+    - révérence ;
+    - salut de la main ;
+  - celui qui écoute hoche la tête ;
+  - le PNJ se tait pendant les répliques du héros.
+- **Portraits vivants** : le visage de celui qui parle est rendu en direct à partir du personnage du monde, avec ses gestes. Le portrait apparaît avec un petit effet de pop.
+- **Texte animé** :
+  - machine à écrire qui respire sur la ponctuation ;
+  - petites voix synthétisées (nouveau son `voice`), avec un timbre différent pour chaque personnage ;
+  - didascalies (entre parenthèses) dans une encre plus douce, sans voix ;
+  - points de progression de la scène ;
+  - flèche qui avance ;
+  - choix qui glissent un à un.
+- **Vie au repos** : laissé immobile une dizaine de secondes, le héros regarde autour de lui ou s'étire.
+- Tests : nouveau scénario `dialogue` (rencontre, gestes, caméra, portraits, proposition et fin de quête, vie au repos). Le scénario `ui` couvre maintenant les scènes plus longues.
+
+### Nouveautés 3.7.1 (champs sans carrés, herbe plus serrée, herbe moins écrasée, plein de nouveaux sons)
+
+- **Fini les grands carrés de blé** (capture envoyée depuis un téléphone) :
+  - le bord des champs n'est plus tiré à la règle : il ondule, et le blé s'éclaircit progressivement sur plusieurs mètres ;
+  - le blé pousse en zones plus ou moins denses ;
+  - le sol doré sous les champs est plus discret ;
+  - l'herbe pousse maintenant aussi sous le blé, moins dense : avant, elle y était supprimée, ce qui laissait le sol nu entre les épis ;
+  - le blé est plus serré (un pied tous les 0,42 m au lieu de 0,5 m) et moins éclairci sur les téléphones.
+- **Herbe plus serrée sur téléphone.** Les profils graphiques moins élevés l'éclaircissaient beaucoup (densité 0,55 en Moyen, 0,3 en Bas).
+  - Densités : Élevé 0,8 → 0,9 ; Moyen 0,55 → 0,7 ; Bas 0,3 → 0,45.
+  - L'espacement réagit moins à ce réglage.
+- **L'herbe s'écrase beaucoup moins** quand on passe dessus : elle s'écarte doucement au lieu de se coucher, avec une force de 0,6 au lieu de 1. La trace laissée derrière soi est légère et se redresse vite.
+- **Plein de nouveaux sons**, tous synthétisés (`tools/make_sfx_world.py`) :
+  - **ambiances** :
+    - les **sauterelles et grillons de la prairie** par beau temps, avec un vent léger dans l'herbe et une alouette au loin ;
+    - le **grondement sourd sous l'eau** avec des bulles ;
+    - le **vent sec du désert** dans les Sables et les Canyons ;
+    - le **ressac de la mer** sur toutes les côtes (avant : la Côte de Corail seulement).
+  - **la vie autour du héros**, chaque son venant de son propre endroit dans le monde :
+    - de jour : trois chants d'oiseaux différents (plus nombreux en forêt), un coucou dans les bois, des corbeaux au-dessus des champs, des mouettes sur la côte, le cri des rapaces qui tournent au-dessus des montagnes ;
+    - la nuit : des chouettes, et des grenouilles près de l'eau ;
+    - au vent : un bruissement de feuillage ;
+    - sous l'eau : des bulles.
+  - **actions** : la hache qui mord le bois, la chute d'arbre (craquement, feuillage qui siffle, fracas au moment exact où l'arbre touche le sol), la pioche qui tinte sur la roche du souterrain, un petit carillon à chaque objet obtenu.
+  - Sous l'eau, les ambiances de la surface sont étouffées.
+- **Vérifié sur ordinateur seulement** : tests unitaires et scénarios de régression (le scénario `wheat` a été adapté aux champs irréguliers). **Je n'ai pas pu écouter les sons sur un téléphone.**
+
+### Nouveautés 3.7.0 (oiseaux en 3D, toutes les fonctions revérifiées)
+
+- **Des oiseaux en 3D.** Les vols d'oiseaux étaient de petites taches ; ce sont maintenant de vrais oiseaux (corps, tête, bec, queue, ailes à deux segments) qui battent des ailes.
+  - Trois positions d'aile, dessinées en une seule passe chacune, quel que soit le nombre d'oiseaux.
+  - **Hirondelles** : des volées de 8 à 18 qui traversent les prairies vite, en battant des ailes.
+  - **Mouettes** sur les côtes : de 3 à 7, blanches, qui planent souvent.
+  - **Rapaces** au-dessus des Monts Titans, des Cimes, de Frostheim et des Canyons : seuls ou à deux, grands, ils tournent lentement en planant.
+  - Ils viennent de jour, pas pendant les tempêtes, et apparaissent et disparaissent en douceur.
+- **Tout le jeu revérifié.**
+  - Les 75 scénarios automatiques ont été rejoués : combats, donjons, domaine, courses, coopération, prologue, météo, faune…
+  - Un seul était cassé : celui des véhicules. Il ne débloquait pas les véhicules (devenus à gagner dans l'histoire en 3.4.0) et attendait 2 véhicules au lieu de 3 depuis le vaisseau volant. Le jeu lui-même n'était pas en cause ; le test est corrigé et passe.
+- **Les nouveautés se trouvent plus facilement** :
+  - le forgeron de Brindlemere vend maintenant la **hache de bûcheron** et la **Trappe de souterrain** ;
+  - le marchand vend des **pommes** et des **gâteaux au miel**.
+- **Vérifié sur ordinateur seulement** : tests unitaires, scénarios de régression, nouveau scénario `birds`.
+
+### Nouveautés 3.6.1 (une herbe nette, plus de flou)
+
+- **D'où venait le flou** (vérifié sur des captures en 1920 × 900, profil Élevé) :
+  - le sol sous l'herbe : sa texture de 256 pixels, très agrandie près de la caméra, faisait des taches floues, et les reliefs de sa carte de normales s'éclairaient en bosses molles ;
+  - des brins trop larges (3,5 à 7 cm), qui ressemblaient à des feuilles ;
+  - un anti-crénelage (FXAA) qui étalait chaque bord sur jusqu'à 8 pixels, alors que dans une herbe dense presque tout est un bord.
+- **Ce qui change :**
+  - les brins sont fins (2,6 à 4 cm) et plus nombreux par touffe, avec plus de contraste d'un brin à l'autre et une base plus sombre ;
+  - près de la caméra, le sol sous l'herbe prend une couleur unie et ombrée, avec un grain fin, au lieu de taches agrandies ; ses reliefs y sont aplanis ;
+  - le FXAA n'étale plus que sur 2,5 pixels et garde un tiers du pixel net ;
+  - la couche d'herbe rapprochée va jusqu'à 28 m au lieu de 24.
+- **Coût** : environ 1 million de triangles d'herbe au lieu de 0,9 million sur la même vue. Les réglages graphiques plus bas l'allègent comme avant.
+- **Vérifié sur ordinateur seulement** : tests unitaires et scénarios de régression.
+
+### Nouveautés 3.6.0 (vrais nuages, couper les arbres, base souterraine, nouvelles armures)
+
+- **De vrais nuages en volume.** Avant, c'était une couche plate en 2D : le ciel est maintenant traversé par une couche de cumulus calculée en 11 pas.
+  - Les nuages ont une base plate, des tours arrondies qui s'effilent vers le haut, des sommets éclatants au soleil, des ventres gris, un liseré argenté à contre-jour, et des dessous roses et orangés au coucher.
+  - Ils dérivent avec le vent et se fondent dans la brume à l'horizon. Il y en a quelques-uns par beau temps, et ils couvrent le ciel quand il se couvre.
+- **Couper les arbres**, avec n'importe quelle arme, en frappant un arbre devant soi quand aucun ennemi n'est visé.
+  - Il faut 3 coups à la hache, 2 à la nouvelle **hache de bûcheron**, 5 avec une autre arme, et un de plus pour les grands arbres.
+  - Les copeaux volent, l'arbre craque, puis bascule à l'opposé de vous et s'écrase dans un nuage de poussière.
+  - **Récolte** : du bois (plus pour les grands arbres), parfois de la résine, des pommes (chênes), des noix de coco ou des dattes (palmiers), du miel, et rarement un nid d'oiseau.
+  - Une souche reste à sa place, et l'arbre repousse au bout d'un jour de jeu. Les arbres coupés sont sauvegardés.
+- **Votre base souterraine.**
+  - Fabriquez une **Trappe de souterrain** à l'établi (12 bois, 3 lingots de fer, 6 pierres) et posez-la n'importe où dehors. Une échelle descend vers une petite salle taillée dans la roche.
+  - **Creusez vos galeries** en frappant la paroi : avec une pioche dans le sac, un bloc tombe en un coup (en trois sinon) et devient du sol.
+  - Chaque bloc donne de la pierre. Les filons visibles dans la paroi donnent du **fer, du charbon, de l'argent, de l'or ou du cristal**, plus riches loin de l'échelle. Le bord est en roche-mère.
+  - Des torches éclairent les galeries au fur et à mesure, les cristaux luisent, la lumière du jour tombe par la trappe.
+  - L'ensemble fait 40 × 40 blocs de 2 m. Tout est sauvegardé ; une trappe reposée ailleurs mène au même souterrain.
+- **Cinq nouvelles armures complètes** (casque, plastron, gants, bottes), avec leurs bonus d'ensemble, leurs recettes et leurs modèles 3D :
+  - **du nomade écarlate** (cuir et lin) ;
+  - **des abysses** (corail, argent et perle, avec une crête de nageoires) ;
+  - **titanesque** (acier-titan, plumet de foudre) ;
+  - **du dragon** (écailles et or, cornes noires) ;
+  - **stellaire** (métal d'étoile, diadème à la gemme lumineuse).
+- **Nouvelles armes** :
+  - hache de bûcheron ;
+  - lame de corail ;
+  - Trident des abysses ;
+  - Croc du dragon ;
+  - Bâton stellaire ;
+  - masse des falaises ;
+  - Crochet de vipère ;
+  - arc de la wyverne.
+- **Nouveaux objets** :
+  - **bijoux** : Anneau de l'écaille, Coquille des marées ;
+  - **à manger et à boire** : pomme, gâteau au miel, velouté des bois, potion des profondeurs ;
+  - **matériaux** : résine, miel sauvage, nid d'oiseau.
+  - Chacun a son modèle 3D et sa recette (forge, établi, feu de camp ou alchimie).
+- **Vue à la première personne : retirée.** Elle a été essayée (bras et arme à l'écran, balancement de la tête), mais le résultat n'était pas assez beau. Elle n'apparaît pas dans les paramètres.
+- **Corrigé** :
+  - souterrain : le ciel ne transparaît plus à travers la roche près de la caméra ;
+  - deux nouvelles armes avaient un identifiant déjà pris ; elles sont renommées.
+- **Vérifié sur ordinateur seulement** :
+  - 3 209 tests unitaires réussis ;
+  - nouveaux scénarios automatiques :
+    - `chop` : un chêne abattu en 4 coups, 6 bois, la souche, la repousse ;
+    - `cellar` : la trappe posée, la descente, 3 blocs creusés, la remontée, puis sauvegarde et rechargement ;
+    - `skylook` : les nuages le matin, par temps couvert et au coucher ;
+  - scénarios de régression passés.
+
+### Nouveautés 3.5.0 (un vrai modèle 3D pour chaque objet, et le monde sous l'eau)
+
+- **Chacun des 212 objets a son propre modèle 3D** (`game/ItemModels.cpp`). Avant, seules les armes en avaient un, minuscule, et les autres objets partageaient quelques icônes : un cœur pour le pain, une pioche pour tous les minerais, une pièce pour toutes les bagues.
+  - **Potions** : flacons de couleur avec bouchon de liège, reflet et étiquette ; les grandes ont un col doré et une gemme.
+  - **Élixirs** : bouteilles taillées dans une cage d'or, avec un bouchon en étoile qui brille.
+  - **Nourriture** : pain, ragoûts dans un bol, poissons grillés, baies, dattes, noix de coco, viande, et aussi bombe et bandage.
+  - **Minerais** : roches veinées de fer, cuivre, or, argent ou minerai rare ; charbon.
+  - **Lingots** : empilés, avec le poinçon du forgeron ; ceux d'étoile et d'acier titan luisent.
+  - **Cristaux** : en grappes de couleur ; ambre, corail, sablier, éclat d'étoile.
+  - **Plantes** : herbes, lys de givre, champignons lumineux, racine de braise, lin.
+  - **Autres matériaux** : peaux, fourrure, toile, soie d'araignée, os, essence d'ombre, écaille de dragon, pièces de pirate, coquillages, perle.
+  - **Bijoux** : bagues avec gemme taillée (anneau de cuivre, d'argent ou d'or selon la bague) et amulettes en pendentif (soleil, feuille de chêne, médaillon).
+  - **Armures** : casques (cuir, cotte de mailles, cornes de givre, crête de braise, capuches sylvestre et d'ombre, couronne), cuirasses, gantelets et bottes, dans la couleur de l'objet.
+  - **Objets de quête et reliques** : pierre d'écho à la rune lumineuse, Couronne-Mère, cartes en rouleau, lettre cachetée, lanterne, harpe elfique, cor du jarl, longue-vue, masque solaire, cloche marine, œil du sphinx, comète.
+  - **Objets clés** : boussole, botte ailée, plume de phénix, aimant, trident, trèfle, fer à cheval ailé.
+  - **Le reste** : sacs (le sac sans fond scintille d'étoiles), montures (fer à cheval doré et ruban), teintures en pot, et une vraie pelle.
+- **Où on les voit :**
+  - **Inventaire** : chaque icône est rendue depuis le modèle, cadrée pour remplir la case (les longues armes en diagonale, le reste de trois quarts).
+  - **Fiche d'un objet** : l'objet tourne lentement dans un halo de sa rareté.
+  - **Au sol** : l'objet lui-même flotte et tourne, au lieu d'un sac, au-dessus de son rayon de lumière.
+- **Le monde sous l'eau** :
+  - **la couleur** : l'eau absorbe le rouge puis le reste avec la distance ; une brume bleu-vert se referme vers 40 m, plus sombre en profondeur ; l'eau prend la couleur de sa région (lagons turquoise, mers froides, marais) ;
+  - **la lumière** : des rayons descendent de la surface, et des **caustiques** (le filet de lumière des vagues) dansent sur le fond, les rochers et le plongeur. On les voit aussi depuis la surface en eau peu profonde ;
+  - **le mouvement** : l'image ondule doucement ; l'ancien voile vert plat est supprimé ;
+  - **la vie du fond** : forêts de laminaires qui ondulent dans le courant, herbiers, rochers avec anémones et étoiles de mer, coquillages ; dans les mers chaudes, **coraux** branchus, éventails et coraux cerveaux de toutes les couleurs. Les lacs et rivières ont aussi leurs herbes ;
+  - **des bancs de poissons** (6 à 15 par banc, 8 couleurs) tournent entre le fond et la surface et ondulent en nageant ;
+  - **des épaves** gisent au fond de la mer, entre 6,5 et 15 m, à peu près un morceau de mer profonde sur 40 : coque éventrée, mât couché, lambeau de voile, cloche. **Un coffre** brille à l'intérieur et s'ouvre sous l'eau ;
+  - **on plonge maintenant jusqu'à 15 m** (7 m avant), en gardant un œil sur la jauge d'air.
+- **Bug corrigé** : la fiche d'un objet clé lisait en dehors de la liste des catégories. Elle affiche maintenant « Objet clé ».
+- **Vérifié sur ordinateur seulement** :
+  - 3 049 tests unitaires réussis ;
+  - nouveaux scénarios automatiques :
+    - `items3d` : les 212 objets ont un modèle ; sac, fiche et objets au sol en images ;
+    - `reef` : sous l'eau, 71 poissons, caustiques, une épave à 14 m, puis le coffre ouvert sous l'eau ;
+  - scénarios de régression passés.
+- **Coût sur téléphone non mesuré** : la vie sous-marine ajoute de la géométrie aux morceaux de mer, et les poissons sont dessinés en une seule passe.
+
+### Nouveautés 3.4.1 (on voit beaucoup plus loin)
+
+- **Distance d'affichage nettement augmentée** dans tous les profils graphiques :
+  - Ultra : 130 → 200 m ;
+  - Élevé : 110 → 165 m ;
+  - Moyen : 95 → 135 m ;
+  - Bas : 80 → 110 m ;
+  - Économie : 70 → 85 m.
+- **Le lointain n'est plus vide.** Avant, au-delà de 100 m, seul le sol était affiché : les villages, les châteaux et les forêts surgissaient d'un coup en approchant.
+  - Le niveau de détail lointain (100 à 230 m) garde maintenant les bâtiments, les arbres et les rochers, en version allégée.
+  - Les petites plantes, l'herbe, les décors de route et les ressources restent réservés aux environs.
+  - Les arbres sont tirés exactement aux mêmes endroits à tous les niveaux de détail : rien ne bouge ni ne saute quand on s'approche.
+- **Brouillard allégé en proportion** (jusqu'à −40 % en Ultra), pour que ce qui est affiché plus loin se voie vraiment.
+- Le blanchiment du soleil de midi ne touche plus que le premier plan : l'horizon reste lisible.
+- **Pas de nouveaux bugs côté jeu** : les créatures, les ressources et les personnages n'apparaissent toujours qu'à proximité (même règle qu'avant). La distance ne change que ce qui est affiché.
+- **Coût sur téléphone non mesuré** : plus de morceaux de terrain sont dessinés (environ 200 appels de dessin au lieu de 120 sur une vue large, sur ordinateur). Si ça rame, le profil « Moyen » ou « Bas » reste plus loin qu'avant pour moins cher.
+- **Vérifié sur ordinateur seulement** : 3 049 tests unitaires réussis. Nouveau scénario `farview` (vue depuis le vaisseau : 80 morceaux lointains, dont 67 avec des bâtiments ou des arbres), et scénarios de régression.
+
+### Nouveautés 3.4.0 (herbe serrée, mouvements fluides, véhicules à débloquer, vaisseau volant, soleil brûlant)
+
+- **Herbe dense et serrée**, comme une vraie prairie :
+  - chaque touffe est maintenant un petit carré de gazon de 15 brins fins et presque droits (20 près du héros), au lieu de 10 brins écartés en étoile ;
+  - les touffes, plus larges et plus rapprochées (0,60 m au lieu de 0,72 m), se chevauchent : le sol ne se voit plus entre elles ;
+  - une sous-couche de brins courts remplit le pied.
+  - Sur ordinateur : environ 885 000 triangles d'herbe au lieu de 475 000 sur la même vue. Les réglages graphiques plus bas réduisent la densité comme avant. **Coût sur téléphone non mesuré.**
+- **Mouvements plus fluides et qui suivent le terrain** :
+  - le corps affiché glisse sur les marches et les bosses au lieu de sauter d'un coup ;
+  - les demi-tours ne sont plus instantanés (environ 50 ms) ;
+  - les animaux (loups, chevaux, sangliers…) s'inclinent avec la pente, dans le sens de la marche comme sur le côté. Les personnages restent droits et se penchent un peu en montée ;
+  - la marche démarre et s'arrête en douceur.
+  - Seul l'affichage est lissé : les collisions et les coups restent exacts.
+- **Véhicules débloqués par l'histoire** (le cheval reste disponible dès le début) :
+  - la **moto** après « Les Murmures » (quête 2), la **voiture** après « La Couronne brisée » (quête 3), le **vaisseau volant** quand la Couronne est reforgée (quête 5) ;
+  - chaque déblocage a sa grande annonce ;
+  - avant, le garage ne propose que le cheval, et les véhicules ne sont pas encore garés à Brindlemere ;
+  - **anciennes sauvegardes** : vous recevez directement les véhicules que votre progression a déjà gagnés.
+- **Le vaisseau volant de l'Ordre** (nouveau véhicule) :
+  - **la coque** : coque en bois au bord doré, pont en planches, rambardes, cabine à l'arrière (fenêtres éclairées la nuit), barre à roue, figure de proue en aigle doré, lanterne ;
+  - **au-dessus** : mât, voiles latérales, deux moteurs à hélices qui tournent, un grand ballon rayé crème et rouge cerclé d'or, avec ses ailerons de queue et huit cordages ;
+  - **pour le prendre** : appelé depuis le garage, il descend des nuages et se pose près de vous ;
+  - **commandes** : joystick pour diriger, Saut maintenu pour monter, Bouclier maintenu pour descendre (jusqu'à 150 m), bouton Action pour se poser et descendre à terre ;
+  - il passe tout seul au-dessus des montagnes, glisse le long des bâtiments, se balance doucement, et ses moteurs fument.
+- **Le soleil brûlant de midi** (ciel dégagé, de la fin de matinée au milieu de l'après-midi ; plus fort dans les déserts, les canyons, la steppe et la jungle, très faible dans les terres froides) :
+  - **la lumière** : soleil plus fort et plus blanc ;
+  - **l'ombre** : plus profonde et plus froide (moins de lumière du ciel) ;
+  - **la chaleur** : l'air tremble au-dessus du sol dès une douzaine de mètres ;
+  - **les reflets** : les zones claires brûlent vers un blanc chaud ;
+  - **le soleil** : quand il est dans le champ, une étoile de rayons et un cœur aveuglant (aussi par temps clair à d'autres heures, plus discrets) ;
+  - le soir et la nuit, l'effet disparaît.
+- **Vérifié sur ordinateur seulement** :
+  - les 3 049 tests unitaires réussissent ;
+  - nouveaux scénarios automatiques : `airship` (véhicules verrouillés au départ, moto après la quête 2, vaisseau après la quête 5, il descend des nuages, monte à 43 m, parcourt 190 m, se pose et laisse le héros à terre) et `sunlook` (canyons 0,96, Greenhaven 0,62, soir et nuit 0) ;
+  - les scénarios de régression passent aussi.
+
+### Nouveautés 3.3.1 (fini les cercles plats)
+
+- **Cercles runiques** : les disques de couleur tout plats au centre des salles, sous le joueur à l'arrivée dans l'espace et au portail de sortie de chaque donjon sont remplacés par de vrais cercles runiques :
+  - **ce qui est construit** : un anneau de pierres taillées posé dans le sol, des bandes de métal incrustées et une étoile à huit branches ; autour, huit pierres runiques avec des glyphes lumineux ; au centre, un dais octogonal et son cristal ;
+  - **les effets du shader** : un cercle de glyphes et un hexagramme qui tournent lentement, une onde de lumière qui part vers l'extérieur toutes les 3 secondes, des particules qui montent du bord ;
+  - le cercle **s'illumine et tourne plus vite quand on marche dessus** ;
+  - le cercle de sortie est plus petit, avec des pierres plus hautes.
+- **Tapis des salles du trône** : bordure intérieure foncée, médaillons en losange tissés et franges à l'entrée (avant, c'était un rectangle uni).
+- **Vérifié sur ordinateur seulement** : 3 049 tests unitaires réussis, scénarios `cosmos`, `dungeonlook`, `realm`, `titandungeons`, `aurora` et `ui`.
+
+### Nouveautés 3.3.0 (l'espace, et une 13e région : les Canyons Écarlates)
+
+- **Voyage dans l'espace** :
+  - l'**Observatoire des étoiles**, sur un col des Monts Titans, a une porte de basalte et d'argent avec un vortex de nuit étoilée et une sphère armillaire ;
+  - il ouvre sur **Les Confins stellaires** : des astéroïdes reliés par des ponts de lumière, au-dessus d'une planète ;
+  - un **ciel spatial entièrement en shader** : nébuleuses violettes et bleues avec leurs bandes de poussière, trois couches d'étoiles colorées qui scintillent, la bande galactique, une géante gazeuse à anneaux, le soleil avec sa couronne ;
+  - **la planète** : océans, continents, nuages qui défilent, calottes polaires sur son propre axe, reflet du soleil sur l'eau, lumières des villes côté nuit, atmosphère bleue sur le bord ;
+  - autour : une ceinture de 46 astéroïdes, des cristaux, un monolithe à anneau de lumière ;
+  - **gravité réduite** (sauts lents et longs) ;
+  - ennemis : esprits d'aurore, golems et araignées de cristal. Récompense : le *Cœur de comète*.
+- **La carte s'agrandit : les Canyons Écarlates**, une 13e région sur toute la côte sud (environ 3,9 × 1,9 km), sous la jungle et les Titans :
+  - plateaux rouges en escaliers, gorges profondes au fond de sable, aiguilles de pierre ;
+  - **lieux** : deux villages aux maisons d'adobe (Roc-Écarlate, Aiguille-Rouge), la Citadelle des Falaises (château en grès), les Arches du Couchant (ruines), le Camp des Nomades et deux pierres de voyage. Des routes les relient à Xochi ;
+  - **5 créatures** : Coyote écarlate (en meute, la nuit), Scorpion de feu, Wyverne des falaises, Pillard des gorges, Colosse de grès rouge ;
+  - **ressources** : or, cuivre, minerai rare, cactus, racine de braise, cristaux ;
+  - **ambiance** : tempêtes de poussière rouge, lumière chaude, vent du désert, page de chronique ;
+  - **ailleurs dans le monde** : un archipel du ciel, des totems et des orbes ;
+  - la taille du monde ne change pas (la région remplace la mer du sud) : **les sauvegardes et la carte de découverte restent compatibles**.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 3 049 réussis (placement des bâtiments, routes, collisions compris) ;
+  - nouveaux scénarios `cosmos` (portail, arrivée dans l'espace, saut en gravité réduite : 2,6 m) et `canyons` (4 lieux dans la région, carte) ;
+  - scénarios de régression réussis.
+- **À confirmer sur ton téléphone.**
+
+### Nouveautés 3.2.0 (chasse aux trésors façon Zelda, îles du ciel partout, objets mis en valeur, mods 2.0, LK Studio)
+
+- **Totems de pouvoir** (34 dans le monde) :
+  - deux par région, sur les hauteurs, plus un au sommet de chaque archipel du ciel ;
+  - de loin, on les repère à un rayon de lumière bleue ;
+  - les éveiller donne un pouvoir ou un bonus permanent, avec une petite fanfare. L'ordre suit la distance depuis Brindlemere, totems au sol d'abord : boussole des Anciens, bottes de Zéphyr, cœur, sort Colère céleste, anneau-aimant, cape de plume, etc. ;
+  - chaque totem donne aussi 5 éclats d'étoile et rend toute la vie.
+- **Orbes anciens** (58) :
+  - cachés dans toutes les régions, avec un rayon doré ;
+  - chacun donne 2 éclats ;
+  - paliers : 5 orbes = +10 cases de sac, 10 = +20 de vie, 15 = +10 cases, 20 = +10 % d'attaque, 25 = sort Pluie d'étoiles, 30 = +20 d'endurance et de mana, 40 = la Lame des Anciens.
+- **Objets clés** (pouvoirs permanents tant qu'on les porte, hors du sac) :
+  - Bottes de Zéphyr : double saut ;
+  - Cape de plume de roc : planer en gardant le doigt sur Saut ;
+  - Anneau-aimant : le butin vient à vous, jusqu'à 10 m ;
+  - Boussole des Anciens : une flèche pointe vers le totem ou l'orbe le plus proche ;
+  - Écaille de triton : respiration illimitée sous l'eau ;
+  - Plume de phénix : vous relève une fois par jour ;
+  - Trèfle d'or : +50 % d'or et un butin plus rare ;
+  - Sabot de vent : sprint deux fois moins coûteux et +10 % de vitesse.
+- **Archipels du ciel dans toutes les régions** :
+  - trois îles en escalier (environ 15, 24 et 33 m au-dessus du sol), aux couleurs de la région : neige, sable, cendre, mousse violette ou herbe ;
+  - un geyser au sol vous lance sur la première île, puis un geyser du vent sur chaque île vous lance sur la suivante ;
+  - au sommet : un totem ; sur l'île du milieu : un orbe ; sur la première : un coffre du ciel (+3 éclats).
+- **Économie** :
+  - **éclats d'étoile**, la nouvelle monnaie, affichée à côté de l'or. On les gagne aux totems, aux orbes, aux coffres du ciel et sur les ennemis forts ;
+  - **Merveilles** chez tous les marchands, payées en éclats : sacs, boussole, aimant, écaille, élixirs ;
+  - la vente se fait maintenant en deux touches (choisir l'objet, puis « Vendre X or ») : plus de vente par erreur.
+- **Sac à cases** :
+  - une nouvelle partie commence avec 40 cases ;
+  - on en gagne avec la sacoche de cuir (+10, en or chez tous les marchands), le sac d'aventurier (+15), le sac sans fond (+25) et les paliers d'orbes ;
+  - le sac affiche ses cases vides et une rangée de cases verrouillées ;
+  - les anciennes sauvegardes gardent leurs 120 cases.
+- **Objets mis en valeur** :
+  - le butin rare, épique ou légendaire au sol a un **rayon de lumière** de sa couleur, plus haut pour les meilleurs objets ;
+  - une **petite carte « objet obtenu »** apparaît au-dessus des boutons, et une **fanfare** au centre pour les pouvoirs ;
+  - dans le sac, les objets rares brillent et les légendaires « respirent ».
+- **Sorts légendaires** :
+  - Colère céleste, Souffle du dragon et Ère glaciaire (totems) ;
+  - Pluie d'étoiles (palier de 25 orbes).
+- **Interface** :
+  - les repères de carte collés au bord de l'écran ne passent plus sur l'encadré de quête et ne se chevauchent plus ;
+  - le compteur de vitesse est plus petit et placé à gauche, il ne cache plus la route ;
+  - « Sac plein » ne s'affiche plus en boucle.
+- **Mods 2.0** :
+  - nouvelles créatures et nouveaux objets (`enemy.add`, `item.add`) ;
+  - couleur, région, fréquence, niveau et butin des créatures ;
+  - rareté et couleur des objets ;
+  - objets, arme et or de départ. Voir `docs/MODDING.md`.
+- **Trois gros mods livrés** (désactivés par défaut) :
+  - **Bestiaire légendaire** : 30 créatures nouvelles ;
+  - **Arsenal des légendes** : 24 armes ;
+  - **Invasion des ombres** : 16 créatures de nuit.
+- **LK Studio**, une nouvelle application (`release/LK-Studio.apk`, voir `lkstudio/README.md`) pour créer des mods sur le téléphone : créatures, objets, règles du monde, modèles 3D importés avec squelette automatique, sons, export direct.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 3 020 réussis ;
+  - nouveau scénario `treasures` : totem, double saut, montée d'un archipel par ses 3 geysers, totem du sommet, plané, orbe, sac plein, sacs, inventaire et boutique ;
+  - scénario `bigmods` et suite complète des scénarios réussis.
+- **À confirmer sur ton téléphone.**
+
+### Nouveautés 3.1.0 (herbe nette, entrée de mine refaite, vrais loups, donjons et châteaux habillés)
+
+- **Plus de flou sur l'herbe** :
+  - **cause** : un effet « tilt-shift » (miniature) floutait le bas de l'écran, là où se trouve l'herbe proche. Il montait jusqu'à 80 % quand on dézoomait ;
+  - il est **supprimé en jeu**, en extérieur comme dans les donjons. Le vrai flou de profondeur reste réservé aux dialogues et aux cinématiques ;
+  - la résolution dynamique ne descend plus sous 80 % (avant : 75 %), donc l'image reste plus nette quand le téléphone est chargé.
+- **Le « caillou bizarre » près des mines est corrigé** :
+  - **cause** : l'entrée de mine était un seul rocher de 10 m dont la base plate flottait 1,3 m au-dessus du sol, à côté d'un cadre de porte isolé ;
+  - elle est maintenant une butte rocheuse **enfoncée dans le sol**, avec une galerie étayée (trois cadres de bois qui s'enfoncent dans le noir), un auvent en planches, une enseigne, une lanterne suspendue, des rails, un wagonnet de minerai, un treuil, un tas de minerai, une pioche, des caisses et un tonneau ;
+  - les collisions et la lumière de la lanterne suivent la nouvelle forme (la lumière tourne avec la mine).
+- **Les loups n'utilisent plus le modèle Tripo** :
+  - ils sont dessinés par le jeu. **Forme** : poitrail profond jusqu'aux coudes, taille fine, épaules et cuisses musclées, longues pattes aux grosses pattes ovales avec griffes, crâne large et long museau, oreilles triangulaires épaisses inclinées vers l'arrière, collerette épaisse, queue touffue portée bas ;
+  - **mèches de fourrure** courtes et arrondies qui cassent la silhouette : collerette, joues, menton, arrière des cuisses, avant-bras et dessous de la queue ;
+  - **pelage peint sur tout le corps, en dégradé continu** (plus de taches séparées) : selle sombre sur le dos, flancs grisonnants, ventre, gorge et intérieur des pattes crème, masque clair sur le museau et les joues, tons fauves sur les pattes, les oreilles et le chanfrein, raie sombre devant les pattes avant, bout de queue sombre, poils de jarre clairs et sombres mêlés ;
+  - **détails** : yeux ambrés en amande cerclés de noir avec pupille, truffe noire, babines sombres, crocs, intérieur des oreilles clair ;
+  - cela vaut pour tous les loups (gris, des neiges, des steppes, boréal, des Titans, molosses de l'Abîme) et pour Fenra, le loup géant monture ;
+  - `assets/models/wolf.lkm` et `wolf.jpg` sont supprimés, ce qui allège l'APK d'environ 10 Mo.
+- **Donjons habillés** (tous sauf le Royaume Céleste, qui garde ses îles) :
+  - **murs** :
+    - temples, catacombes, Abîme et sanctuaires : murs maçonnés (trois assises décalées), plinthe, corniche et pilastres ;
+    - mines : cadres de bois et planches ;
+    - grottes : blocs de roche, stalactites de glace dans les cavernes gelées, toiles d'araignée dans l'antre ;
+  - **décor des murs** : appliques avec flamme et lumière, bannières aux couleurs du thème, niches à crânes, chaînes ;
+  - **portes** : encadrement en pierre avec clé de voûte entre chaque couloir et chaque salle (bois dans les mines) ;
+  - **mobilier par thème le long des murs** : sarcophages avec gisant et bougies, statues sur socle, étagères d'urnes et de livres, grandes jarres, statues de gardiens, tables à bougies, wagonnets de minerai, caisses et tonneaux, râteliers et marmites gobelines, œufs d'araignée, cristaux de glace. Les gros meubles ont des collisions ;
+  - **salle du boss** transformée en salle du trône : estrade à deux marches, trône à haut dossier avec cimier doré (autel de pierre dans les grottes), tapis bordé d'or depuis l'entrée, quatre grands braseros ;
+  - **lumière** : les donjons sont un peu plus clairs pour que le décor se voie.
+- **Châteaux refaits** :
+  - **murailles** : talus, cordons, pierres de taille, contrefort, meurtrières, mâchicoulis et chemin de ronde ;
+  - **tours** : base évasée, anneaux, meurtrières, parapet en encorbellement à 12 créneaux, toit à avant-toit, épi doré et fanion ;
+  - **donjon (corps de logis)** : socle, contreforts, mâchicoulis, escalier et porte en arc, blason, fenêtres à meneaux sur deux étages, tour centrale à flèche, grandes bannières ;
+  - **porte** : porterie entre deux tours rondes, arc à claveaux, herse levée, battants ouverts, blason et lanternes ;
+  - **cour des châteaux non hostiles** : deux casernes, un puits, trois étals et deux bannières devant le donjon.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 2 985 réussis ;
+  - scénarios `grass`, `camera`, `ui`, `titandungeons`, `mine` et `interior` réussis ;
+  - nouveaux scénarios avec captures : `minecamp` (la mine), `wolves` (aucun loup avec un modèle importé : WOLVES TEST PASSED), `dungeonlook` (six donjons, salle et salle du trône) et `castlelook` (Fort Aldren).
+- **À confirmer sur ton téléphone**.
+- **Coût en triangles** : un donjon dessiné passe à environ 150 000 à 220 000 triangles (le monde extérieur en affiche 700 000 à 1 100 000).
+
+### Nouveautés 3.0.4 (les cercles sur le sol autour du héros)
+
+- **Cause** : en OpenGL ES, un shader lit les textures 2D en **basse précision** par défaut, sauf déclaration contraire. Le moteur ne déclarait rien pour les textures 2D.
+  - Sur téléphone, l'ombrage ambiant (SSAO) et les rayons de lumière lisaient donc la profondeur de la scène sur environ 10 bits.
+  - Le sol reconstruit faisait des marches, d'où des cercles concentriques autour de la caméra, très visibles sur l'herbe.
+  - Sur ordinateur, cette précision est ignorée : le défaut ne s'y voyait pas.
+- **Correction** :
+  - toutes les textures 2D sont maintenant lues en haute précision ;
+  - l'ombrage ambiant a un peu plus de marge, pour qu'un sol plat ne s'assombrisse jamais lui-même.
+- **Vérifié sur ordinateur seulement** (2 985 tests, rendu inchangé). **À confirmer sur ton téléphone.**
+
+### Nouveautés 3.0.3 (lignes sur le sol, herbe sous la pluie)
+
+- **Les lignes sur le sol, vraie cause** : plusieurs effets tiraient leur aléatoire de `fract(sin(x) × 43758)`. Sur les GPU de téléphone (Mali notamment), `sin()` perd sa précision sur les grandes valeurs (coordonnées du monde, pixels de l'écran, temps) et ce calcul se met à dessiner des bandes et des lignes. Les effets touchés :
+  - le flou des ombres (sous les arbres) ;
+  - les ondes de pluie sur le sol et sur l'eau ;
+  - les paillettes de neige et de sable ;
+  - le grain de l'image (sur tout l'écran) ;
+  - la tempête de sable.
+
+  Ils utilisent maintenant un hachage entier, exact sur tous les GPU.
+- **Rayons de soleil dans la brume** : leur bruit en diagonale traçait des stries. Il est remplacé par un bruit sans direction.
+- **Pluie** : les petites ondes des gouttes ne s'affichent plus qu'à moins de 26 m (au loin, elles formaient un quadrillage).
+- **Herbe** :
+  - sous la pluie, elle devient plus sombre et plus riche au lieu de grise et brillante comme du plastique ;
+  - les hautes herbes sont plus vertes, et leurs pointes ne saturent plus en blanc-jaune ;
+  - le reflet du vent et le contre-jour sont plus doux (les couchers de soleil rougissaient tout) ;
+  - les touffes lointaines sont plus fines (5 brins au lieu de 4 brins élargis).
+- **Vérifié sur ordinateur seulement** : nouveau scénario `grasslook` (jour, pluie, Titans, crépuscule), 2 985 tests passés. Les lignes n'apparaissaient pas sur mon rendu d'ordinateur : la correction vise la cause identifiée dans le code, mais **elle n'a pas été vérifiée sur ton téléphone**.
+
+### Nouveautés 3.0.2 (image nette, plus de trames ni de lignes, herbe partout)
+
+- **Plus de trames de points ni de lignes** :
+  - les arbres et objets entre la caméra et le héros s'effaçaient selon une grille régulière de points, qui faisait des lignes sur téléphone. Ils se dissolvent maintenant avec un motif naturel, ancré dans le monde ;
+  - sur les grandes pentes de montagne, la roche se répétait en bandes. Une deuxième texture, tournée et plus grande, casse ces stries.
+- **Image plus nette** :
+  - quand le téléphone ralentit, la résolution automatique ne descend plus sous 75 % (elle pouvait tomber à 50 %, d'où le flou et la pixellisation) ;
+  - un filtre de netteté rend le détail, plus fort quand la résolution baisse ;
+  - le flou de miniature en haut et en bas de l'écran est presque supprimé en jeu.
+- **Herbe partout et serrée** :
+  - l'herbe proche reste dense plus loin (jamais moins de 60 %) ;
+  - une nouvelle couche de touffes légères porte la prairie jusqu'à environ 100 m (avant, plus rien après 46 m) ;
+  - herbe plus fournie dans les régions froides et les montagnes.
+- **Et pourtant moins cher qu'avant** : un brin d'herbe était dessiné recto et verso alors que l'herbe est déjà affichée sans élimination des faces. Un seul côté suffit, ce qui divise son coût par deux.
+  - Scénario `perf` : Brindlemere 572k triangles (664k en 3.0.0), Chênebrune 788k (898k), vallées des Titans 730k à 950k (jusqu'à 980k avant).
+- **Vérifié sur ordinateur seulement** : 2 985 tests passés, captures regardées. **Pas testé sur téléphone.**
+
+### Nouveautés 3.0.1 (pouvoirs spectaculaires : vrais effets en shader)
+
+- **Nouveau moteur d'effets** : chaque pouvoir dessine maintenant de vraies formes 3D animées par un shader, qui brillent avec le bloom et éclairent le décor et les personnages autour d'elles. Les formes disponibles :
+  - ondes de choc ;
+  - cercles magiques à runes qui se tracent puis tournent, avec un hexagramme ;
+  - rayons d'énergie à cœur blanc ;
+  - piliers de lumière et tornades en spirale ;
+  - sphères d'explosion qui se consument ;
+  - boucliers en dôme ;
+  - arcs de lame ;
+  - sol fissuré et brûlant ;
+  - rayons de soleil.
+- **Kaede** :
+  - Shuriken : une rune s'ouvre devant sa main et deux lames de vent violettes partent avec les shurikens ;
+  - Pas de l'ombre : une tornade d'ombre l'avale, une traînée violette, une étoile noire qui éclate derrière la cible, puis une double coupe en croix ;
+  - Bombe fumigène : un dôme de fumée qui gonfle, scellé par un cercle de runes.
+  - Dans l'ombre, elle porte un voile violet.
+- **Astra** :
+  - Rayon stellaire : un cercle de runes doré s'ouvre devant ses mains, traversé par un rayon de lumière, avec une explosion à l'impact ;
+  - Onde solaire : cercle solaire au sol, colonne de lumière, rayons et deux anneaux de feu ;
+  - Frappe météore : aura de feu pendant la chute, puis boule de feu, anneau de flammes, sol fissuré qui rougeoie quelques secondes et pilier de feu.
+  - En vol, elle porte une aura dorée et projette un cercle solaire au sol sous elle.
+- **Sorts de l'Errant** :
+  - rune devant la main pour les projectiles ;
+  - cercle et onde pour les sorts de zone, avec une forme selon l'école : sol en feu, dôme de glace, tornade de nature, rayons ;
+  - colonne de lumière pour les soins ;
+  - vrai dôme visible pour l'Égide ;
+  - tornade et traînée pour la ruée ;
+  - arcs et éclats pour l'éclair en chaîne ;
+  - une colonne de lumière par éclair pour le tonnerre ;
+  - rayon pour le drain.
+- **Projectiles magiques** (les tiens et ceux des ennemis) : ce sont maintenant des orbes d'énergie, avec un cœur brillant et une coque qui tourbillonne.
+- **Attaques lourdes, chargées et fin de combo** : un croissant lumineux reste dans l'air, aux couleurs de l'élément de l'arme.
+- **Vérifié sur ordinateur seulement** :
+  - nouveau scénario `powers` : 12 pouvoirs déclenchés au crépuscule, en captures ;
+  - scénario `heroes` toujours réussi ;
+  - 2 985 tests passés.
+- **Pas testé sur téléphone.** Chaque effet ne coûte qu'un appel de dessin et quelques milliers de triangles, mais un combat chargé peut en empiler beaucoup (96 au maximum) ; les plus récents remplacent les plus anciens.
+
+### Nouveautés 3.0.0 (Monts Titans, cités aux ruelles tortueuses, forteresses de la Légion, château et armée)
+
+- **Carte agrandie** : 7 680 m × 7 680 m (6 144 m avant). Les anciennes terres ne bougent pas : on gagne une longue bande à l'est, les **Monts Titans**, reliée aux Steppes de Valdor et à la Jungle d'Émeraude par des cols.
+- **Les Monts Titans** : des vallées vertes et des cuvettes où vivent les villes, puis des versants raides et des sommets enneigés (jusqu'à environ 200 m, neige à partir de ~90 m). Il y a des forêts de pins, des éboulis et une météo de montagne. On y trouve de l'acier-titan (fer, charbon, or), des loups des Titans, des trolls des cimes, des wyvernes et des contrebandiers.
+- **Deux grandes cités fortifiées, construites comme de vraies villes** :
+  - **Hautebrume** et **Rochebrune**, chacune entourée de remparts (20 tours, 4 portes) ;
+  - pas d'avenues droites : des rues principales qui serpentent des portes jusqu'à une place de marché irrégulière, puis des dizaines de ruelles et de venelles qui partent dans tous les sens, tournent, se rejoignent ou finissent en cul-de-sac ;
+  - les maisons suivent les courbes des deux côtés de chaque rue, avec des écarts irréguliers ;
+  - cathédrale, donjon du seigneur, auberges, forges, halle, puits, étals, lanternes aux coins de rue, caisses et tonneaux, 30 habitants ;
+  - champs, moulin et enclos hors des murs.
+  - Les deux villages de montagne (Col-des-Aigles, Pied-de-Lance) poussent de la même façon, sans remparts.
+  - Les anciens villages gardent leur plan d'avant.
+- **La Légion de Fer** tient 3 forteresses : la Citadelle de Fer-Noir, Fort Corbeau, et Khar-Vos dans les steppes.
+  - Garnison : légionnaires, arbalétriers, piquiers, un chevalier noir, et un seigneur de guerre devant le donjon.
+  - Tuez le seigneur de guerre et la garnison se rend. La forteresse est à vous :
+    - vos gardes la tiennent ;
+    - elle paie 180 pièces d'or chaque matin ;
+    - elle ajoute 4 places à votre armée ;
+    - vous pouvez y aller en voyage rapide depuis la carte.
+  - Sur la carte, un anneau rouge marque une forteresse ennemie, un anneau doré une forteresse conquise.
+- **3 nouveaux donjons avec leur boss** : le Gouffre des Titans (le Ver des Glaces), les Mines de Fer-Noir (le Maître-Forge) et le Tombeau du Roi-Géant (Ymrir). Les créatures plus faibles qu'ils empruntent à d'autres régions sont remontées au niveau du donjon.
+- **Votre domaine devient un château** :
+  - on l'agrandit en bourg (62 m), puis en château (80 m) ;
+  - nouveaux bâtiments : murailles de pierre, tours de rempart, porte fortifiée, donjon (tour maîtresse), caserne, chapelle (2 soldats tombés reviennent chaque matin), moulin, statues, lanternes ;
+  - **donjon du domaine** : une crypte à bâtir, qui mène à votre propre donjon, au niveau que vous choisissez (5 à 50).
+- **Votre armée** :
+  - épéistes, archers (ils tirent à distance) et chevaliers (il faut une caserne) ;
+  - trois ordres : garder le domaine, m'escorter (ils vous suivent en formation, **même dans les donjons**), ou attaquer à volonté.
+- **Personnages et quêtes** :
+  - Capitaine Héloïse (les 3 forteresses), Bjorn Ferrecœur (l'acier-titan, le Maître-Forge), Sibylle (le Ver et le Roi-Géant), Arno le chasseur, Maud l'aubergiste ;
+  - 8 quêtes ;
+  - nouvelles armes : hache du seigneur de guerre, lame d'acier-titan, marteau du Roi-Géant, lance du Ver, arbalète et pavois de la Légion, chevalière du conquérant.
+- **Herbe plus serrée** : touffes plus fournies et plus rapprochées près du héros, éclaircies plus tôt au loin pour que le coût reste celui d'avant.
+- **Anciennes sauvegardes** : elles se chargent. La carte explorée et les trous creusés sont convertis au nouveau format.
+- **Vérifié sur ordinateur seulement** :
+  - 2 985 tests passés, dont : bâtiments posés au sol, aucun chevauchement, rien sur les routes, données cohérentes ;
+  - scénario `army` (10/10) : domaine agrandi en château, 6 bâtiments, 9 soldats dont 3 archers et 2 chevaliers, l'armée qui suit dans le donjon du domaine, garnison de la citadelle (11), conquête, gardes, tribut, sauvegarde et rechargement ;
+  - scénario `titandungeons` : les 3 donjons, ennemis au bon niveau, boss présents ;
+  - scénario `titans` : visite en captures.
+  - **Pas testé sur téléphone.** Les combats complets contre les nouveaux boss n'ont pas été joués de bout en bout.
+- **Coût** : scénario `titans` : cités entre 410k et 615k triangles, vallées sauvages des Titans entre 780k et 980k (Chênebrune, l'endroit le plus chargé d'avant, est à 898k). Avec l'herbe plus serrée, Brindlemere passe de 582k à 664k, Port-Azur et Chênebrune baissent un peu. Ces chiffres sont mesurés sur ordinateur, pas sur un téléphone : si ça rame, baisser la qualité de l'herbe dans les Paramètres.
+
+### Nouveautés 2.9.1 (champs de blé doré qu'on traverse)
+
+- **Champs de blé autour des villages, fermes et moulins** de Greenhaven et de la Steppe : des parcelles d'environ 46 × 32 m, orientées selon le village, séparées par des chemins de terre, avec un sol doré sous les épis. Environ 58 % des parcelles sont semées ; les autres restent en prairie.
+- **Le blé se couche sous le corps** : chaque touffe compte 8 tiges avec épis, et elles plient autour du héros, de sa trace et des personnages proches (même système que l'herbe haute). Elles ondulent aussi avec le vent.
+- **Coquelicots rouges** semés dans les champs (environ 1,2 % des touffes) et quelques taches de blé encore vert, comme sur la photo de référence.
+- **Se cacher** : dans le blé, le héros compte comme dans les hautes herbes (les ennemis le repèrent de moins loin).
+- Pas d'arbres, de rochers ni d'herbe dans les champs. Le blé s'arrête aux routes, aux bâtiments, à l'eau et aux pentes raides.
+- **Vérifié sur ordinateur seulement** : scénario automatique `wheat` (un champ trouvé près de Brindlemere, 6776 touffes chargées autour, héros caché à 0,60), 2794 tests passés, scénarios de non-régression rejoués. **Pas testé sur téléphone.**
+- **Coût** : le blé n'est dessiné qu'à moins de 62 m, et de moins en moins dense au-delà de 24 m. Scénario `perf` : Brindlemere passe de 573k à 582k triangles (les autres villes ne changent pas). Au milieu d'un champ, le coût est plus élevé que dans une ville : il n'a pas été mesuré sur téléphone. Si ça rame, baisser la qualité de l'herbe dans les Paramètres.
+
+### Nouveautés 2.9.0 (vrais modèles 3D réalistes de la galerie Tripo : villageois, loup, sanglier, cerf)
+
+- **Modèles réalistes en jeu**, tous choisis dans la galerie publique de Tripo (« Free 3D Models »), puis squelettés et animés par les outils du jeu :
+  - **villageois** : un paysan en tunique brune (11 k triangles), une paysanne au tablier et au foulard (7,6 k), une autre en robe rouge (7,6 k) et un homme au gilet de fourrure très léger (1 k). Le jeu tire au hasard entre ces variantes, donc les villages ne sont plus des clones. Les personnages nommés féminins sans modèle propre utilisent aussi ces paysannes ;
+  - **loup gris** réaliste (19 k triangles), utilisé par tous les loups qui n'ont pas leur propre modèle (loup gris, des neiges, des steppes, boréal) ;
+  - **sanglier** réaliste (18,5 k triangles, texture 4K réduite à 1K) ;
+  - **cerf** (daim) réaliste pour les cerfs sauvages du monde : 805 k triangles d'origine, simplifiés à 20 k, et les bois suivent la tête.
+- **Banque de modèles dans ton Google Drive**, dossier « Tripo / LOST KINGDOM - Banque de modèles ». Chaque modèle y est rangé sous un nom clair (catégorie, description, nombre de faces) pour rester utilisable après la fin de l'abonnement Tripo. Les doublons créés par les essais d'export ont été mis à la corbeille (récupérables). Le loup gris (10 Mo) et le sanglier (6,4 Mo) n'ont pas pu être envoyés depuis l'environnement de développement (limite de 4,2 Mo par envoi) ; ils sont à exporter depuis Tripo.
+- **Outils d'import améliorés** :
+  - `tools/import_character.py` : option `--yaw` pour les modèles livrés tournés (les modèles squelettés de la galerie regardent vers +X) ; il applique aussi la transformation du nœud du maillage (conversions FBX : rotation de −90° et échelle ×100) ;
+  - `tools/import_quadruped.py` : options `--fwd` (sens de la tête) et `--anat` (fichier JSON des articulations), pour importer d'autres animaux que le cheval. La règle `head_above` rattache bois et cornes à la tête ;
+  - **chaîne de récupération** : les fichiers « meshopt » de la galerie sont décompressés avec `gltf-transform dequantize`, les FBX convertis avec FBX2glTF, et les modèles trop lourds simplifiés avec `tools/simplify_glb.py` (pymeshlab).
+- **Vérifié sur ordinateur** :
+  - nouveau scénario `fauna` : villageois, cerf, sanglier et loup côte à côte, les 5 avec un modèle importé texturé ;
+  - scénarios `npcs`, `modfun` (loup géant) et `interior` réussis ;
+  - tests unitaires : 2794 réussis ;
+  - coût en triangles des personnages animés : Brindlemere +13 k, Solmar +17 k, Port-Azur +39 k.
+- **Écartés** :
+  - une deuxième paysanne en robe verte : ses proportions trapues trompent la détection des épaules (elle est dans la banque mais pas dans le jeu) ;
+  - un villageois très détaillé de 734 k triangles et un loup blanc de 1,9 million : trop lourds.
+- **Non vérifié** : rien n'a été essayé sur un téléphone. Le loup a la tête légèrement tournée sur le côté (c'est le modèle d'origine).
+
+### Correctifs 2.8.1 (Terres d'Aurore refaites en réaliste)
+
+Retour reçu sur la 2.8.0 : « l'île n'est pas réaliste, trop bleue, mal faite ». En effet, tout y était cyan : l'herbe, les arbres, les champignons, les cristaux, et même le dessus des îles flottantes.
+
+- **La région devient une île nordique volcanique**, dans l'esprit de l'Islande :
+  - mousse vert sombre et herbe sèche dorée ;
+  - roche de lave nue par endroits ;
+  - bouleaux argentés, quelques pins dans les creux, rochers moussus, fougères et buissons ;
+  - de rares affleurements de quartz blanc ou fumé, à peine lumineux.
+  Les champignons géants et les cristaux violets et cyan ont été retirés. La lumière est froide et propre, sans dominante violette, et la météo est celle d'une île du nord (ciel clair, brume de mer, averses). Les aurores restent la nuit.
+- **Arbre de la région** : c'est maintenant un bouleau d'aurore, avec un tronc blanc argenté marqué de lenticelles sombres, des branches fines et un feuillage vert ou doré naturel. Il remplace l'arbre cyan à fruits lumineux.
+- **Îles flottantes refaites**, comme des blocs arrachés au sol :
+  - un contour irrégulier ;
+  - un dessus bosselé de mousse et d'herbe sèche avec des plaques de terre nue ;
+  - une couche de terre brune, puis de la roche en strates qui s'affine jusqu'à un éperon ;
+  - 16 racines qui pendent du bord ;
+  - quelques quartz dans la roche ;
+  - sur le dessus, un bouleau, des rochers et des buissons, en plus du coffre et de la veine de cristal d'aurore.
+- **Geysers refaits en vraies sources chaudes** : des terrasses de dépôts minéraux crème et ocre, un bassin bleu-vert clair, des pierres mouillées et deux panaches de vapeur. L'ancien bassin turquoise lumineux a disparu.
+- **Cristal d'aurore** : les teintes sont plus douces (aqua pâle à lilas) et la lueur moins forte, sur une roche sombre.
+- **Village** : les maisons de Lumenhaven sont des maisons longues nordiques (avant : maisons à dôme du désert).
+- **Vérifié sur ordinateur** : le scénario `aurora` réussit toujours (éjection par le geyser à 16,7 m, atterrissage sur l'île, coffre, chute, source libre, Aïla). Les tests unitaires et le scénario `newgame` réussissent aussi. Lumenhaven passe de 778 k à 747 k triangles.
+- **Non vérifié** : rien n'a été essayé sur un téléphone. Le dessous des îles reste sombre vu d'en bas : il est à l'ombre.
+
+### Nouveautés 2.8.0 (nouvelle région : les Terres d'Aurore ; palmiers refaits)
+
+- **Une nouvelle région, les Terres d'Aurore.** C'est une grande île d'environ 3,2 km × 1 km dans la mer du sud-ouest, jusque-là vide. Un isthme d'environ 380 m de large la relie à la Côte de Corail, à l'ouest de Port-Azur ; une route part de la Pierre de Port-Azur et va jusqu'à Lumenhaven.
+  - **Paysage** : des prairies turquoise dans de larges cuvettes, des crêtes de cristal à flancs en gradins et quelques aiguilles rocheuses.
+  - **Végétation** : deux nouvelles essences, l'*arbre de cristal* (tronc nacré, feuillage turquoise, fruits de cristal lumineux) et la *flèche d'aurore* (colonnes de cristal hexagonales). On y trouve aussi des champignons géants, des éclats de cristal et des fougères.
+  - **Ambiance** : la lumière est froide et violette, les nuits claires sont presque toujours traversées d'aurores, la brume y est lumineuse. La musique est celle, éthérée, du Royaume Céleste.
+- **Geysers propulseurs** (nouveauté de jeu). Il suffit de marcher dans une source lumineuse pour être projeté dans les airs.
+  - Les sources *libres* lancent à environ 7 m, avec une petite poussée vers l'avant.
+  - Celles qui sont au pied d'une île flottante visent l'île : le héros monte d'environ 16 m et atterrit sur le pont.
+  - Aucun dégât de chute après une éjection. Une source ne relance pas tant qu'on n'en est pas sorti.
+- **Îles flottantes** (nouveauté). Neuf îles flottent entre 14 et 17 m au-dessus des prairies.
+  - Chacune a un dessus de prairie, un dessous en éperon de roche, des cristaux qui pendent et brillent, et un arbre de cristal.
+  - On y trouve un coffre avec un *éclat du ciel* et une veine de cristal d'aurore.
+  - On peut marcher dessus et sauter dans le vide. Passer dessous ne fait pas monter dessus.
+- **Nouvelle ressource : le cristal d'aurore.** On le récolte dans la région, sur les îles, en creusant ou sur certains ennemis. Il sert à fabriquer :
+  - la *Lame d'aurore* (épée légendaire, arcane) ;
+  - le *Sceptre boréal* (bâton, glace) ;
+  - l'*Arc de lumière* ;
+  - le *Cœur d'aurore* (amulette).
+- **Quatre nouveaux ennemis** : le *Loup boréal* (meute), le *Golem de cristal* (tank, sensible au feu), le *Spectre d'aurore* (lanceur de sorts, la nuit) et l'*Araignée de quartz*.
+- **Village de Lumenhaven**, avec des maisons à dôme, une pierre de passage pour le voyage rapide et le *Cratère Cristallin* au sud-est.
+- **Aïla, la cristallière**, vend des potions et des bombes, et donne trois quêtes :
+  - *Lumière captive* : 6 cristaux d'aurore à rapporter ;
+  - *Contrat : golems de cristal* : 3 golems à vaincre ;
+  - *Les îles du ciel* : 3 éclats du ciel à trouver, récompensés par la Lame d'aurore.
+- **Palmiers refaits.** Chaque palme a maintenant une nervure centrale arquée et huit paires de folioles qui retombent, au lieu de trois grandes lames plates. Au loin, l'ancienne version légère est conservée.
+- **Bug trouvé et corrigé pendant les tests** : sur une source libre, le héros retombait dans la même source et repartait sans fin.
+- **Vérifié sur ordinateur** :
+  - scénario `aurora` : paysages de jour et de nuit, 9 îles et 23 sources générées, et le parcours complet de la nouveauté :
+    - la source monte à 16,6 m, le héros atterrit sur le pont à 3,7 m du centre sans perdre de vie ;
+    - le coffre donne l'éclat du ciel ;
+    - le héros saute de l'île (chute de 28 m) ;
+    - une source libre monte à 6,7 m puis on retombe à côté ;
+    - Lumenhaven, Aïla et ses 3 quêtes, un golem de cristal ;
+  - tests unitaires : 2794 réussis (placement des bâtiments, routes, eau ; les îles et les sources sont exclues du test « bâtiment qui flotte ») ;
+  - scénarios `newgame`, `titlemenus`, `interior`, `modfun`, `dig`, `mine` et `swim` réussis.
+- **Coût en triangles** : Lumenhaven 778 k (Chênebrune, la ville la plus boisée, reste à 947 k) ; les autres villes ne changent pas. **Les performances sur téléphone ne sont pas mesurées.**
+- **Limites** : rien n'a été essayé sur un vrai téléphone. Le golem de cristal paraît plus gris que turquoise en plein jour. On traverse visuellement la roche d'une île si on la longe par en dessous (elle n'a pas de collision latérale). Les crêtes de cristal utilisent la texture de falaise habituelle.
+
+### Nouveautés 2.7.0 (arbres et herbe plus réalistes, 8 mods spéciaux)
+
+- **Sapins refaits.** Ils sont désormais faits de sept étages de branches en étoile, chacun tourné au hasard. Chaque branche part du tronc, se cambre puis retombe, avec des encoches entre les branches. Le feuillage est sombre près du tronc et plus clair au bout des aiguilles, avec un dessous dans l'ombre. Le tronc s'affine vers le haut, a des racines au pied et une flèche au sommet. Les sapins enneigés ont de la neige sur chaque étage. Au loin, une version allégée de quatre étages est utilisée.
+- **Chênes et bouleaux refaits.** La couronne est maintenant portée par les branches : chaque branche quitte le tronc, se divise une fois et porte sa propre masse de feuilles. La silhouette est irrégulière, on voit le bois entre les touffes, et les masses de feuilles sont plus bosselées. Les feuilles sont plus petites, plus claires sur le dessus et dépassent du volume.
+- **Herbe plus réaliste et mieux plantée.** Chaque touffe pousse d'un seul pied : 8 brins fins (10 près du héros) qui montent, se courbent puis retombent vers l'extérieur. Le pied est sombre et enfoncé de 2 cm dans le sol, la pointe est plus claire et un peu dorée, et chaque brin a sa propre teinte. Le milieu des brins bouge moins que la pointe dans le vent.
+- **Vraies fleurs.** Les coquelicots et les marguerites ont maintenant une coupe de pétales relevés autour d'un cœur, à la place de carrés plats. La lavande a des épis de petites fleurs. Les fleurs des prés ont une tige courbée avec deux feuilles et six pétales.
+- **Huit mods spéciaux livrés avec le jeu**, ce qui en fait 14 au total. Ils sont désactivés par défaut, à activer dans le menu *Mods*, et se combinent entre eux :
+  - *Lune basse* : gravité lunaire, sauts d'environ 5 m ;
+  - *Monde des géants* : ennemis deux fois plus grands, plus de vie, double expérience ;
+  - *Mini-monstres* : ennemis deux fois plus petits ;
+  - *Hiver éternel* : il neige partout ;
+  - *Nuit éternelle* : il est toujours 23 h 30 ;
+  - *Destrier céleste* : montures 2,2 fois plus rapides ;
+  - *Apocalypse* : orage permanent, ennemis géants et enragés, plus d'or et d'expérience ;
+  - *Terrassier* : pelle et bombes gigantesques.
+- **Nouvelles clés de mod** (voir `docs/MODDING.md`) : `game.gravity`, `game.jump`, `game.time_speed`, `game.hour`, `game.weather` (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal), `game.mount_speed` et `game.enemy_scale`.
+- **La carte** : elle a déjà été agrandie en 2.4.0. Elle mesurait alors 6 144 m × 6 144 m (contre 4 608 m avant), avec les Steppes de Valdor et la Jungle d’Émeraude ; elle a de nouveau grandi en 3.0.0 (7 680 m, les Monts Titans).
+- **Vérifié sur ordinateur** :
+  - scénario `trees` : captures avant et après dans quatre régions ;
+  - scénario `modfun` : un saut lunaire monte à 5,2 m contre environ 1 m d'habitude, un loup géant est à l'échelle 2, la nuit éternelle et la neige forcée fonctionnent ;
+  - tests unitaires : 2734 réussis, dont les 14 mods livrés appliqués sans erreur et le refus d'une météo inconnue ;
+  - scénarios `newgame` et `titlemenus` réussis.
+- **Coût en triangles** (scénario `perf`, avant puis après) : Brindlemere 552 k → 560 k, Port-Azur 471 k → 464 k, Shirokawa 554 k → 570 k, Chênebrune (la plus boisée) 831 k → 947 k (+14 %). Pour compenser des touffes plus fournies, l'herbe est un peu plus espacée. **L'effet en images par seconde sur téléphone n'est pas mesuré.**
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone. Les palmiers, les arbres de la jungle et les autres essences n'ont pas été refaits.
+
+### Correctifs 2.6.2 (herbe et arbres dans le vent)
+
+- **L'herbe ne s'enfonce plus dans le sol.** Avec un vent fort (neige, tempête, steppe), le haut des brins était poussé de côté sans limite et descendait sous le terrain. Le brin plie maintenant autour de son pied en gardant sa longueur, jusqu'à environ 55° : il ne passe jamais sous le sol. L'herbe écrasée par le héros ou la monture reste elle aussi au-dessus du sol.
+- **Les sapins ne se séparent plus de leur tronc.** Chaque étage de feuillage glissait d'un bloc, avec une force différente pour chaque étage, alors que le tronc ne bouge pas. Désormais, seul le bout des branches bouge : le point d'attache au tronc reste fixe. Le balancement de tous les feuillages (chênes, bouleaux…) est aussi limité à environ 30 cm, pour qu'aucune couronne ne quitte son tronc.
+- **Vérifié sur ordinateur** : nouveau scénario `wind`, avec des captures dans les sapins de Frostheim sous la neige (force du vent 0,6) et dans la prairie de Brindlemere sous la tempête (force 1,1). Tests unitaires réussis.
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone.
+
+### Correctifs 2.6.1 (crash du menu Mods depuis l'écran titre)
+
+- **Crash corrigé.** Depuis l'écran titre, ouvrir *Mods* puis toucher l'onglet *Équipement* (ou *Inventaire*, *Compétences*, *Carte*…) faisait planter le jeu. Ces pages lisent le héros, qui n'existe pas encore avant de lancer une partie. Hors partie, la fenêtre s'appelle maintenant *Options* et ne montre que trois onglets : *Paramètres*, *Mods* et *Parties*. Si une autre page est demandée sans partie en cours, ce sont les paramètres qui s'affichent.
+- **Mods livrés tenus à jour.** Une mise à jour du jeu rafraîchit le texte et les valeurs des mods intégrés déjà installés. Le choix activé / désactivé est conservé.
+- **Vérifié sur ordinateur** :
+  - nouveau scénario `titlemenus` : démarrage à froid sans héros, *Mods*, puis appui sur *Équipement*, *Inventaire*, *Compétences*, *Carte*, *Paramètres*, *Parties* et *Mods*, puis ouverture forcée de tous les autres menus ; aucun plantage ;
+  - scénarios `menus`, `ui`, `newgame` et `interior` réussis. Le test `ui` tapait sur l'onglet *Quêtes*, caché en bas de la liste des onglets ; il tape maintenant sur *Compétences* ;
+  - tests unitaires réussis.
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone.
+
+### Nouveautés 2.6.0 (plusieurs parties, écran Nouvelle partie, mods intégrés, habitants dans les maisons)
+
+- **Six parties séparées.** L'écran titre propose maintenant *Continuer* (la dernière partie jouée), *Nouvelle partie*, *Parties*, *Mods*, *Paramètres* et *Crédits*. Chaque partie a sa propre sauvegarde : la sauvegarde automatique, le lit, l'auberge et la réapparition après la mort écrivent toutes dans la partie en cours. Le menu *Parties* charge, sauvegarde ou supprime une partie (la suppression demande une confirmation). L'ancienne sauvegarde automatique des versions précédentes reste chargeable.
+- **Écran Nouvelle partie.** On choisit l'emplacement (1 à 6), la difficulté (*Facile*, *Normal*, *Difficile*, *Héroïque* : vie des ennemis ×0,7 / ×1 / ×1,3 / ×1,65, attaque ×0,6 / ×1 / ×1,35 / ×1,75), les événements aléatoires (embuscades, étoiles filantes, caches) et le prologue. Le menu affiche aussi les mods actifs, avec un bouton *Gérer les mods*. Les réglages sont enregistrés dans la sauvegarde de la partie.
+- **Six mods livrés avec le jeu.** Ils sont désactivés par défaut et s'activent dans le menu *Mods* (écran titre ou paramètres) :
+  - *Chroniques du Vagabond*, le mod d'exemple ;
+  - *Méga-bombes*, des cratères énormes ;
+  - *Ennemis coriaces*, des ennemis plus durs mais plus d'expérience ;
+  - *Fortune des rois*, trois fois plus d'or ;
+  - *Héros véloce*, plus de vitesse et d'endurance ;
+  - *Armurerie légendaire*, des armes de départ plus fortes.
+  Comme avant, les changements de mods s'appliquent **au prochain lancement du jeu**.
+- **Nouvelles clés de mod `game.*`** (voir `docs/MODDING.md`) : vie et attaque des ennemis, expérience, or, vitesse du héros, récupération d'endurance.
+- **Des habitants dans les bâtiments.** On y trouve :
+  - à l'auberge, un aubergiste derrière le comptoir : chambre à 20 or avec sauvegarde, repas chaud à 8 or, partie de dés à 10 or (on gagne 20 or si on fait mieux que lui) ;
+  - à la chapelle, un prêtre : soins gratuits, ou bénédiction à 15 or qui soigne aussi les états ;
+  - à la forge, un forgeron qui tape sur l'enclume : forge et amélioration d'arme ;
+  - dans les maisons, de jour, un habitant qui partage un repas une fois par jour.
+  Ils se tournent vers le héros quand il approche.
+- **Voix des personnages : non ajoutées.** Je n'ai aucun moyen, dans cet environnement hors ligne, de produire des voix vraiment réalistes en français. Les seules synthèses disponibles sonnent robotiques. Comme demandé (*« si pas réaliste n'en mets pas »*), il n'y a donc pas de voix. Les dialogues restent écrits.
+- **Vérifié sur ordinateur** :
+  - scénario `newgame` : clic sur *Nouvelle partie*, partie 3 en *Héroïque*, la partie démarre dans l'emplacement 3, vie des ennemis ×1,65, *Continuer* pointe sur la partie 3, la difficulté est relue depuis la sauvegarde, les 6 mods sont installés ;
+  - scénario `interior` : l'aubergiste existe, le dialogue s'ouvre, une partie de dés débite ou crédite l'or correctement ;
+  - tests unitaires : 2723 réussis, dont l'application sans erreur des 6 mods livrés ;
+  - scénarios `dig` et `mine` : toujours réussis.
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone. Les habitants des maisons n'apparaissent pas la nuit.
+
+### Nouveautés 2.5.1 (creuser et miner plus facilement)
+
+- **Bouton « Creuser » dans la barre du haut** (pioche, à gauche du garage), visible dès que vous avez une pioche ou une pelle : un toucher active ou arrête le mode creusage (avant : caché dans le sac, et seulement avec la pelle).
+- **En mode creusage, le bouton pioche mine aussi** : devant un rocher, un filon ou un arbre, le coup le récolte ; ailleurs, il creuse le sol. Maintenir lance une bombe.
+- **La pioche permet aussi de creuser** (plus seulement la pelle).
+- **On peut creuser dans les villages**, entre les maisons (avant : interdit dans toute l'enceinte, y compris à Brindlemere où l'on commence) ; restent interdits : sous et contre les bâtiments, la place centrale, les châteaux, temples, monastères, tours, ponts et pierres de passage.
+- **Outils de départ** : nouvelle partie avec pioche, hachette, **pelle** et **2 bombes** ; les anciennes sauvegardes reçoivent une fois les outils qui leur manquent.
+- **Vérification (ordinateur seulement)** : scénario `mine` : nouvelle partie, filon le plus proche, bouton d'action touché au doigt : 3 minerais obtenus ; puis creuser à Brindlemere entre les maisons : accepté (`MINE TEST PASSED`, `MINE TOWN TEST PASSED`) ; 2 715 tests unitaires réussis.
+
+### Nouveautés 2.5.0 (entrer dans les bâtiments)
+
+- **On peut entrer dans les bâtiments** : devant la porte d'une maison, d'une maison de pierre, d'une longère, d'une auberge, d'une chapelle, d'une forge, d'une maison de grès du désert ou d'une cabane, le bouton d'action affiche « Entrer : … ». Un fondu, et vous êtes dedans ; la porte au fond de la pièce (« Sortir ») vous ramène dehors, devant le bâtiment.
+- **Des intérieurs meublés**, différents selon le bâtiment :
+  - **maison / longère** : lit, cheminée qui crépite (lumière et feu), table avec tabourets, cruche et bol, étagère de pots, tonneau, tapis, lanterne ;
+  - **auberge** : comptoir, étagère à bouteilles, tonneaux, quatre tables avec leurs tabourets, grande cheminée, lanternes, un lit à louer ;
+  - **chapelle** : bancs en deux rangées, tapis d'allée, autel avec bougies, symbole doré, vitraux colorés ;
+  - **forge** : foyer, enclume, tonneaux de trempe, râtelier, meule ;
+  - murs à colombages (plâtre et poutres) ou en pierre, fenêtres lumineuses, sol en planches ou en dalles ; pas de plafond, pour que la caméra voie la pièce.
+- **Ce qu'on peut y faire** :
+  - **dormir** dans un lit : vie, mana et endurance au maximum, réveil à 7 h, partie sauvegardée ;
+  - **travailler à la forge** : ouvre l'artisanat avec les recettes de forge ;
+  - **un coffre par maison**, à ouvrir une seule fois (enregistré dans la sauvegarde).
+- Ambiance : lumière chaude, son de pièce, musique de village ; le creusement est désactivé à l'intérieur.
+- **Vérification (ordinateur seulement)** : scénario `interior` : la porte d'une maison de Brindlemere est détectée, on entre, on dort (vie au maximum, 7 h), on ressort devant la porte, la forge ouvre l'artisanat, l'auberge a sa salle et son lit (`INTERIOR TEST PASSED`) ; captures regardées ; 2 715 tests unitaires réussis. **Limites** : les intérieurs sont des pièces types (pas la forme exacte du modèle extérieur) et ne contiennent pas encore d'habitants ; l'intérieur des maisons reste assez lumineux ; rien n'a été testé sur téléphone.
+
+### Nouveautés 2.4.0 (sol creusable et bombes, vraie nage, carte agrandie, deux nouvelles régions, bugs corrigés)
+
+- **Creuser le sol** :
+  - **Pelle** (forgeron de Brindlemere et de Solmar, ou forge : 2 lingots de fer + 2 bois). Dans le sac, « Creuser » active le **mode creusage** : le bouton épée devient une pioche et creuse le sol devant vous à chaque coup (on peut descendre jusqu'à 14 m). La terre rend parfois une pierre, un minerai de la région, et rarement un **trésor enfoui** (or et gemme). « Arrêter » quitte le mode.
+  - **Bombes** (forge : 2 charbons + 1 racine de braise, ou 3 charbons + 1 sel de mer ; aussi en boutique). « Lancer » depuis le sac, ou **maintenir l'épée** en mode creusage : la bombe vole, rebondit, sa mèche crépite, puis elle **explose** : cratère avec un rebord de terre projetée, dégâts de feu aux créatures autour (et à vous si vous êtes trop près), onde de choc, tremblement.
+  - Les **étoiles filantes** des événements creusent maintenant un vrai cratère.
+  - Le terrain creusé garde sa texture de **terre** (pas de roche ni de pavés), les arbres et l'herbe suivent le nouveau sol, la parcelle est reconstruite en arrière-plan.
+  - On ne peut pas creuser dans les villages, châteaux, temples, ni contre les bâtiments.
+  - Les trous et cratères sont **enregistrés dans la sauvegarde** ; une nouvelle partie repart d'un sol intact.
+  - **Mods** : `dig.radius`, `dig.depth`, `bomb.radius`, `bomb.depth`, `bomb.damage`, `bomb.fuse` (voir `docs/MODDING.md`) ; mod d'exemple `release/mods/mega-bombes.zip` (cratères de 8 m).
+- **Vraie nage** :
+  - **bug corrigé** : en mer (fond sous le niveau 0), le héros **marchait sur l'eau** au lieu de nager (la marche sur les obstacles partait de 0 m) ;
+  - nager lentement ne fatigue plus et ne fait plus perdre de vie ; le **crawl** (pousser le joystick au bord) est plus rapide et coûte de l'endurance ;
+  - **plonger** : le bouton Esquive (flèche vers le bas dans l'eau) plonge jusqu'à 7 m ; Saut ou Esquive remonte ; **jauge d'air** (bulles, 22 s), puis la vie baisse ;
+  - **sortir de l'eau** : Saut près d'une berge hisse le héros dessus ;
+  - trois animations (brasse, crawl avec roulis et respiration sur le côté, nage sous-marine avec battement de dauphin), sillage et bruits de brasse, bulles sous l'eau, vue teintée et son étouffé sous la surface ;
+  - des **bancs de coquillages** (perles) au fond des lacs et des criques, à aller chercher en plongée.
+- **Carte agrandie : 6 144 m de côté** (4 608 avant) : une bande de terres à l'est et un grand bloc au sud-est ; la Côte de Corail garde sa mer au sud.
+- **Deux nouvelles régions** :
+  - **Steppes de Valdor** : prairie dorée à perte de vue, herbes hautes, collines rocheuses, pierres levées, grand ciel ; villes **Valdor, Cité des Chevaux** et **Campement du Khan**, **Cercle des Pierres Levées**, **Tertre du Roi Cavalier**, **Camp des Cavaliers Noirs**, **Tour des Vents**, un lac ; ennemis : Cavalier noir, Archer de la steppe, Loup des steppes, Aurochs ;
+  - **Jungle d'Émeraude** : collines boisées, tours de calcaire, arbres géants, fougères, lagons, brume humide ; villes **Émeraude-sur-Lianes** et **Xochi, la Cité des Cascades**, **Temple du Jaguar** (nouveau donjon), **Ruines de Tlaloc**, **Grotte de la Cascade**, **Camp des Pilleurs de Tombes** ; ennemis : Jaguar d'émeraude, Mygale de jade, Guerrier de Tlaloc, Gardien de jade ;
+  - routes depuis Rempart-du-Nord, Fort Zénith et le Temple du Soleil Mort, 5 pierres de passage, météo et étalonnage propres, ressources propres ;
+  - 2 personnages (Borya à Valdor, Itzel à Émeraude) et **4 quêtes** (Cavaliers Noirs, le Roi Cavalier, le réveil du Jaguar, les mygales) ;
+  - 2 nouvelles musiques : « La Steppe » (violon, quintes, galop) et « La Jungle » (kalimba, marimba, flûte de pan, congas).
+- **Autres bugs corrigés** : plantage des tests (tableaux par région trop courts pour les nouvelles régions), bâtiments qui se chevauchaient aux ruines de Tlaloc.
+- **Vérification (ordinateur seulement)** : scénarios `dig` (6 coups de pelle : −2,8 m ; bombe : cratère ; sauvegarde puis rechargement : le trou est conservé ; nouvelle partie : sol intact), `swim` (nage, crawl, plongée à 4,9 m, air, remontée), `newlands` (captures des deux régions) ; **2 715 tests unitaires réussis** (dont les nouveaux tests du sol creusable : creuser, pas de marche entre deux parcelles, refus dans un village, sauvegarde et rechargement, réglages de mod) ; balayage automatique des anciens scénarios : héros, histoire, physique, pont, puits, course réussis — le balayage a été arrêté avant la fin (trop lent sur le rendu logiciel), les autres anciens scénarios n'ont **pas** été rejoués. **Non vérifié** : tout sur téléphone, l'équilibrage des nouvelles régions et des bombes.
+
+### Nouveautés 2.3.6 (performances mobiles + événements dans le monde)
+
+- **Performances** (mesurées par le nouveau scénario `perf`, qui compte les triangles par catégorie dans six villes) :
+  - herbe : les touffes sont mélangées une fois à la construction de la parcelle, puis on en dessine de moins en moins avec la distance (toutes jusqu'à 20 m, 35 % au bord) ;
+  - personnages : version simplifiée des modèles importés au-delà de 18 m (regroupement de sommets), plus d'ombre au-delà de 25 m ni de contour au-delà de 22 m (sauf le héros, la cible, le boss et la monture) ;
+  - bâtiments importés : version simplifiée au-delà de 32 m, et ceux hors du champ de la caméra ne sont plus envoyés à la carte graphique ;
+  - résultat sur ordinateur : Brindlemere passe de 703 k à 552 k triangles par image (−21 %), Port-Azur de 554 k à 475 k, Solmar de 275 k à 244 k. **L'effet réel en images par seconde sur téléphone n'est pas mesuré.**
+- **Événements aléatoires dans le monde** (toutes les 4 à 7 minutes, hors donjon, village, boss et conduite ; un marqueur avec la distance s'affiche à l'écran) :
+  - **Embuscade** : une bande de créatures de la région attaque des voyageurs ; battez-les toutes pour recevoir leur coffre, de l'or et de l'expérience ;
+  - **Chute d'étoile** : une étoile filante traverse le ciel et s'écrase (onde de choc, poussière, explosion) ; le cratère contient du minerai d'étoile et des cristaux ;
+  - **Cache oubliée** : un coffre abandonné repéré à l'écart du chemin.
+- **Vérification (ordinateur seulement)** : scénario `events` : les trois événements démarrent et se terminent (`EVENTS TEST PASSED`, +52 or pour l'embuscade, 3 gisements dans le cratère) ; captures regardées ; scénario `perf` ; 2 618 tests unitaires réussis.
+
+### Nouveautés 2.3.5 (menus réalistes optimisés mobile + nouvelles ressources)
+
+- **Menus refaits, plus réalistes** : nouveau kit graphique généré par `tools/make_ui.py` : couverture de cuir travaillé avec grain, pores et plis éclairés en relief, piqûre sellier, filets dorés et coins en laiton rivetés ; onglets en ruban de cuir (rouge sang quand actif) ; boutons en planches de chêne huilé avec embouts de laiton ; cartes de cuir pour les objets et les recettes.
+- **Optimisés pour téléphone** :
+  - le journal occupe tout l'écran, les 14 onglets sont sur le côté gauche, en grands rubans de 64 px avec icône et nom (avant : une rangée de 15 petites icônes en haut), et ils défilent au pouce ;
+  - tous les textes des pages du journal sont 12 % plus grands ; le bouton de fermeture est agrandi (74 px) ;
+  - **Pause** : une carte de cuir avec 7 grandes planches (icône + texte) ;
+  - **Sac** : couverture de cuir, cases en cuir, boutons en planches ; **écran titre** : boutons en planches, la mention du studio ne chevauche plus « Crédits » ;
+  - **Artisanat** : la page n'est plus vide loin d'un atelier : toutes les recettes sont listées, celles de l'atelier où vous êtes en premier, les autres grisées avec l'atelier nécessaire (« Il faut : Forge »).
+- **Plus de ressources** :
+  - 8 nouveaux types de gisements, chacun avec son modèle : **filon d'or** (Sables, High Crowns), **filon d'argent** (Frostheim, High Crowns), **charbon** (Cendres, Ombres), **cactus à figues** (Sables), **coquillages** avec perles (Côte de Corail), **lin** (Greenhaven, Elderwood), **roche d'ambre** (Sables), **racine de braise** (Cendres, Ombres). Les filons demandent la pioche ;
+  - **2 à 4 gisements par parcelle** au lieu de 1 à 3, repousse en **5 minutes** au lieu de 7 ;
+  - 12 nouveaux matériaux (minerais et lingots d'or, d'argent et d'acier, charbon, figue de barbarie, coquillage, perle, lin, toile de lin, racine de braise) ;
+  - 14 nouvelles recettes : lingots d'or, d'argent et d'acier, toile de lin, **épée d'acier**, **hache d'acier**, **dague d'argent**, **anneau d'argent**, **anneau d'or**, **collier de perle**, **bandage de lin**, **jus de figue**, **tonique de braise**, **poisson salé**.
+- **Vérification (ordinateur seulement)** : scénario `res` : les 8 nouveaux gisements posés devant le héros (capture regardée) puis récoltés, 18 objets obtenus, `RES TEST PASSED` ; scénario `menus` : capture de chaque menu (pause, sac, journal et ses pages, paramètres, carte, titre) regardée ; 2 618 tests unitaires réussis. **Non vérifié** : la taille réelle sous le doigt sur un téléphone, l'équilibrage des nouvelles armes et recettes.
+
+### Nouveautés 2.3.4 (épée tenue en courant, sons corrigés et plus réalistes, nouvelles musiques)
+
+- **L'épée ne tombe plus quand on court** : hors combat, elle reste posée sur l'épaule en marchant, en courant et en sprintant (avant, elle descendait et pendait pointe en bas dès que le héros bougeait). Elle rebondit un peu avec la foulée et repasse en garde dès qu'un combat commence.
+- **Bugs de son corrigés (moteur audio)** :
+  - les changements de musique et d'ambiance copiaient le fichier entier (jusqu'à 3,7 Mo) pendant que le mixeur était bloqué → micro-coupures. Les fichiers sont maintenant partagés et ouverts hors du verrou ;
+  - si le téléphone refuse le 48 kHz (par exemple 44,1 kHz), la musique jouait ~9 % trop vite et trop aiguë : elle est maintenant rééchantillonnée ;
+  - plus de clics : chaque son démarre et s'arrête avec un fondu de quelques millisecondes, et une voix « volée » (trop de sons en même temps) s'éteint en fondu au lieu d'être coupée net ;
+  - un même son déclenché plusieurs fois au même instant (plusieurs coups dans une frame) est fusionné : plus de volume doublé ni d'effet « phaser » ;
+  - la musique ne fait plus de va-et-vient : celle du combat tient 6 s après le dernier ennemi, et une nouvelle musique de région, de village ou de nuit doit rester la bonne pendant 3 s avant de démarrer.
+- **Sons plus réalistes** :
+  - chaque son varie légèrement en hauteur et en volume à chaque fois (pas de « copier-coller ») ;
+  - les sons lointains perdent leurs aigus (absorption de l'air) ;
+  - nouveaux bruitages par synthèse physique (`tools/make_sfx_real.py`) : pas en deux temps (talon puis plante du pied) avec une texture propre à chaque sol (feuilles, gravier, neige qui crisse, **sable** (nouveau), bois creux, eau), 3 variantes par sol jamais rejouées deux fois de suite ; épée qui fend l'air, impacts sur la chair, armure qui résonne, blocage au bouclier, parade lame contre lame ; réception avec cliquetis d'armure, roulade ; sabots du cheval avec la résonance creuse du sabot (3 variantes) ; vrai sifflet humain ;
+  - ambiances refaites : chants d'oiseaux de plusieurs espèces placés dans l'espace, grillons et chouette la nuit, vent en rafales, ruisseau qui gargouille, pluie sur les feuilles, et une **nouvelle ambiance de mer** (vagues, ressac, galets) sur la Côte de Corail.
+- **Nouvelles musiques** (orchestre échantillonné FluidR3, composées dans `tools/compose_music.py`) : « Les Sables » (désert, mode oriental, guitare façon oud, percussions), « La Côte » (harpe, flûte, marimba, en 3/4) et « Le Royaume Céleste » (chœurs, célesta, harpe). Ces trois zones réutilisaient auparavant la musique d'une autre région.
+- **Vérification (ordinateur seulement)** : 2 558 tests unitaires réussis, dont de nouveaux tests du mixeur (musique rendue à 44,1 kHz, trois sons identiques fusionnés en une voix, départ sans clic) et le décodage des nouveaux fichiers ; scénario `swordrun` : captures de côté à l'arrêt, en marche, en course et en sprint (épée sur l'épaule) ; spectrogrammes et niveaux des nouveaux sons vérifiés. **Je ne peux pas écouter les sons** : leur réalisme n'a été jugé que sur les spectrogrammes et les niveaux. Rien n'a été testé sur téléphone.
+
+### Nouveautés 2.3.3 (moins de boutons + nouveau modèle de cheval)
+
+- **Moins de boutons d'action** : à pied, il en reste 6 au lieu de 9 (attaque, esquive, saut, parade, sort(s), potion).
+  - **Plus de bouton « Courir »** : poussez le joystick jusqu'au bord et vous courez presque tout de suite (0,12 s). Un cercle doré et le mot « COURSE » apparaissent autour du joystick.
+  - **Bouton Monture contextuel** : il n'apparaît que si votre cheval est à moins de 25 m (pour remonter dessus). Le garage appelle le cheval et « Saut » fait descendre.
+  - **À cheval**, les boutons d'attaque, de parade et de sorts disparaissent (on ne peut pas combattre en selle) : il reste saut (descendre), esquive (galop) et potion.
+  - **Potion** : le bouton est caché quand vous n'avez plus de potion.
+  - Le tutoriel « Courir » explique le joystick au bord ; l'éditeur de disposition ne montre plus le bouton Courir.
+- **Nouveau modèle de cheval** (fichier Tripo fourni) : importé avec un nouvel outil, `tools/import_quadruped.py`. Le modèle était statique ; l'outil place les 21 articulations du squelette quadrupède du jeu sur l'anatomie du cheval (pattes, cou, tête, mâchoire, queue) et calcule les poids de peau le long de la surface. Le cheval joue donc les animations existantes (pas, trot, galop, queue, tête). Il remplace le cheval construit en code, pour votre monture comme pour les chevaux du ranch du domaine. Selle réaliste à environ 1,45 m, cavalier recalé sur son dos.
+- **Vérification (ordinateur seulement)** : scénario `garage` : cheval appelé, héros en selle, captures de côté à l'arrêt et au galop regardées (cavalier bien assis, pattes animées).; 2 547 tests unitaires réussis. **Non vérifié** : le rendu sur téléphone, l'aspect du cheval de près dans toutes les animations (saut, mort), les chevaux du ranch.
+
+### Nouveautés 2.3.2 (garage déplacé + appel du cheval)
+
+- **Garage déplacé** : le bouton (icône bleue) est maintenant dans la barre du haut, à gauche du sac ; sa liste s'ouvre sous la barre, à gauche de la minicarte. Il ne touche plus les boutons d'action (attaque, saut, courir, potion…). Il est caché en conduisant et dans un donjon.
+- **Appeler le cheval** : le garage propose Voiture, Moto et **Cheval**. Le cheval arrive à côté du héros (sol sec, sans mur) et le héros monte directement en selle. Si vous n'avez encore aucune monture, l'écurie royale vous confie un cheval (la monture achetée chez Odo reste prioritaire si vous en avez une). Si votre cheval était resté loin, il est ramené près de vous.
+- **Vérification (ordinateur seulement)** : scénario `garage` : voiture appelée à 4,1 m, conduite à 15,5 km/h, puis cheval appelé et héros en selle (`HORSE SUMMON OK`) ; captures du garage ouvert et du cheval regardées ; 2 547 tests unitaires réussis. **Non vérifié** sur téléphone (taille des doigts, position exacte selon l'écran).
+
+### Nouveautés 2.3.1 (le Royaume Céleste refait à la qualité du monde)
+
+- Les îles n'étaient que des dalles carrées sur fond violet. Elles sont maintenant construites comme le reste du monde : un **sol organique** au contour irrégulier, rendu par le même shader de terrain que le royaume (textures d'herbe, de terre et de roche, normales), des **falaises de roche** qui plongent sous chaque île vers une grande masse de pierre et de longues aiguilles suspendues, de la **vraie herbe** animée par le vent (comme dans les prairies) avec des fleurs pâles, des **arbres** (arbres anciens et champignons géants lumineux, bouleaux, chênes) sur le pourtour des îles, des buissons et des fougères, et de la brume sous les îles.
+- **Caméra libre** dans le Royaume (comme dehors) : on peut regarder le ciel, l'aurore et les îles lointaines ; dans les autres donjons, la caméra reste plongeante.
+- Vérification (ordinateur seulement) : 2 547 tests unitaires réussis.; capture de l'intérieur regardée (`REALM TEST PASSED`). Non vérifiés : la traversée complète et le combat du Gardien, rien sur téléphone.
+
+### Nouveautés 2.3.0 (logo SuperEssence animé, Portail Céleste et Royaume Céleste, tailles corrigées)
+
+- **Logo du studio animé au lancement** (l'image fournie, découpée en trois : « Super », « Essence », le point) : « Super » glisse depuis la gauche, « Essence » apparaît de gauche à droite avec un bord lumineux, le point jaune tombe et rebondit deux fois en s'écrasant, une gerbe d'étincelles dorées, puis un reflet blanc balaie uniquement les lettres ; « STUDIO » et « présente » arrivent ensuite. Environ 6 s, un toucher le passe. Les fichiers sont dans `assets/branding/` (réutilisables pour d'autres jeux).
+- **Portail Céleste** (nouveau lieu, sur la prairie à l'est du Lac Miroir, près de Brindlemere) : estrade de pierre à runes, anneau de blocs gravés au liseré d'or, vortex de lumière (disques superposés et six bras en spirale), deux pylônes couronnés de cristaux flottants, pierres en orbite, et des étincelles qui tournent et s'engouffrent dans le vortex. L'anneau est ouvert à sa base : on marche dedans, « Entrer : Le Royaume Céleste ».
+- **Le Royaume Céleste** (nouvelle zone) : un archipel d'îles d'herbe flottant dans un ciel violet, avec des racines de roche qui pendent sous chaque île, des ponts de lumière, des pylônes de cristal, des îles lointaines qui dérivent tout autour, une aurore et un soleil bas. Pas de murs : tomber d'une île ramène à l'entrée (avec 15 % de PV perdus). Feux follets, spectres et dragonnets ; un nouveau boss, **le Gardien de l'Éther** (lancier céleste, 3 phases) ; récompense : la Lentille d'étoile. Le Royaume utilise la mécanique des donjons (salles, énigme des braseros, porte, retour par le portail de sortie).
+- **Tailles des bâtiments importés** : ils étaient ajustés à leur emprise au sol seulement, d'où une forge à hauteur d'épaule, un puits au genou, une tour de 5 m. Chaque type a maintenant une hauteur crédible (maison 7 m, auberge 10 m, chapelle 11 m, tour 13 m, forge 5,2 m, puits 2,8 m, étal 2,9 m, tente 2,7 m), dans la limite de 1,7 fois l'ajustement à l'emprise pour ne pas avaler les voisins.
+- **Vérification (2.3.0, ordinateur seulement)** : 2 547 tests unitaires réussis.(dont la cohérence portail → Royaume → Gardien) ; captures regardées : 6 images du logo animé, le portail, l'intérieur du Royaume (`REALM TEST PASSED`), les 12 bâtiments importés à côté du héros. **Non vérifiés** : le combat contre le Gardien de l'Éther, l'énigme et la traversée complète du Royaume, rien sur téléphone. Les bâtiments construits dans le code (désert, côte) n'ont pas été remesurés par rapport au héros.
+
+### Nouveautés 2.2.1 (appeler un véhicule, compteur de vitesse, bâtiments posés à plat)
+
+- **Garage** (déplacé dans la barre du haut en 2.3.2) : un bouton (icône bleue) ouvre « Appeler un véhicule » → Voiture ou Moto. Le véhicule apparaît à côté du héros (côté droit d'abord, sinon autour), sur un sol sec et plat, sans chevaucher un mur ; si la place manque, un message le dit. Impossible dans un donjon ou en conduisant. Fini les véhicules perdus au bout du monde.
+- **Compteur de vitesse** en conduisant : cadran sous le suivi de quête, aiguille, chiffre en km/h, arc qui passe au rouge au-delà de 80 % de la vitesse maximale, « R » en marche arrière.
+- **Bâtiments posés à plat** : le sol sous chaque bâtiment (maisons, auberges, tours, temples, statues, pierres de passage…) est aplani à une seule hauteur, avec un talus de 4 m autour ; les bâtiments ne sont plus enterrés d'un côté ni posés sur un socle de pierre. Exception : ceux qui touchent une rivière ou un lac gardent l'ancien placement (on ne comble pas le lit) ; le pire enfouissement mesuré (7,8 m, une maison) est l'un de ceux-là.
+- **Vérification (2.2.1, ordinateur seulement)** : 2 532 tests unitaires réussis (aucun bâtiment flottant, 0 sur 1 101) ; scénario `garage` : la voiture appelée arrive à 4,1 m du héros, la conduite atteint 15,5 km/h en 3 s, captures du garage et du compteur regardées. **Non vérifiés** : la moto appelée, la taille des objets par rapport au héros (pas encore traitée), rien sur téléphone.
+
+### Nouveautés 2.2.0 (sac rapide, repères, réapparition, téléportation en poussière, donjons sur la carte)
+
+- **Sac rapide** (bouton sac en haut à droite) : un seul panneau à droite de l'écran, le jeu reste visible. 5 filtres (Tout, Équipement, Soins, Matériaux, Quête), grandes cases triées par catégorie puis rareté, et une barre d'action en bas : nom, effet (« Soigne 40 PV ») ou comparaison avec l'objet porté (« attaque +6 · défense +0 · vie +0 »), boutons Utiliser / Équiper / Jeter. L'équipement porté s'affiche en haut (toucher une case ouvre la page Équipement). « Journal complet » ouvre l'ancien journal à onglets pour le reste (compétences, artisanat, quêtes…).
+- **Repères personnels** : sur la carte, touchez n'importe où pour poser un repère (6 au maximum, touchez-le pour l'enlever, bouton « Effacer les repères »). Ils apparaissent sur la minicarte et à l'écran avec la distance, accrochés au bord quand ils sont hors champ. Enregistrés dans la sauvegarde.
+- **Donjons sur la carte** : les 9 entrées de donjon sont toujours affichées ; celles qui ne sont pas encore découvertes portent un « ? », celles terminées sont en vert ; leur nom s'affiche en zoomant.
+- **Point de réapparition et « Je suis bloqué »** (menu Pause) : « Point de réapparition ici » enregistre l'endroit où vous êtes (pas en l'air, dans l'eau, dans un donjon ou en combat de boss) ; « Je suis bloqué » vous y ramène (dans un donjon : retour à l'entrée). Sans perte d'or, contrairement à la mort.
+- **Téléportation en poussière** (voyage rapide et « Je suis bloqué ») : le héros se désagrège des pieds à la tête (bord du shader de dissolution qui brûle en or), en quelques centaines de grains de poussière dorée qui dérivent avec le vent et montent vers le ciel, avec une colonne de lumière ; l'écran de chargement prend le relais, puis la poussière retombe et le héros se reforme de la tête aux pieds, avec une onde au sol. Les commandes sont bloquées et le héros invulnérable pendant l'effet. C'est un effet de particules stylisé, pas une simulation physique.
+- **Vérification (2.2.0, ordinateur seulement)** : 2 532 tests unitaires réussis ; nouveau scénario `qol` : sac, carte (repères et donjons), menu Pause et les deux moitiés de la téléportation photographiés et regardés ; le héros arrive à 4,2 m de la pierre visée, entièrement reformé (`QOL TEST PASSED`). **Non vérifiés** : les touchers réels (poser un repère au doigt, boutons du sac et de la pause n'ont pas été pressés par le robot), la sauvegarde et le rechargement des repères, rien sur téléphone.
+
+### Nouveautés 2.1.0 (chargement propre, tutoriel interactif, voyage rapide)
+
+- **Chargement sans « pop-in »** : au lancement d'une partie, après un voyage rapide et avant chaque plan du prologue, le jeu reste derrière un écran noir avec le titre, une **barre de progression** et une astuce, jusqu'à ce que le décor autour du héros (ou de la caméra) soit entièrement en place (détail proche et terrain lointain, jusqu'à 10 s au maximum). Pendant l'attente, le monde est diffusé plus loin (230 m) et chargé plus vite (48 morceaux par image au lieu de 3 à 8) ; l'écran reste au moins 0,6 s pour ne pas clignoter, puis s'éclaircit en fondu. Les notifications sont masquées pendant le chargement. Les scénarios robot ne passent pas par cet écran.
+- **Tutoriel interactif** après le prologue (au lieu d'une seule ligne d'aide) : 7 étapes validées par l'action réelle (marcher 6 m, tourner la caméra, courir, sauter, rouler, attaquer, parler à Maëlle), avec un anneau qui pulse autour du bouton à utiliser, une barre de progression en points et un bouton « Passer ». Il n'est proposé qu'une fois (drapeau `tutorial_done`) et pas aux parties déjà commencées.
+- **Voyage rapide** : sur la carte, touchez une pierre de passage découverte puis « Voyage rapide : <nom> » (impossible dans un donjon, pendant un combat de boss, à cheval ou en véhicule). Un fondu, puis le chargement propre ci-dessus ; le point de retour est mis à jour.
+- **Vérification (2.1.0, ordinateur seulement)** : 2 532 tests unitaires réussis ; scénario `start` (nouveau) : l'écran de chargement, puis le tutoriel (étapes 1 et 3) ont été photographiés et regardés. **Non vérifiés** : le voyage rapide n'a pas été essayé (le code compile, la carte n'a pas été capturée), les étapes 2, 4, 5, 6 et 7 du tutoriel n'ont pas été jouées, et rien n'a été essayé sur téléphone.
+
+### Nouveautés 2.0.1 (bouton Courir ; potion déplacée)
+
+- **Bouton Potion** déplacé du milieu de l'écran au bord droit, au-dessus d'Attaque (la disposition enregistrée est de nouveau remplacée par la nouvelle par défaut). Vérifié par les tests de disposition (aucun chevauchement, tout dans la zone sûre, 5 formats d'écran) ; la position finale n'a pas été photographiée.
+
+- **Bouton « Courir »** (flèche, à gauche de Parade) : un appui active la course tant que le joystick est tenu, un second appui revient à la marche ; il s'allume quand la course est verrouillée. Il se déplace dans l'éditeur de disposition (la disposition enregistrée par une ancienne version est remplacée par la nouvelle par défaut). Le joystick poussé à fond fait toujours courir, désormais après 0,3 s au lieu de 0,5 s.
+- Vérifié sur ordinateur : tests unitaires (2 532 réussis, dont le contrôle qu'aucun bouton n'en chevauche un autre) et une capture. Le bouton n'a pas été essayé au doigt, ni sur téléphone ; il n'y a pas de nouveau mouvement (accroupi, glissade) : je n'en ai pas ajouté. APK toujours non reconstruit.
+
+### Nouveautés 2.0.0 (« L'Héritage du Septième » : un monde de 4 608 m, deux nouvelles régions, un Acte II, un ciel refait)
+
+> **À lire d'abord.** Cette version a été écrite et vérifiée **sur ordinateur seulement** (Mesa llvmpipe, rendu logiciel). L'APK 2.0.0 a été construit après coup (`release/LOST-KINGDOM-SUPERESSENCE.apk`). **La clé de signature locale a été recréée** (le dossier `keystore/` n'est pas versionné) : **désinstallez l'ancienne version avant d'installer celle-ci**, vos sauvegardes locales seront perdues. Rien de ce qui suit n'a été essayé sur un vrai téléphone : les performances du nouveau ciel, du nouveau monde et des nouveaux effets ne sont **pas mesurées** sur mobile.
+
+- **Un monde 2,25 fois plus grand** : 4 608 m de côté au lieu de 3 072 m (21 millions de m² au lieu de 9,4). L'île d'origine garde ses coordonnées ; les nouvelles terres s'étendent à l'est et au sud. Les sauvegardes existantes restent valables (la zone de départ n'a pas bougé).
+  - **Les Sables d'Ambre** (sud-est, nouvelle région) : un océan de dunes en croissants aux crêtes vives, des mesas à terrasses, un fleuve (le Sekh) qui descend des montagnes et se jette dans l'oasis de Kheft, des oasis, des acacias, des cactus, des agaves, des rochers sculptés par le vent, de la brousse sèche. Tempêtes de sable.
+  - **La Côte de Corail** (sud, nouvelle région) : collines de jungle, lagons turquoise, plages de sable blanc, palmiers, bananiers, buissons fleuris, bois flotté, coquillages, récifs, îlots au large (accessibles à la nage). Le fleuve de Gravemoor y descend jusqu'à la mer.
+  - **La chaîne du nord-est** : les montagnes de High Crowns se prolongent à l'est de Highspire (village de Hautgel, Rempart-du-Nord, Mine des Naines).
+- **38 nouveaux lieux** (71 au total, dont une porte de donjon) : 14 villages et bourgs (dont 6 sur l'ancienne île : Chênebrune, Saule-Rieur, Givrebourg, Aubéclat, Braise-Pic, Marais-Noir), Solmar (cité de 104 m de rayon avec bazars, minarets, portes), l'oasis de Kheft, Tamrak, le caravansérail de Zafir, **Port-Azur** (port avec pontons de 42 à 56 m, auberge, halle aux poissons), Corail-sur-Pilotis (village sur lagon), Sel-de-Mer, le temple de Shirokawa, le Phare des Brumes, la Gardienne des Sables (sphinx), le Temple du Soleil Mort (ziggourat), le Fort Zénith, les Colonnades de Karun, l'épave du Léviathan, le Pont du Tonnerre, des camps de pilleurs et de corsaires, des mines, des tours, 6 pierres de passage. 24 routes nouvelles, 4 ponts supplémentaires (9 au total), une rivière nouvelle (le Sekh) et le fleuve de Gravemoor prolongé jusqu'à la mer.
+  - **11 nouveaux types de bâtiments**, tous modélisés dans le code : maison à dôme, halle de bazar, minaret, ziggourat, phare, pagode, sphinx, ponton (praticable, à 0,75 m au-dessus de l'eau), case de plage, colonnade, porte du désert.
+  - **19 nouveaux éléments de décor** : palmier, palmier-dattier, bananier, buissons fleuris, acacia, cactus, agave, roche sculptée, virevoltant, brousse, roche de mer, bois flotté, coquillages, hamac, séchoir à filets, barque, amphores, tapis, brasero.
+  - **Villages plus riches partout** (anciens compris) : une seconde couronne de maisons avec enclos ; chaque habitation a sa cour choisie par région (tonneaux, caisses, foin, jarres, tapis, filets, barques, palmiers, fougères, pins…) ; les arbres poussent entre les maisons au lieu de s'arrêter au bord du village.
+- **Acte II, « L'Héritage du Septième »** (après la fin de l'Acte I ; Maëlle donne la première quête) : la Couronne avait un septième joyau, le Silence, caché à Shirokawa. 9 quêtes principales (n1 à n9) de Brindlemere à Port-Azur, du Pont du Tonnerre au désert, du Temple du Soleil Mort au sanctuaire sous Shirokawa ; 14 quêtes annexes (dont contrats de chasse), 2 chasses au trésor, 2 quêtes cachées, 2 serments de faction ; 15 personnages ; **4 boss** (la Reine Scorpion, le Capitaine Mareval, Sekhmar le Roi-Soleil, le Silence) ; **3 donjons** (Grotte des Marées, Temple du Soleil Mort, Sanctuaire du Silence) ; 16 nouvelles créatures ; 2 nouvelles réputations (Caravaniers de Solmar, Marins de Port-Azur) ; 5 nouveaux chapitres en cinématique (visibles dans Objectifs → L'histoire, avec « Revoir ») ; 7 armes, 4 bijoux, 6 consommables, des matériaux et une nouvelle monture (le destrier d'ambre, chez Samir à Solmar).
+- **Shaders et ambiance** :
+  - **Ciel refait** : diffusion de l'atmosphère (auréole, bande de coucher de soleil), **nuages éclairés** (une couche de cumulus avec ombre propre, liseré argenté face au soleil et dessous rougeoyant, plus des cirrus), lune avec mers et halo, étoiles qui scintillent, **Voie lactée** avec lanes de poussière, **étoiles filantes**, **arc-en-ciel** après la pluie.
+  - **Aurores boréales** au-dessus de Frostheim (et plus discrètes sur High Crowns) par nuit claire.
+  - **Mirage** (chaleur qui fait trembler le lointain) dans le désert, **tempête de sable** (voile de grains en traînées, fumée ocre, particules), brume de poussière sur l'horizon.
+  - **Reflets de lentille** (halo, fantômes, traînée) quand le soleil est dans le champ et dégagé.
+  - **Rides de sable** sur les dunes et les plages (deux échelles, qui suivent le vent) ; eau tropicale (turquoise sur sable blanc, éclat de lagon, bandes d'écume qui montent sur la plage).
+  - Météo et grading propres à chaque région (désert brûlant et doré, côte saturée et turquoise).
+- **Vérification (2.0.0, ordinateur seulement)** :
+  - 2 532 vérifications unitaires réussies, 0 échec (nouveaux contrôles : indices des donjons et des boss, chaîne n1→n9, placement des 38 nouveaux lieux : aucun bâtiment sur une route, dans l'eau ou dans un autre, ponts praticables).
+  - Scénario `full` de l'Acte I : **joué jusqu'à l'écran de générique (29 captures), sans plantage**, à 640x360, avec le nouveau monde et le nouveau ciel. Le journal contient une ligne « save failed (slot 2) » que je n'ai pas expliquée (je n'ai pas vérifié si elle existait avant la 2.0.0). Le scénario n'a pas été relancé sous AddressSanitizer.
+  - Les captures du nouveau monde (`lands`) et du ciel (`sky`) ont été regardées ; tout n'a pas été photographié (par exemple l'intérieur des trois nouveaux donjons n'a pas été vu).
+- **Outils pour regarder** : `./build/desk/lk_desktop --assets assets --size 960x540 --frames N --dt 0.0333 --autoplay=lands` (tour des nouveaux lieux ; `LK_LANDS=solmar,port_azur` en choisit), `--autoplay=sky` (ciel : jour, coucher, nuit, aurore, arc-en-ciel ; `LK_SKY=aurora`), et `LK_PROBE=64 ./build/desk/lk_tests assets` (carte ASCII des régions et du relief, liste des lieux).
+- **Limites (honnêtement).**
+  - **Aucun essai sur téléphone** (l'APK 2.0.0 est construit et sa signature vérifiée, mais jamais installé ni lancé sur un appareil ou un émulateur) : les nuages (quatre lectures de texture par couche), les étoiles (hachage) et les aurores (six pas) coûtent du temps GPU que je n'ai pas mesuré ; les profils « Économie » et « Moyen » ne les simplifient pas encore.
+  - **La musique n'a pas été recomposée** : les Sables d'Ambre jouent le thème des Ashen Lands, la Côte de Corail celui de Greenhaven. Pas de nouveaux bruitages non plus (vagues, vent de désert) : les ambiances existantes sont réutilisées.
+  - **L'Acte II n'a pas été joué de bout en bout** : les tests contrôlent la cohérence des données (chaîne n1→n9, cibles, indices des donjons et des boss, existence des lieux), pas un parcours de plusieurs heures. Le scénario robot ne couvre que l'Acte I.
+  - Les créatures de l'Acte II réutilisent les squelettes existants : le scorpion et le crabe sont des araignées recolorées, le chacal un loup, le serpent un lézard, le dragonnet des sables un dragon réduit ; le Silence, Sekhmar et Mareval sont des humanoïdes avec une apparence propre mais pas de modèle 3D dédié.
+  - Les îlots au large n'ont pas de contenu (palmiers et plage seulement). Les cinématiques de l'Acte II montrent les lieux, pas les personnages (comme celles de l'Acte I).
+  - La mesure de la mémoire et du temps de génération des chunks sur téléphone reste à faire : le monde a 2,25 fois plus de chunks, mais seuls ceux autour du héros sont chargés.
+  - Jouer à deux : les nouveaux lieux sont dans le plan du monde (identique chez les deux joueurs avec la même version) ; les quêtes de l'Acte II et leurs créatures n'ont pas été essayées à deux.
+  - Le plan `docs/PLAN_MAJ_2.0.md` (caméra libre, combat « badass », exécutions…) n'a pas été revu ni traité par cette version : « 2.0.0 » désigne ici l'agrandissement du monde, l'Acte II et les shaders.
+
+### Nouveautés 1.13.0 (jouer à deux en Wi-Fi, bande originale orchestrale, forêts brumeuses)
+
+- **Jouer à deux** (Journal → onglet **À deux**), sur le même réseau Wi-Fi :
+  - un joueur choisit **Héberger une partie**, l'autre **Rejoindre une partie** : la partie est trouvée automatiquement sur le Wi-Fi. Si le routeur bloque cette recherche, on peut taper l'adresse de l'hôte, affichée sur son écran ;
+  - l'hôte garde son monde : les créatures, l'heure et la météo. L'invité y entre avec **son propre héros**, sa sauvegarde, son niveau, son équipement et ses quêtes ;
+  - chacun voit le héros de l'autre (nom et barre de vie au-dessus de la tête, contour bleu, point bleu sur la minimap et la carte) et **le domaine de l'autre**, ajouté à la carte pendant la partie ;
+  - **on se bat ensemble** : les créatures de l'hôte traquent le plus proche des deux héros et mordent l'invité ; les coups de l'invité blessent les créatures de l'hôte ; quand une créature meurt, l'invité gagne aussi son expérience, son butin et l'avancée de ses quêtes, Gardiens et fragments de Couronne compris ;
+  - réseau local UDP (port 47777) : 20 envois par seconde, et un canal fiable pour les coups, les dégâts, les morts, les apparences et les domaines (renvoyés jusqu'à l'accusé de réception). Si l'autre disparaît plus de 6 s, la partie se ferme proprement ; l'hôte attend alors un nouveau joueur ;
+  - l'APK demande maintenant la permission réseau d'Android (INTERNET), utilisée uniquement pour le réseau local.
+- **Bande originale orchestrale.** 14 nouveaux morceaux composés pour le jeu (titre, Greenhaven, village, Elderwood, Frostheim, Ashen, Highcrowns, Royaume des Ombres, nuit, donjon, combat, boss, générique, jingle). Ils sont joués par de **vrais instruments échantillonnés** (la banque de sons FluidR3, de Frank Wen, sous licence MIT) : cordes, harpe, flûte, hautbois, cors, trompettes, chœur, timbales, célesta, guitare, flûte à bec, piano.
+  - Le thème principal « Lost Kingdom » revient dans le titre et le générique ; chaque région a sa couleur (valse pastorale à Greenhaven, guitare et flûte à bec au village, célesta et chœur à Elderwood, cors et cloches à Frostheim, taikos à Ashen, fanfare à Highcrowns, violoncelle sombre dans les Ombres, berceuse au piano la nuit).
+  - Tout est écrit note à note dans `tools/compose_music.py` (mélodies, accords, arrangements), puis rendu avec FluidSynth à 48 kHz et normalisé (-16 à -17,6 LUFS, aucun écrêtage). Un contrôle automatique d'harmonie compte les frottements d'un demi-ton entre la mélodie et l'accompagnement ; il en reste de 0 à 6 % des notes longues (des notes de passage), un peu plus dans *Shadows* et le donjon, où c'est voulu.
+  - L'ancienne musique synthétisée n'est plus utilisée (`tools/make_audio.py` ne produit plus que les effets et les ambiances).
+- **Ambiance.**
+  - **Forêts brumeuses** : sous les arbres, l'air se charge d'une brume légère, teintée de vert, que les **rayons du soleil** traversent plus fort ; des **poussières dorées** flottent dans la lumière.
+  - **Brume du matin** entre 5 h et 9 h, partout.
+  - **Villages plus animés** : 12 villageois au lieu de 8.
+- **Vérification (1.13.0)** : 2 055 tests unitaires (+6 sur le réseau : encodage des messages, message tronqué détecté, adresses, aller-retour UDP réel). Nouveau test à deux :
+  - deux instances du jeu tournent en même temps sur l'ordinateur. L'hôte fonde son domaine ; l'invité **trouve la partie tout seul** sur le réseau, la rejoint, prend l'heure de l'hôte (10 h au lieu de 20 h 30) et voit son domaine ;
+  - l'hôte fait apparaître 3 loups près de l'invité ; l'invité les combat avec de vraies commandes d'attaque : 9 coups transmis, 3 morts reçues, l'invité passe au niveau 2, il est mordu 7 fois (`COOP HOST TEST PASSED` et `COOP GUEST TEST PASSED`).
+
+  Les 26 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; le test à deux (hôte et invité) passe aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur des téléphones.
+- **Limites (honnêtement).**
+  - **Le jeu à deux n'a jamais été essayé entre deux vrais téléphones** : seulement entre deux instances sur un même ordinateur. Certains routeurs (Wi-Fi d'hôtel, d'école) isolent les appareils : la partie ne peut alors pas se faire, même en tapant l'adresse.
+  - Les créatures vivent autour de l'hôte : si l'invité part trop loin (au-delà d'environ 150 m), il ne croise plus de créatures. Restez proches.
+  - Ne sont pas partagés : les PNJ et les animaux (chacun voit les siens), les donjons (chacun joue le sien), les véhicules (l'autre voit le héros, pas la voiture), les cinématiques, les courses, les traqueurs de la nuit de l'invité (ce sont ceux de l'hôte qui comptent).
+  - Deux joueurs au maximum, sur le même réseau local seulement (pas d'Internet).
+  - « Réalisme des photos » : le jeu reste un moteur maison pour téléphone, avec des décors en partie construits en code. Les brumes, rayons, reflets et la nouvelle musique rapprochent l'ambiance, pas la fidélité d'un jeu PC moderne (Unreal Engine 5).
+
+### Nouveautés 1.12.0 (l'histoire racontée en chapitres, une fin à choisir, reflets dans l'eau, tout bien placé)
+
+- **L'histoire, en chapitres.** La quête principale avait une intrigue écrite dans les Chroniques (les Gardiens appellent le héros « sire », le novice à la cicatrice qui ne vieillit pas) mais jamais racontée. Elle l'est maintenant, en 5 nouvelles cinématiques à plans (23 plans en tout, dans les vrais lieux du monde, avec heure, météo et brume propres à chacun) :
+  - **I · La voix dans la pierre** (après la Pierre d'écho) : Aldric parle. Une âme liée au sceau ne meurt pas ; quand le sceau cède, elle est rejetée, « comme une épave sur la grève » ;
+  - **II · Les six Gardiens** (en arrivant à Highspire) : survol des six repaires, un plan et une phrase par Gardien. Alaric dit « sire », puis se reprend ;
+  - **III · Le novice à la cicatrice** (après la Couronne reforgée) : **la révélation**. Frère Alaric était le novice qui tenait les tenailles la nuit de la Brisure, l'élève de Malgrath ; il disparaît. La quête suivante démarre seule ; si une quête vous demandait encore de lui parler, cette étape est validée (ce dernier point n'est pas couvert par un test) ;
+  - **IV · Le champion qui attendait** (après Corwin) : Sire Corwin reconnaît son roi et le prévient : la Couronne reforgée est une clé pour ouvrir, pas pour fermer ;
+  - **V · Le choix d'Aldric** : après Malgrath, un écran de choix. **Reprendre ta place dans le sceau** (épilogue « Le Roi du sceau ») ou **Briser la Couronne à jamais** (épilogue « Le Roi sans couronne », qui renvoie à votre domaine). Puis le générique ; le monde reste ouvert ensuite.
+  - Les textes des quêtes 5 à 7 suivent la révélation. Le but affiché dans **Objectifs** change avec l'histoire, et une section **L'histoire** résume chaque chapitre vu, avec un bouton **Revoir** (revoir un chapitre ne relance pas ses effets).
+- **Tout bien placé.** Un nouvel audit génère les 1 285 chunks autour des 33 lieux du monde et vérifie 11 529 objets solides et 393 bâtiments. Il a trouvé de vrais défauts, corrigés :
+  - **18 bâtiments sur des routes** (dont des maisons au milieu de la route qui traverse Brindlemere, et des lanternes sur les pavés) et **4 paires d'étals l'un dans l'autre** : une passe de placement écarte chaque bâtiment de la route et de ses voisins (32 déplacés de quelques mètres, 8 petits éléments sans place retirés : lanternes, étals) ;
+  - des arbres pouvaient pousser dans une maison posée à cheval sur deux chunks (chaque chunk ne regardait que ses propres bâtiments) : la végétation évite désormais aussi les bâtiments des chunks voisins ;
+  - résultat : 0 objet dans un bâtiment, sur une route, dans l'eau ou flottant ; 0 bâtiment qui en chevauche un autre ou posé sur une route (les routes qui finissent à la porte d'une tour ou d'une crypte, et les remparts traversés à leur porte, sont normaux).
+  - **caméra contre un mur** : quand le héros a le dos collé à un grand bâtiment, la caméra, même rapprochée au plus près, restait dans le mur. Elle monte maintenant au-dessus du toit ou tourne autour du héros vers un côté libre, et le jeu fait pivoter doucement la caméra dans ce sens (les commandes suivent ce qu'on voit). Le test de la caméra l'a trouvé quand l'auberge de Brindlemere a été déplacée hors de la route.
+- **Shaders.**
+  - **Reflets dans l'eau** (profils Ultra et Élevé) : le héros, les personnages, les roseaux, les ponts et les arbres proches se reflètent dans l'eau, ondulés par les vagues. La scène est copiée avant de dessiner l'eau, puis le shader de l'eau suit le rayon réfléchi dans cette copie (« réflexions en espace écran »). Vu de haut, comme dans le jeu, l'effet reste discret.
+  - **Paillettes** sur la neige, le givre et le sable mouillé : de minuscules cristaux accrochent le soleil et scintillent.
+- **Vérification (1.12.0)** : 2 049 tests unitaires (+8 : audit de placement). Nouveaux scénarios :
+  - `story` : les 4 chapitres se déclenchent à la fin des bonnes quêtes et vont jusqu'au bout ; la quête 4 démarre après le chapitre II ; Alaric disparaît et la quête 6 démarre après le chapitre III ; la quête 7 après Corwin ; l'écran de choix apparaît, un vrai appui sur « Briser la Couronne » lance l'épilogue, puis le générique ;
+  - `ssr` : l'eau avec et sans reflets, et la neige au soleil.
+
+  Les 26 scénarios qui donnent un verdict sont réussis, sans erreur (après la correction de la caméra, `camera`, `story`, `full`, `grounded`, `buildings`, `domain`, `ui`, `touch` et `heroes` ont été relancés et passent). `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `story` passe aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - Les cinématiques des chapitres montrent les lieux, pas les personnages : Alaric, Corwin et Malgrath sont « joués » par la voix (texte et nom de celui qui parle), pas par un modèle animé dans le plan.
+  - Le test `story` déclenche les fins de quête directement : il ne joue pas toute la quête principale (une dizaine d'heures de jeu).
+  - Les reflets coûtent une copie de l'image et 22 pas de rayon par pixel d'eau ; leur coût sur un vrai téléphone n'est pas mesuré.
+  - Jouer à deux n'existe toujours pas.
+
+## Axes d'amélioration
+
+Ce qui ferait le plus progresser le jeu, du plus important au moins important (avis honnête) :
+
+1. **L'essayer sur de vrais téléphones.** Tout est vérifié sur ordinateur. Il faut mesurer les performances (images par seconde, chauffe, batterie), le tactile réel et les pilotes graphiques de plusieurs marques, puis régler les profils. C'est le plus gros risque restant.
+2. **Les personnages dans les cinématiques.** Mettre Alaric, Corwin, Maëlle et Malgrath en scène (modèles 3D animés, gestes, regards) au lieu de plans de décor avec du texte.
+3. **Des voix.** Un doublage, même partiel (le prologue, les chapitres), changerait beaucoup l'immersion.
+4. **De vrais modèles pour tout le monde.** Les héros, 12 bâtiments, 6 monstres et 2 véhicules sont des modèles 3D ; les villageois, les autres créatures (21 sur 27) et la végétation sont encore construits en code.
+5. **Des animations capturées** (motion capture) pour la marche, les combats et les dialogues, au lieu d'images-clés et de procédural.
+6. **Une musique enregistrée** : la bande originale (1.13.0) utilise des instruments échantillonnés ; un vrai orchestre et des musiciens iraient plus loin.
+7. **Le jeu à deux** existe depuis la 1.13.0 en Wi-Fi local ; il reste à l'essayer entre deux vrais téléphones, puis à l'étendre (donjons et véhicules partagés, jeu par Internet).
+8. **Plus de contenu entre les chapitres** : des quêtes secondaires liées à l'histoire (Corwin, l'Ordre, les élèves de Malgrath), des donjons uniques par Gardien, des choix qui changent les villages.
+9. **La publication** : un AAB signé avec votre clé pour le Play Store, une politique de confidentialité, des captures et une fiche boutique.
+10. **D'autres langues** (anglais d'abord) et des options d'accessibilité (taille du texte, daltonisme, sous-titres plus grands).
+
+### Nouveautés 1.11.2 (ponts réparés, sauter en courant, physique et caustiques)
+
+- **Les ponts se traversent.** Il y en a 3 dans le monde (là où une route croise une rivière), et ils sont refaits :
+  - la hauteur où l'on marchait était 0,8 m au-dessus des planches dessinées (l'arche était comptée deux fois) : on flottait au-dessus du pont ;
+  - le jeu repoussait le héros quand le ravin sous le pont était raide (la « poussée des pentes » regardait le terrain sous le tablier) : c'est ce qui empêchait de traverser ;
+  - désormais **un seul profil de tablier** sert au dessin, au sol où l'on marche et aux garde-corps. Il rejoint la route aux deux bouts sans marche (rampe plus longue quand il faut monter haut) ;
+  - nouveau modèle : planches irrégulières, longerons, poteaux et deux lisses qui suivent le tablier, **piles en bois avec croisillons jusqu'au fond du ravin**, culées en pierre et une lanterne allumée la nuit à chaque bout.
+- **Sauter en courant.**
+  - Joystick poussé au bord pendant 0,5 s : on sprinte (il fallait 1,5 s). L'autre pouce appuie sur Saut.
+  - En sprintant avec Esquive maintenue, **glissez le même pouce sur Saut** : le héros saute et continue de sprinter.
+  - Le saut en courant va plus haut et plus loin (6,0 m de long contre 1,3 m à l'arrêt), et garde sa vitesse en l'air.
+  - Saut « tolérant » : on peut encore sauter 0,13 s après avoir quitté un bord, et un appui jusqu'à 0,15 s avant de toucher le sol est gardé en mémoire.
+- **Physique du héros.**
+  - Les pentes comptent : on monte moins vite (jusqu'à × 0,62) et on descend un peu plus vite (× 1,15).
+  - Une longue chute en courant se termine par une **roulade** qui garde l'élan et divise les dégâts de chute par deux.
+- **Physique de la voiture et de la moto.**
+  - **Adhérence** : dans un virage serré à pleine vitesse, la voiture glisse (jusqu'à 0,41 rad de dérive mesurée), avec poussière sous les roues arrière. La moto ne dérape presque pas.
+  - **Suspension** (voiture) : la carrosserie plonge au freinage, se cabre à l'accélération et penche dans les virages, les roues restant au sol.
+  - **Sauts** : sur une crête, le véhicule décolle, plonge du nez en l'air et se réceptionne en écrasant ses ressorts (secousse, poussière, vibration). On ne peut plus diriger en l'air.
+- **Graphismes : caustiques** dans l'eau peu profonde. Les vagues concentrent le soleil en un réseau de lignes lumineuses qui bougent, avec le courant, sur le fond des rivières et des rivages (profils Ultra et Élevé).
+- **Vérification (1.11.2)** : 2 041 tests unitaires, dont un nouveau sur les ponts (aucune marche de plus de 9 cm tous les 25 cm, les bouts à 0 cm de la route, 1,8 m au moins au-dessus de l'eau, sol de marche = tablier). Nouveaux scénarios :
+  - `bridge` : traverser à pied les 3 ponts sans nager, pieds sur les planches (écart 0,000 m), puis en voiture (écart 0,013 m) ; vues de côté et de nuit ;
+  - `physics` : saut à l'arrêt et en courant, pentes, roulade de réception, dérapage, parcours complet de la route de Gravemoor (18 points), lancer de la voiture (0,57 s en l'air, réception sur les ressorts) ;
+  - `touch` vérifie en plus les deux façons de sauter en sprintant, avec de vrais doigts simulés (7,7 m/s en l'air).
+
+  Les 24 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `bridge` et `physics` passent aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - Sur les routes du jeu, assez douces, la voiture n'a pas décollé pendant les tests : le saut n'a été vérifié qu'avec un lancer simulé.
+  - Sous un pont, on ne peut pas marcher dans le lit de la rivière juste sous le tablier : le jeu vous remet sur le pont.
+  - Le dérapage et la suspension sont une simulation simple (pas de moteur physique complet) ; ils n'ont pas été réglés au doigt sur un vrai téléphone.
+
+### Nouveautés 1.11.1 (un but au jeu : objectifs, défis et courses ; rivières réparées, herbe plus haute, rayons de soleil)
+
+- **Où sont les véhicules ?** La voiture et la moto sont garées sur la route, juste à l'est de Brindlemere (le village de départ). Elles sont maintenant **marquées sur la minimap** (icône bleue, collée au bord quand elles sont loin) **et sur la carte** (« Voiture », « Moto »).
+- **Nouvel onglet « Objectifs »**, le premier du menu :
+  - **le but** du jeu : retrouver les 6 fragments de la Couronne-Mère, avec le nombre de fragments trouvés et la prochaine étape de la quête principale ;
+  - **« À faire aussi »** : domaine, courses, traqueurs de la nuit, quêtes des villages, contrats de chasse, donjons, Gardiens, héros à débloquer ;
+  - **19 défis** avec barre de progression et récompense en or (de 80 à 500), accordée automatiquement : atteindre le niveau 5 puis 15, découvrir 10 puis 25 lieux, vaincre 50 puis 250 ennemis, un Gardien, réunir 3 fragments, fonder et agrandir son domaine, terminer une course, gagner l'or, débloquer les trois héros, 15 pages de Chroniques, 10 quêtes…
+- **3 courses en voiture ou à moto**, tracées sur les vraies routes depuis Brindlemere :
+  - Sprint de Millbrook (197 m, 5 points de passage), Route du Fort Aldren (263 m, 6 points), La grande route de Gravemoor (759 m, 18 points) ;
+  - on s’arrête un peu plus d’une seconde dans le **cercle vert** du départ (visible en conduisant, et sur la carte), compte à rebours 3-2-1, puis on passe dans chaque point de passage (colonnes d'étincelles lumineuses et flèche sur la minimap) ;
+  - chronomètre à l'écran, **médailles de bronze, d'argent et d'or**, record sauvegardé ; la première fois, chaque médaille rapporte 80, 150 puis 300 or.
+- **Rivières réparées.** Près de Brindlemere, le nivellement du village remplissait le lit de la rivière : on voyait un ravin gris et sec en escaliers au bord de la mer, sans eau (sol à 6,35 m, eau à 2,65 m). C'est probablement ce que montrait votre capture. Le nivellement ne touche plus les lits de rivière, et les embouchures dans les lacs gardent leur eau. Un test vérifie 2 001 points le long des rivières : aucun n'est à sec.
+- **Herbe plus dense et plus haute** : environ 30 % de brins en plus et 30 % plus hauts (jusqu'à 1,85 fois la hauteur de base près du héros). Elle se couche toujours au passage.
+- **Shaders.**
+  - **Rayons de soleil volumétriques** (profils Ultra et Élevé) : la lumière du soleil diffuse dans l'air, et les arbres, les toits et les falaises y découpent des ombres. L'effet est plus fort le matin, le soir, dans la brume et après la pluie, et discret à midi.
+  - **Roche en vraie projection triplanaire** : plus de traînées étirées sur les falaises et les berges.
+- **Conduite** : tirer le joystick vers l'arrière en roulant freine d'abord, puis passe en marche arrière.
+- **Vérification (1.11.1)** : 2 028 tests unitaires (+1 : rivières en eau). Nouveaux scénarios réussis :
+  - `race` : course complète en voiture avec un pilote automatique (départ, compte à rebours, 5 points de passage, arrivée en 10,7 s, médaille d'or, défi « Pilote » accordé, onglet Objectifs) ;
+  - `river` : la rivière de Brindlemere a de l'eau ;
+  - `shafts` : rayons de soleil le matin, à midi et le soir.
+
+  Les 22 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `race` passe aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - **Jouer à deux** n'existe toujours pas (voir la 1.10.0).
+  - Les rayons de soleil coûtent 14 lectures de la carte d'ombres par pixel. Ils sont désactivés en profil Moyen et en dessous ; leur coût sur un vrai GPU de téléphone n'est pas mesuré.
+  - Les courses n'ont pas d'adversaires : on court contre la montre.
+  - Le pilote automatique du test roule mieux qu'un joueur au doigt : les temps des médailles (longueur ÷ 17, 13,5 et 10 m/s) n'ont pas été réglés sur un vrai téléphone.
+
+### Nouveautés 1.11.0 (vrais modèles 3D pour le monde, voiture et moto)
+
+- **12 bâtiments en modèles 3D** générés avec Tripo (compte de l'utilisateur, connecté par le Tripo CLI) :
+  - 3 maisons (colombages et chaume, pierre et tuiles rouges, chaumière moussue), auberge, maison de pierre enneigée, longère nordique, chapelle, forge, tour de guet, puits, étal de marché et tente ;
+  - textures 4K à la génération, ramenées à 1024 px dans le jeu pour la mémoire du téléphone ; de 5 000 à 12 000 triangles chacun ;
+  - ils remplacent les bâtiments construits en code dans tous les villages et dans votre domaine, entrée vers la rue, posés au sol avec leurs collisions ;
+  - les textures des bâtiments sont plus claires (le shader les assombrissait comme celles des personnages).
+- **6 monstres en modèles 3D animés** :
+  - le Golem de pierre, le Titan de Pierre (boss) et l'Élémentaire de braise viennent des modèles du Drive ;
+  - le gobelin, le bandit et le squelette ont été créés avec Tripo ;
+  - tous ont reçu un squelette Tripo (« Rig »), repris par `tools/import_rigged.py`. Ils jouent les animations du jeu (marche, attaques, morts).
+- **Voiture et moto, à conduire** (modèles du Drive : la « realistic supercar » et la « sport bike ») :
+  - elles sont garées sur la route juste à l'est de Brindlemere. Le bouton d'action fait « Conduire la voiture », « Monter sur la moto », puis « Descendre » ;
+  - on conduit au joystick : il indique la direction où aller, et le véhicule accélère et tourne vers elle (marche arrière si on tire vers l'arrière à l'arrêt). Vitesse maximale environ 90 km/h pour la voiture et 97 km/h pour la moto ;
+  - **les roues tournent** avec la vitesse et les roues avant braquent. Un nouvel outil, `tools/import_vehicle.py`, sépare chaque roue du modèle d'un seul bloc (pneu et jante) en gardant la fourche de la moto immobile ;
+  - **la carrosserie suit le terrain** : hauteur, tangage et roulis calculés sous chaque roue. La moto se penche dans les virages ;
+  - **le héros est assis sur la moto**, penché sur le réservoir, mains au guidon, et il penche avec elle. Dans la voiture, il n'est pas montré (il est dedans) ;
+  - un **bruit de moteur** continu monte dans les tours avec la vitesse (nouveau son en boucle dans le moteur audio) ;
+  - choc contre un arbre ou un mur (ralentissement, secousse), arrêt devant l'eau et les falaises. La position des véhicules est sauvegardée.
+- **Crédits Tripo utilisés : 980 sur 1 000** (bâtiments 110 + 10 × 50, retexture 20, squelettes 3 × 25, nouveaux monstres 3 × 75). Il en reste 20.
+- **Vérification (1.11.0)** : 2 027 tests unitaires, dont 48 nouveaux sur les modèles importés :
+  - les 12 bâtiments se chargent ;
+  - les 6 monstres ont le squelette du jeu, les jambes sous les hanches et la face vers l'avant ;
+  - la voiture a 4 roues et la moto 2, chacune avec assez de sommets, un centre à la hauteur du rayon, les roues avant à l'avant et un siège.
+
+  Nouveaux scénarios réussis :
+  - `vehicles` : monter par un vrai appui, rouler 52 m jusqu'à 25 m/s, 23 tours de roue, tangage entre -0,15 et 0,16 rad, carrosserie à 7 cm du sol, virage, descendre, moto avec bassin à 4 cm du siège et inclinaison de 0,57 rad, sauvegarde et chargement ;
+  - `showcase` : les 12 bâtiments vus de face ;
+  - `enemy` : un monstre en combat.
+
+  Les 21 scénarios sont réussis ; `full` et `vehicles` passent aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - La voiture et la moto ne renversent pas les ennemis et ne sont pas des montures de combat.
+  - Sur la moto, les rayons de la jante arrière restent en partie immobiles (seul le pneu et une partie de la jante tournent).
+  - Les modèles 3D augmentent la taille de l'APK d'environ 9 Mo (34 Mo au total), et les villages dessinent plus de triangles : les performances sur téléphone ne sont pas mesurées.
+  - Un seul exemplaire de chaque véhicule, garé à Brindlemere.
+
+### Nouveautés 1.10.2 (caméra au doigt : libre et plus douce)
+
+- **Un seul geste pour les deux sens.** Avant, un glissement tournait la caméra **ou** l'inclinait (verrou d'axe de la 1.6.1). Maintenant, la caméra suit le doigt dans toutes les directions à la fois : un glissement en diagonale tourne et incline en même temps.
+- **Même vitesse sur les deux axes**, pour qu'une diagonale du doigt donne une diagonale à l'écran.
+- **40 % plus lent** qu'avant. Le réglage « Sensibilité caméra » des Paramètres permet encore d'ajuster.
+- Un mouvement de moins de 6 unités ne fait pas bouger la caméra, pour qu'un simple appui ne la décale pas.
+- **Vérification** : le scénario `camera` fait un vrai glissement en diagonale. Il vérifie que la caméra tourne de 0,75 rad et s'incline de 0,54 rad, au même rythme sur les deux axes, et refait tous les autres gestes (glisser vers le haut, axe inversé, pincement, double appui). `CAMERA TEST PASSED`. Les 1 979 tests unitaires et les scénarios `touch`, `ui` et `full` sont réussis, `full` aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+
+### Nouveautés 1.10.1 (bâtiments bien posés au sol)
+
+- **Correction : les bâtiments ne volent plus.**
+  - **Cause** : chaque bâtiment était posé à une seule hauteur (celle du centre du village ou du domaine). Sur une pente ou au bord de la zone aplanie d'un village, un côté flottait au-dessus du sol. Mesuré sur les 339 bâtiments du monde : 71 flottaient, jusqu'à 7,25 m.
+  - **Correction** :
+    - chaque bâtiment repose sur le point le plus bas du sol sous son emprise ;
+    - sur une pente, les maisons, auberges, chapelles, tours, forges et donjons sont surélevés à mi-pente, sur des **fondations en pierre** visibles côté aval, au lieu d'être à moitié enterrés ;
+    - les champs et les enclos épousent le relief ;
+    - le terrain aplani du domaine est élargi pour couvrir toute la zone constructible.
+  - **Vérification** : un nouveau test unitaire mesure l'écart sous chaque bâtiment : 0 bâtiment flottant, écart maximal 0,00 m. Le scénario `grounded` filme les bâtiments qui flottaient le plus.
+- 1 979 tests unitaires et les 18 scénarios réussis ; `full` et `domain` aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+
+### Nouveautés 1.10.0 (votre domaine, traqueurs de la nuit, pluie avancée)
+
+- **Votre domaine** (Journal → onglet **Domaine**) :
+  - **Fonder** : plantez votre étendard dans la nature, loin des villages, des routes et de l'eau, pour 10 bois. Le terrain est aplani, le domaine apparaît sur la carte, et vous y réapparaissez après une mort.
+  - **Construire** : 10 bâtiments. Maison, tente et grande maison pour loger ; champ, étal, puits et enclos pour produire ; forge, tour de guet et palissades.
+    - Chacun coûte du bois, de la pierre, du cuir ou des lingots.
+    - Un aperçu du bâtiment (vert si l'emplacement est libre, rouge sinon) se place devant le héros : on marche pour le déplacer, on le tourne, on construit.
+    - Les bâtiments sont de vrais bâtiments du monde (collisions, lumières, fumée) et utiliseront vos modèles 3D quand ils arriveront.
+  - **Habitants** (40 or, il faut de la place dans les maisons) : ils vivent au domaine, cultivent les champs et tiennent les étals.
+  - **Soldats** (120 or, il faut une tour de guet) : armure, épée et bouclier. Ils gardent le domaine et attaquent les ennemis qui s'approchent, ou vous **escortent** partout. Un soldat tombé au combat est perdu.
+  - **Élevage** : cochons (35 or) et chevaux (250 or) dans les enclos. Les cochons donnent de la viande et du cuir ; les chevaux donnent un poulain (votre propre cheval) tous les 3 jours.
+  - **Production chaque matin** : du pain (un champ par habitant), de la viande, du cuir, et de l'or grâce aux étals. Le puits ajoute 25 %. On récolte depuis l'onglet Domaine.
+  - **Sûr la nuit** dès qu'une tour de guet est construite.
+- **Traqueurs de la nuit** : après la tombée de la nuit, hors des lieux sûrs, un hurlement, puis des **Molosses de l'Abîme** et des **Rôdeurs de minuit** sortent de l'ombre derrière vous.
+  - Ils connaissent votre position et vous pistent partout, et ils sont aussi forts que vous.
+  - Ils abandonnent si vous atteignez un village (ou votre domaine avec une tour), et ils se dissolvent à l'aube.
+- **Pluie avancée** :
+  - des **flaques** se forment dans les ornières des chemins, sur les pavés et dans les creux, et s'agrandissent quand la pluie dure ;
+  - elles reflètent le ciel, et les gouttes y font des **ronds** ; un frémissement d'impacts couvre tout sol mouillé ;
+  - des **éclaboussures** apparaissent là où tombent les gouttes, des cercles sur l'eau, et des **rideaux de pluie** au loin ;
+  - les personnages ruissellent.
+- **Vérification (1.10.0)** : 1 978 tests unitaires. Trois nouveaux scénarios sont réussis :
+  - `domain` : fondation et construction par de vrais appuis, 7 bâtiments, recrutement, apparition des habitants, soldats et animaux, soldats qui combattent un loup, production du matin, sauvegarde puis chargement sans doublon ;
+  - `hunters` : vague de nuit qui se rapproche, abandon au village, dissolution à l'aube ;
+  - `rain` : sol mouillé, particules, héros trempé.
+
+  Tous les autres scénarios sont aussi réussis ; `full`, `domain` et `hunters` passent sous AddressSanitizer sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Ce qui n'est pas fait (honnêtement)** :
+  - **Jouer à deux** n'existe pas encore : il faut une couche réseau entre deux téléphones (hôte et invité, synchronisation des héros, des ennemis et des combats). C'est un gros chantier à part, et je ne peux pas le tester ici sans deux appareils.
+  - Le **partage du monde** (envoyer sa sauvegarde à un ami) n'est pas fait non plus.
+  - Les ennemis ne visent pas encore vos soldats (ils visent le héros) ; il n'y a pas d'attaque organisée du domaine.
+  - Une seule base par partie, de 34 m de rayon.
+
+### Nouveautés 1.9.1 (hautes herbes)
+
+- **Prairies de hautes herbes** (1 m à 1,35 m) :
+  - elles couvrent environ un quart de Greenhaven, et une partie des Ombres, d'Elderwood et des Hautes-Cimes ;
+  - elles s'arrêtent aux routes, aux villages, aux champs et aux bâtiments ;
+  - chaque touffe compte huit brins fins et des épis, avec des couleurs du vert au blond paille, en grandes taches.
+- **Elles bougent quand on y passe** :
+  - les herbes s'écartent autour du héros, des PNJ, des ennemis et de la monture ;
+  - plus une herbe est haute, plus elle se couche ;
+  - le héros laisse derrière lui un sillage d'herbes couchées, qui se relèvent lentement en oscillant ;
+  - le vent les fait onduler par rafales.
+- **Vie dans les herbes** : un bruissement plus fort à chaque pas, des sauterelles qui bondissent, et parfois un vol d'oiseaux qui s'envole devant le héros quand il court (de jour).
+- **Se cacher** : dans les hautes herbes, les ennemis repèrent le héros d'environ deux fois moins loin, tant qu'il n'attaque pas. Un message l'explique la première fois.
+- **Coût maîtrisé** : environ 60 triangles par touffe, et les touffes ne sont dessinées que jusqu'à 50 m. Leur densité suit le profil « Qualité graphique » des Paramètres : clairsemées en profil bas, absentes dans le profil le plus économe.
+- **Vérification (1.9.1)** :
+  - 1 965 tests unitaires, dont 5 sur les prairies : elles sont reproductibles d'une partie à l'autre, absentes des routes, des villages, de Frostheim et des Cendres, et couvrent 26 % de Greenhaven ;
+  - les 13 autres scénarios réussis, `full` et `tallgrass` aussi sous AddressSanitizer, sans erreur ;
+  - nouveau scénario `tallgrass`, réussi : prairie trouvée, environ 6 500 touffes chargées, herbes qui s'écartent pendant la marche, et un loup à 13 m qui voit le héros à découvert mais pas dans les herbes ;
+  - vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limite** : les performances sur téléphone ne sont pas mesurées. Si les prairies ralentissent le jeu, choisis un profil graphique plus bas dans les Paramètres.
+
+### Nouveautés 1.9.0 (bâtiments en 3D, combat d'Astra, quêtes, détails réalistes)
+
+- **Bâtiments en modèles 3D (prêt pour tes modèles).** Le jeu peut maintenant remplacer ses bâtiments construits en code par des modèles 3D :
+  - maisons, auberges, maisons de pierre, longères, forges, chapelles, tours, puits, étals, tentes, avec jusqu'à 3 variantes chacun ;
+  - le modèle est posé sur l'emprise du bâtiment, porte vers la rue, à la bonne taille. Les collisions, les lumières et la fumée des cheminées restent ;
+  - les modèles s'importent avec `tools/import_prop.py`, et un mod peut aussi en ajouter (`models/props/…`) ;
+  - **aucun modèle de bâtiment n'est encore livré** : la liste des modèles à générer avec Tripo, avec leurs prompts, est dans `docs/TRIPO_PROMPTS.md` (section 3b). Le jeu a été vérifié avec une petite maison de test qui n'est pas incluse dans le jeu.
+- **Combat d'Astra plus riche** (et de tout héros à mains nues) : un enchaînement en trois coups (direct, crochet, **uppercut** qui part des jambes) et une attaque lourde, un **coup de pied retourné** avec les bras en balancier et un petit saut.
+- **4 nouvelles quêtes et 2 chroniques :**
+  - « Le septième fragment » (Tomas, après la quête de Kaede) : le Sanctuaire d'Aelindor et le Silence, le joyau qui défait la Couronne ;
+  - « Ce que l'étoile n'a pas pardonné » (Ilian, après la quête d'Astra) : à Highspire, le premier indice jouable sur Frère Alaric ;
+  - « La carte au trésor de Pip » et « Ronde de nuit » (capitaine Aubert), à Brindlemere.
+- **Détails réalistes :**
+  - par temps froid (Frostheim, neige, nuits des Hautes-Cimes), les personnages proches **soufflent de la buée**, plus souvent quand ils courent ou sont essoufflés ;
+  - après une baignade, le héros **dégouline** pendant environ 25 secondes.
+- **Vérification (1.9.0)** : 1 960 tests unitaires. Trois nouveaux scénarios sont réussis :
+  - `buildings` : maison de test installée par un mod, posée, affichée, et le héros s'arrête contre ses murs ;
+  - `combo` : les quatre coups d'Astra s'enchaînent ;
+  - `details` : 6 particules de buée par respiration, ruissellement après la baignade.
+
+  Les scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue`, `heroes` et `full` sont aussi réussis ; `full` et `buildings` passent sous AddressSanitizer sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - La buée est discrète : sur la neige, et derrière le casque du Naufragé, elle se voit peu.
+  - Les monstres du Drive (golem, titan, élémentaire de lave) attendent leur version « Rig » de Tripo pour être importés proprement.
+  - Les mods de bâtiments s'appliquent au lancement du jeu (comme les autres mods).
+
+### Nouveautés 1.8.1 (Astra a son modèle 3D)
+
+- **Astra utilise maintenant un modèle 3D** : la « cosmic deity » blanc et or envoyée sur le Drive, avec sa couronne de rayons et ses épaulières d'or.
+  - Le modèle d'origine (1,8 million de triangles) flottait, un genou relevé, entouré de cinq planètes. Un nouvel outil, `tools/simplify_glb.py`, le prépare pour le jeu :
+    - il retire les planètes (les pièces qui ne touchent pas le corps) ;
+    - il remplace la jambe pliée par le reflet de la jambe droite, sous le genou, pour que la marche fonctionne ;
+    - il réduit le modèle à 20 000 triangles.
+  - Le squelette du jeu est ensuite posé par `tools/import_character.py`, comme pour le héros de départ.
+  - L'aura dorée, la traînée de lumière et toutes les animations (marche, course, attaques, vol) s'appliquent à ce modèle.
+- **Vérification (1.8.1)** : 1 923 tests unitaires, dont le contrôle du modèle d'Astra (os valides, budget, jambes droites). Les scénarios `heroes`, `hero` (avec `LK_HERO=astra`), `ui` et `mods` ont été rejoués et réussis : vol couché, aura, météore. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limite** : le bas de la jambe droite d'Astra est un reflet de la gauche. Si les motifs de la texture ne sont pas symétriques, une légère couture est possible au genou.
+
+### Nouveautés 1.8.0 (roue des héros : Kaede la ninja et Astra qui vole)
+
+- **Roue des héros**, avec **trois héros** exactement. On l'ouvre en touchant le portrait en haut à gauche.
+  - Changer de héros garde le niveau, l'inventaire et les quêtes ; seuls l'apparence, l'arme et les pouvoirs changent.
+  - Un héros verrouillé affiche sa quête de déblocage.
+  - Le héros actif et les héros débloqués sont sauvegardés. Les anciennes sauvegardes se chargent sans changement.
+- **Le Naufragé** : le héros de départ (l'âme d'Aldric), inchangé.
+- **Kaede, Lame des Brumes** : la ninja.
+  - **Modèle 3D** : le « ninja warrior » envoyé sur le Drive.
+    - Il est importé par un nouvel outil, `tools/import_rigged.py`, qui reprend le squelette et les poids de peau du modèle Tripo.
+    - L'outil le remet en pose de repos (bras le long du corps, jambes droites) et le réduit de 1,9 million à 22 000 triangles.
+  - Plus rapide (+18 %), plus fragile (-15 % de PV), dague fixe, **double saut**.
+  - Pouvoirs :
+    - **Shuriken** : 3 étoiles d'acier en éventail ;
+    - **Pas de l'ombre** : téléportation derrière la cible et coup ×2,2 ;
+    - **Bombe fumigène** : étourdit 2 s et rend invisible 3 s (les ennemis la perdent de vue).
+  - Débloquée par la quête « La lame des brumes » (Tomas, à Brindlemere).
+- **Astra, l'Étoile tombée** : l'héroïne qui **vole**. C'est un personnage original.
+  - Le saut dans les airs la fait décoller ; elle tient son altitude, vole à 11 m/s (17 en sprint) et use l'endurance.
+  - Elle vole couchée sur sa trajectoire, un poing en avant, avec une **aura dorée** :
+    - un contour lumineux qui pulse ;
+    - des étincelles ;
+    - une lumière qui éclaire le décor autour d'elle ;
+    - une traînée de lumière derrière ses épaules.
+  - L'aura s'embrase à chaque pouvoir.
+  - Pouvoirs :
+    - **Rayon stellaire** : rayon de 22 m ;
+    - **Frappe météore** : piqué depuis le ciel, explosion à l'impact, sans dégâts de chute ;
+    - **Onde solaire** : onde de choc de 8 m qui étourdit et soigne.
+  - Débloquée par la quête « L'étoile tombée » (Ilian, l'astronome).
+- **Lore** : une chronique par héros, et deux quêtes qui les relient à l'histoire de la Couronne-Mère (`docs/LORE.md`).
+- **Prologue** : chaque plan attend que le décor soit chargé avant de s'afficher (4 s au plus). Plus de plans sur une carte vide.
+- **Vérification (1.8.0)** : 1 910 tests unitaires, dont l'import du ninja (squelette, os valides, budget de triangles, jambes droites) et la pose de vol. Les scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue`, `heroes` et `full` sont réussis. `full`, `heroes` et `prologue` passent aussi sous AddressSanitizer, sans erreur. Le nouveau scénario `--autoplay=heroes` vérifie :
+  - le choix dans la roue par un vrai appui ;
+  - le double saut, le shuriken, le pas de l'ombre et la fumée ;
+  - le vol (altitude et pose), le rayon, la météore sans dégâts de chute et l'onde ;
+  - la sauvegarde puis le chargement de la roue.
+- **Limites.**
+  - Dans la 1.8.0, Astra n'avait pas encore de modèle 3D : c'est corrigé en 1.8.1.
+  - Les animations du GLB du ninja (coups de pied, boxe, course) **ne sont pas reprises** : le jeu anime le squelette en code, comme pour les autres héros.
+  - Le visage du ninja est masqué. Aucun modèle de Goku n'a été importé : c'est un personnage protégé. Astra le remplace par un héros volant original.
+  - Le vol et la roue n'ont pas été essayés sur un téléphone.
+
+### Nouveautés 1.7.0 (histoire : prologue animé, Chroniques, mods)
+
+
+- **Prologue animé et narré.** Une nouvelle partie s'ouvre sur une cinématique d'environ 1 min 15 : dix plans filmés dans le monde du jeu.
+  - Le royaume vu du ciel à l'aube, Highspire, Brindlemere, Morneval de nuit, l'Abîme sous l'orage, le sacrifice d'Aldric, la mer en tempête.
+  - Puis le héros, étendu au sol à l'aube, et une voix : « Tu es revenu… trop tard. »
+  - Il se relève, la marque-couronne brille à son poignet, et le titre « PROLOGUE — Un réveil sur la grève » apparaît.
+  - Narration en texte (machine à écrire), musique, bandes noires, heure, météo et teinte propres à chaque plan.
+  - Un appui passe la phrase ou le plan ; le bouton « Passer » saute tout.
+  - Le prologue se revoit depuis l'onglet **Chroniques**.
+- **Système de cinématiques à plans** (`game/Cinematics.cpp`), réutilisable pour la suite de l'histoire : trajectoire de caméra, narrateur ou personnage qui parle, carton de titre, coupure propre.
+- **Chroniques** : nouvel onglet du Journal, liste à gauche et page à droite. **26 pages** :
+  - la légende (Couronne-Mère, la Chute, le sacrifice, Malgrath, l'Abîme, les Gardiens, l'Ordre, la marque) ;
+  - une page par région, débloquée à la découverte ;
+  - un **souvenir d'Aldric** par Gardien vaincu, qui révèle peu à peu la vérité : le héros n'est pas un héritier, et l'un de ses guides ne vieillit pas.
+
+  La bible du lore est dans `docs/LORE.md`.
+- **Drapeaux d'histoire** (`storyFlags`) sauvegardés. Les anciennes sauvegardes se chargent sans changement.
+- **Mods**, données et ressources seulement, sans code :
+  - **Journal → Paramètres → Mods → Importer un mod (.zip)** ouvre le sélecteur de fichiers d'Android. Le zip est décompressé dans le stockage privé du jeu ; les chemins qui sortiraient du dossier sont refusés et la taille est limitée.
+  - Un mod peut **remplacer** n'importe quel fichier du jeu (modèles 3D, textures, musiques, sons, interface) et **modifier** objets, ennemis, PNJ et chroniques avec de simples lignes `type.id.champ = valeur`.
+  - Le menu Mods permet d'activer ou de désactiver chaque mod, et affiche les erreurs avec le numéro de ligne. Les mods s'appliquent au lancement suivant.
+  - Guide : `docs/MODDING.md`. Mod d'exemple : `release/mods/exemple-chroniques-du-vagabond.zip`.
+- **Vérification (1.7.0)** : 1 873 tests unitaires ; scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue` et `full` réussis ; `full`, `mods` et `prologue` aussi sous AddressSanitizer, sans erreur. Détail des scénarios ajoutés : `--autoplay=prologue` (les 10 plans, état final, sauvegarde des drapeaux, bouton Passer) et `--autoplay=mods` (installation, modifications, remplacement d'un modèle, menu, désactivation par un vrai appui) ; tests unitaires du format des mods. Le mod d'exemple doit s'appliquer sans aucune erreur.
+- **Limites.**
+  - **Pas de voix** : la narration est écrite.
+  - Le prologue réutilise les décors et personnages du jeu : pas de modèles ni d'effets créés spécialement pour lui.
+  - Seuls le prologue et les Chroniques existent pour l'instant : les actes I à V et les fins du plan 2.0 ne sont pas encore jouables.
+  - Les mods ne peuvent pas encore ajouter de nouveaux objets, ennemis ou quêtes.
+  - L'import de mods n'a pas été testé sur un téléphone : sur ordinateur, le mod est copié à la main.
+
+### Nouveautés 1.6.2 (démarche et combat plus fluides)
+
+- **Démarche refaite.**
+  - **Cause principale** : la longueur de pas n'était pas adaptée aux vitesses du héros. Il faisait environ 280 pas/min en trottinant et 350 en sprintant (un coureur réel : environ 170 à 180), et la posture de course se mélangeait à la marche. D'où l'allure accroupie et « trottinante ».
+  - Pas accordés à ses vitesses : environ 155 pas/min en marchant, environ 195 en courant, longues foulées en sprint.
+  - Course moins accroupie : bassin plus haut, genou plus droit quand le pied est au sol, penchée vers l'avant plus modérée.
+  - Posture plus héroïque : poitrine ouverte, tête droite.
+  - Au repos, le héros se tient sur une jambe puis sur l'autre (déhanché naturel).
+  - Quand un ennemi est proche, il passe en **garde** : pieds écartés, pied gauche devant, buste de profil, main libre levée.
+  - Les autres humanoïdes ont aussi des pas plus longs à la course.
+- **Attaques avec tout le corps** (toutes les armes) :
+  - préparation : poids sur la jambe arrière, torse armé dans le sens opposé au coup ;
+  - frappe : fente sur la jambe avant, bassin qui descend, hanches qui tournent dans le sens de la lame, main libre en contrepoids ;
+  - retour en garde.
+
+  Le sens de rotation est déduit de chaque animation, et l'amplitude du déplacement prévu par le coup.
+- **Banc d'essai d'animation** : nouveau scénario `--autoplay=anim`. Il filme le héros de profil sur un « tapis roulant » (repos, marche, trot, sprint, puis attaque légère et lourde), 8 images par allure.
+- **Modèles importés** :
+  - jusqu'à 3 variantes par sexe pour les villageois (`villager_m`, `villager_m2`, `villager_m3`, et de même pour `villager_f`), tirées au hasard pour chaque villageois ;
+  - guide des prompts Tripo : `docs/TRIPO_PROMPTS.md`.
+- **Corrections après les retours sur téléphone.**
+  - **Barre de navigation Android enfin masquée.** Elle restait affichée depuis la 1.0 : le code natif tentait de la masquer depuis le fil du jeu, alors qu'Android l'exige depuis le fil de l'interface (l'erreur était avalée). Une petite classe Java, `android/src/main/java/.../GameActivity.java`, seul code Java du jeu, masque la barre d'état et la barre de navigation au démarrage et à chaque retour au jeu. Un glissement depuis le bord les fait apparaître un instant. L'APK contient donc maintenant un `classes.dex`, compilé par `build_apk.sh` (toujours sans Gradle).
+  - **L'épée ne se plante plus dans le sol à l'arrêt.** Au repos, hors combat, le héros pose l'épée sur l'épaule. En marchant, la lame est tenue à 45° vers l'avant. Un garde-fou relève le poignet si la pointe d'une arme devait passer sous le terrain (pentes, marches). Le scénario `anim` vérifie que la pointe reste au-dessus du sol par la seule animation, au repos, en marche et au trot.
+  - **Jambes moins écartées vues de dos.** Le modèle importé du héros a ses hanches à ±20 cm, jambes verticales, soit environ 45 cm entre les pieds. Les pieds sont ramenés vers l'axe (environ 10 cm du centre en marchant, 13 cm au repos), semelles à plat.
+  - **Caméra « fixe ».** Par défaut, elle suit maintenant le héros sans retard ni avance : plus d'anticipation dans le sens de la course, et des corrections de zoom et de hauteur plus rapides. L'ancien comportement reste disponible : **Réglages → Caméra souple**. Le scénario `camera` vérifie que, par défaut, la caméra reste à moins de 0,45 m du héros en plein sprint.
+- **Limites.**
+  - Les animations restent écrites en code (procédurales), pas en capture de mouvement.
+  - Le jeu ne sait pas encore importer les animations fournies par Tripo.
+  - Tout est vérifié sur ordinateur, **pas sur un téléphone**.
+- **Vérification.** 1 858 tests unitaires réussis ; les scénarios `touch`, `ui`, `grass`, `camera`, `anim` et `full` passent ; `full` passe aussi sous AddressSanitizer, sans aucune erreur. L'APK contient `classes.dex` (classe `GameActivity`, déclarée comme activité de lancement).
+
+### Nouveautés 1.6.1 (corrections après le premier essai sur téléphone)
+
+- **Boutons des dialogues et des menus réparés.** Ce défaut existait depuis la 1.0.0 :
+  - les choix de dialogue, la pause, l'écran de mort, la boutique et tout le journal (onglets, croix de fermeture, réglages) ne réagissaient pas sur téléphone ;
+  - **cause 1** : ces écrans « consommaient » tous les doigts *avant* de dessiner leurs boutons. Sur téléphone, un appui dure plusieurs images : le doigt était marqué dès qu'il touchait l'écran et le bouton ne voyait jamais le relâchement. Le robot de test appuyait en une seule image, ce qui masquait le problème ;
+  - **cause 2** : les icônes du coin haut-droit du HUD (menu, carte, sac) captaient aussi les appuis, alors que la croix de fermeture du journal est posée dessus ;
+  - **vérification** : nouveau scénario `--autoplay=ui`, qui appuie sur les boutons comme un vrai doigt (posé, tenu 0,2 s, relevé) et affiche `UI TEST PASSED`. Il couvre le dialogue (avancer, choisir), « Reprendre », un onglet du journal, la croix de fermeture, un interrupteur des Réglages, un appui bref, et vérifie que la caméra ne bouge pas pendant les menus.
+- **Caméra plus stable** (elle « divaguait »).
+  - Un glisser tourne **ou** incline la caméra, selon sa direction de départ : tourner ne fait plus varier l'inclinaison, et inversement. Levez le doigt pour changer d'axe.
+  - La caméra ne tourne plus d'elle-même pendant un verrouillage de cible.
+  - Les corrections de hauteur liées au terrain (bosses, hauteur minimale) et la distance imposée par les murs sont lissées : la caméra monte vite si nécessaire et redescend doucement. Elle ne passe jamais sous le sol.
+  - Le regard vers l'avant ne s'active plus qu'au sprint.
+  - Le retour automatique de l'inclinaison ne s'applique plus qu'aux angles extrêmes (vue du ciel ou de dessus), après 6 s.
+- **Herbe plus dense et animée.**
+  - Couche de base plus dense ; près du héros (< 30 m), une couche de touffes plus hautes s'ajoute en Ultra, Élevé et Moyen.
+  - L'herbe se couche sous le héros et reste couchée derrière lui environ 0,7 s, puis se relève avec un léger rebond. Le chemin foulé est un peu plus sombre.
+  - Les ennemis, les animaux, les villageois et la monture couchent aussi l'herbe.
+  - Bruit de froissement en marchant dans l'herbe, et quelques brins soulevés en courant.
+  - Vérifié par le scénario `--autoplay=grass` (`GRASS TEST PASSED`).
+- **Relief.**
+  - Montagnes de Frostheim et des High Crowns redessinées : crêtes plus vives, vallées plus larges, ravines sur les pentes, formes déformées pour casser l'aspect « bruit régulier ».
+  - Collines plus marquées à Greenhaven et Elderwood.
+  - **Relief d'horizon** : une maille simplifiée de toute l'île (17 689 sommets, une seule passe de rendu) est dessinée au-delà des zones détaillées. Les montagnes se voient maintenant au loin, au lieu d'un horizon vide.
+- **Villageois et PNJ plus soignés** (modèles procéduraux) : yeux plus petits avec iris sombre et paupières, nez et pommettes plus discrets, menton, lèvres, cheveux avec volume (frange, mèches, cheveux longs sur les épaules), col, épaules arrondies, poignets, tuniques plus longues, tablier de travail, et chapeaux (paille, bonnet, foulard).
+- **Limites.**
+  - Tout est vérifié sur ordinateur (rendu logiciel Mesa), **pas sur un téléphone**.
+  - Les villageois restent des modèles construits en code, au style simple : ils n'atteignent pas la qualité du héros importé. Pour de vrais beaux PNJ, il faut des modèles 3D (par exemple générés avec Tripo comme le héros). Le jeu les prend en charge sans code : `villager_m`, `villager_f`, ou `npc_<id>` pour un PNJ nommé (voir `tools/import_character.py`).
+  - **Coût GPU.** Mesuré dans la vue par défaut, sur la même scène que pour la 1.6.0 (`LK_GPU_PROFILE`, ms par image sur le rasteriseur logiciel, en valeurs relatives) : Élevé 151 (152 en 1.6.0), Moyen 100 (98), Faible 53 (59), Économie 33 (34). C'est inchangé aux variations de mesure près. Mais cette scène a peu d'herbe : dans une prairie dense, l'herbe supplémentaire coûte plus. Ce cas n'a pas été mesuré séparément.
+
+### Nouveautés 1.6.0 (caméra libre)
+
+- **Inclinaison au doigt.** Glisser verticalement dans la zone caméra (moitié droite de l'écran) incline la caméra :
+  - vers le haut : caméra basse qui regarde le ciel (inclinaison -0,35) ;
+  - vers le bas : vue presque du dessus, la carte (inclinaison 1,35) ;
+  - nouvelle option **Réglages → Inverser l'axe vertical** (l'ancienne option devient « Inverser la caméra (horizontal) »).
+- **Regarder le ciel sans traverser le sol.** Quand la caméra est basse :
+  - elle se rapproche du héros (× 0,6, entre 4,5 et 18 m) ;
+  - elle vise au-dessus de sa tête, mais seulement tant que ses pieds restent dans l'image ;
+  - l'œil reste au moins à 0,6 m au-dessus du terrain (3 m dans la vue habituelle, un peu plus quand la caméra est loin).
+
+  Le héros reste entier à l'image, dans le tiers bas, et le ciel occupe le reste.
+- **Zoom de 4 à 40 m** (pincement), multiplicatif et lissé. Le zoom choisi est conservé ; il ne revient plus tout seul à la distance par défaut.
+  - Vers 40 m, c'est la vue « carte » : brouillard repoussé et effet maquette (tilt-shift) plus marqué.
+  - Vers 4 m, gros plan sur le héros, sa cape et son arme, sans flou.
+- **Retour automatique.**
+  - Après 4 s sans toucher la caméra, en se déplaçant, l'inclinaison revient doucement à la valeur par défaut.
+  - Un **double appui** dans la zone caméra remet inclinaison et zoom par défaut.
+  - Pendant un verrouillage de cible, la caméra s'éloigne pour cadrer le héros et la cible, et se place doucement derrière le héros, face à la cible (sauf si vous la tournez vous-même).
+- **Regard vers l'avant.** En courant, la caméra vise 1,5 m plus loin dans la direction de la course.
+- **Collision avec les bâtiments.** Si une maison ou un mur se trouve entre la caméra et le héros, la caméra se place devant et recadre le héros. Les arbres et petits décors ne la bloquent pas : ils restent rendus transparents comme avant.
+- **Cinématiques de boss.** Le dernier plan de l'introduction suit l'inclinaison choisie par le joueur, puis la caméra glisse en 0,7 s vers la vue de jeu au lieu de couper net (aussi après la mort d'un boss).
+- **Vérification.**
+  - Le calcul de la caméra est une fonction pure (`game/CameraRig.cpp`), testée sur 480 configurations synthétiques et 1 920 positions du vrai terrain : œil au-dessus du sol, héros entier dans l'image.
+  - Nouveau scénario `--autoplay=camera` : 12 captures (inclinaisons -0,35, 0, 0,66 et 1,3 × zooms 4, 15 et 40), puis de vrais gestes tactiles injectés (glisser vertical, axe inversé, pincement dans les deux sens, double appui), le retour automatique, le regard vers l'avant, le verrouillage et la collision avec une maison. Il affiche `CAMERA TEST PASSED`.
+- **Limites.**
+  - Tout est vérifié sur ordinateur (rasteriseur logiciel Mesa), **pas sur un téléphone** : le ressenti du glisser et du pincement sur un vrai écran n'est pas vérifié.
+  - **Dans les donjons**, la caméra reste au-dessus des murs comme en 1.5 : distance limitée à 16 m, inclinaison au moins 0,35 (pas de vue vers le ciel) et pas de collision avec les murs, qui sont rendus transparents. Les couloirs font 4 m de large : une caméra basse ou bloquée par les murs y collait au héros (défaut trouvé et corrigé pendant les tests de cette version).
+  - **Coût GPU du zoom arrière.** Dans la vue par défaut (15,5 m), le cadrage est identique à la 1.5 (vérifié par un test), donc le coût ne change pas. À 40 m, l'image contient beaucoup plus de terrain, et le coût augmente. Mesures sur la même scène (`LK_GPU_PROFILE`, ms par image sur le rasteriseur logiciel, en valeurs relatives) :
+
+    | Profil | Vue par défaut (15 m) | Zoom 40 m |
+    |---|---|---|
+    | Élevé | 152 | 191 (+26 %) |
+    | Moyen | 98 | 125 (+28 %) |
+    | Faible | 59 | 82 (+39 %) |
+    | Économie | 34 | 52 (+52 %) |
+
+    Sur un téléphone lent, la résolution dynamique devrait compenser en baissant la résolution interne pendant le zoom arrière ; ce n'est pas vérifié sur un appareil.
+
+### Nouveautés 1.5.0 (monde plus vivant, nouveaux shaders)
+
+- **11 nouveaux décors procéduraux** : fleurs sauvages (marguerites, lavande, coquelicots), herbes hautes en graines, cailloux, branches mortes et feuilles, clôtures, panneaux indicateurs, charrettes, lanternes sur poteau (allumées la nuit), pierres levées (certaines avec rune), feux de camp, tentes.
+- **Placement automatique dans tout le monde.**
+  - Champs de fleurs en taches de couleur, herbes hautes et petits détails entre les arbres. Seulement près du joueur, et désactivé en Économie d'énergie.
+  - Le long des routes : clôtures autour des champs, lanternes près des villages, charrettes et panneaux.
+  - Petites scènes à découvrir hors des routes : camps abandonnés, cercles de pierres (d'obsidienne dans les Ashen Lands), anneaux de champignons lumineux dans l'Elderwood, tombes oubliées dans le Royaume des Ombres, ruines.
+- **Nouveaux effets.**
+  - Rafales de vent qui traversent les prairies en vagues, avec un reflet doré sur l'herbe.
+  - Netteté adaptative : l'image, calculée sous la résolution native, est rendue plus nette.
+  - Virage de couleurs cinéma : ombres légèrement froides, hautes lumières chaudes.
+- **Coût.** Le coût GPU par profil reste proche de la 1.4.0 (mesuré).
+
+### Nouveautés 1.4.0 (optimisation mobile)
+
+- **Profil automatique.** Au premier lancement, le profil graphique est choisi d'après le GPU du téléphone :
+  - Adreno 740 et plus → Ultra ; Adreno 640 à 730 → Élevé ;
+  - Mali-G710 et suivants, Xclipse, Immortalis → Élevé ;
+  - Mali-G76/G78, G610 → Moyen ;
+  - Mali-G52/G57, PowerVR → Faible ;
+  - GPU plus anciens → Économie d'énergie.
+
+  Le choix reste modifiable dans les Réglages et il est couvert par des tests.
+- **Résolution dynamique.** Si le jeu n'atteint pas sa cadence cible, la résolution interne baisse par paliers de 10 %, jusqu'à 50 %. Elle remonte après une période stable, et cette période double à chaque remontée ratée, pour éviter le va-et-vient.
+- **Mesures.** Un profileur CPU et GPU par passe de rendu a été ajouté pour les tests sur ordinateur. Il montre que la logique du jeu coûte moins de 0,5 ms par image et que le terrain représente environ 85 % du coût de la scène opaque.
+- **Optimisations.**
+  - Le terrain ne lit que les couches de texture présentes au pixel, avec des gradients explicites (sans artefacts sur GPU mobile).
+  - La végétation et les décors lointains ne projettent plus d'ombre au-delà de la zone visible : environ −30 % sur les ombres en forêt.
+  - En Moyen et Faible, la carte d'ombres est mise à jour une image sur deux et le bloom démarre au quart de la résolution.
+  - Le shader d'eau est simplifié en Moyen et en dessous, et les normales du terrain sont désactivées en Moyen.
+
+  Coût GPU relatif mesuré sur la même scène : Élevé ≈ 95, Moyen ≈ 61, Faible ≈ 44, Économie ≈ 31.
+- **Registre de modèles importés.**
+  - Tout fichier `assets/models/<id>.lkm` produit par `tools/import_character.py` remplace automatiquement le modèle procédural du personnage correspondant, avec toutes ses animations.
+  - Identifiants pris en charge : `hero`, l'identifiant d'un ennemi humanoïde (`bandit`, `skeleton`, `draugr`…), `npc_<id>` pour un PNJ nommé, et `villager_m` / `villager_f` pour les villageois.
+
+### Nouveautés 1.3.0
+
+- **Plus de « plaques » sous les personnages en marchant.**
+  - Cause : l'outil d'import attachait une partie des semelles au bassin, car les pieds écartés du modèle tombaient dans la zone réservée aux bras. La cape et le tabard étaient aussi en partie attachés aux jambes. Ces faces s'étiraient entre les hanches et le sol.
+  - Correction : l'attribution des os suit désormais la surface du maillage (distance géodésique). La cape part des épaules et le tabard de la ceinture, jamais des jambes.
+  - Un test automatique le vérifie.
+- **Mouvements refaits.**
+  - Les jambes suivent des courbes de marche et de course réalistes : attaque du talon, amorti du genou, poussée sur les orteils, genou haut à la course.
+  - Le bassin descend quand les jambes sont écartées et se balance au-dessus de la jambe d'appui ; les épaules tournent en sens inverse et la tête reste stable.
+  - Les bras se balancent en opposition aux jambes.
+  - Hors combat, l'épée est portée basse, avec un angle stable. La garde se lève toute seule quand un ennemi approche, pour le héros comme pour les ennemis.
+- **Nouveaux effets de rendu.**
+  - Occlusion ambiante (SSAO) : ombres de contact au pied des murs, dans l'herbe, sous les personnages et dans les recoins. Active en Ultra, Élevé et Moyen.
+  - Armure métallique : sur le héros importé, l'acier et le bronze reflètent le ciel et le soleil ; le tissu (cape, tabard) reste mat.
+
+### Nouveautés 1.2.0
+
+- **Nouveau héros 3D.** Le modèle a été généré avec Tripo (texturé, environ 10 000 triangles), puis importé par `tools/import_character.py`. Comme il n'avait pas de squelette, l'outil :
+  - trouve automatiquement les articulations dans le maillage ;
+  - calcule les poids de peau sur le squelette humanoïde du jeu ;
+  - fait passer les bras de la pose en T à la pose de repos.
+
+  Toutes les animations existantes (marche, course, attaques, roulade, monture) s'appliquent donc au modèle. L'arme reste tenue en main.
+- **Limites du modèle importé.**
+  - L'armure ne change plus visuellement avec l'équipement, car elle est peinte dans la texture.
+  - La cape fait partie du maillage et suit le torse, sans physique de tissu.
+  - Le réglage **Réglages → Héros 3D détaillé** permet de revenir au héros procédural, dont l'armure change avec l'équipement.
+
+### Nouveautés 1.1.0 (suite aux retours du premier test sur téléphone)
+
+- **Commandes tactiles réparées.**
+  - Les appuis (attaque, esquive, saut, sorts, potion, interaction, monture), la rotation de caméra et le pincement pour zoomer étaient produits *après* la mise à jour du héros, puis effacés en fin d'image : ils étaient perdus. Ils sont maintenant traités avant la simulation.
+  - Un appui très bref sur Attaque, Esquive ou Parade (doigt posé puis levé pendant la même image) est désormais pris en compte.
+  - Un appui pendant une animation est mémorisé environ 0,4 s (attaque, combo) ou 0,3 s (esquive), puis exécuté dès que possible.
+  - Un doigt n'active qu'un seul bouton, le plus proche. La zone tactile est légèrement plus grande que le bouton.
+- **Boutons replacés.**
+  - Nouvelle disposition en arcs autour de l'attaque, sans chevauchement (Saut et Interagir se superposaient) et à l'écart des bords de l'écran.
+  - La disposition est vérifiée par des tests pour 5 formats d'écran, de 4:3 à 21:9.
+  - Les dispositions enregistrées par la version 1.0.0 sont remplacées automatiquement.
+  - Les boutons sans effet (emplacement de sort vide, pas de monture, rien avec quoi interagir) sont masqués au lieu d'être affichés sans réagir.
+- **Taille de l'écran suivie à chaque image.** Avant, si la fenêtre changeait de taille après le démarrage (masquage de la barre de navigation par le mode immersif, rotation), l'interface gardait l'ancienne échelle et les appuis tombaient à côté des boutons.
+- **Flèches de la carte corrigées.**
+  - Sur la minimap, la flèche du joueur pointait à l'envers et les repères tournaient dans le mauvais sens par rapport à l'image.
+  - La flèche de direction de la quête était inversée.
+  - Un repère « N » indique maintenant le nord. Tout cela est vérifié par des tests.
+- **Rendu plus réaliste.**
+  - Arbres : volumes de feuillage doux, couronne de feuilles qui casse la silhouette.
+  - Couleurs : prairies naturelles (vert profond, olive, paille), forêt d'Elderwood moins fluorescente.
+  - Terrain : texture sans répétition visible.
+  - Eau : plus claire, avec des stries de courant dans les rivières.
+  - Caméra : plus basse, champ de vision plus large.
+  - Ajustement de l'étalonnage.
+
+---
+
+## Sommaire
+1. [Captures](#captures)
+2. [Contenu du jeu](#contenu-du-jeu)
+3. [État des fonctionnalités](#état-des-fonctionnalités)
+4. [Comment le jeu a été vérifié](#comment-le-jeu-a-été-vérifié)
+5. [Limites connues](#limites-connues)
+6. [Compiler](#compiler)
+7. [Architecture](#architecture)
+8. [Contrôles](#contrôles)
+
+---
+
+## Captures
+
+Ces images sont prises dans le harnais de bureau : c'est le code réel du jeu, rendu par le rasteriseur logiciel Mesa, pas sur un téléphone.
+
+| | |
+|---|---|
+| ![Écran titre](docs/screenshots/02_title.jpg) | ![Village de Brindlemere](docs/screenshots/04_village_day.jpg) |
+| ![Dialogue](docs/screenshots/05_dialog.jpg) | ![Équipement](docs/screenshots/07_equipment.jpg) |
+| ![Combat](docs/screenshots/13_combat.jpg) | ![Monture](docs/screenshots/15_riding.jpg) |
+| ![Ashen Lands](docs/screenshots/17_ashen.jpg) | ![Elderwood la nuit](docs/screenshots/18_elderwood_night.jpg) |
+| ![Introduction de boss](docs/screenshots/23_boss_intro.jpg) | ![Combat de boss](docs/screenshots/24_boss_fight.jpg) |
+| ![Donjon](docs/screenshots/25_dungeon.jpg) | ![Éditeur de commandes](docs/screenshots/28_layout_editor.jpg) |
+| ![Caméra basse vers le ciel (1.6)](docs/screenshots/30_camera_sky.jpg) | ![Vue carte, zoom 40 m (1.6)](docs/screenshots/31_camera_map.jpg) |
+| ![Caméra devant un mur (1.6)](docs/screenshots/32_camera_collision.jpg) | ![Montagnes à l'horizon (1.6.1)](docs/screenshots/33_horizon_mountains.jpg) |
+| ![Herbe dense, sillage du héros (1.6.1)](docs/screenshots/34_grass_trail.jpg) | ![Villageois (1.6.1)](docs/screenshots/35_villagers.jpg) |
+| ![Prologue : Highspire (1.7)](docs/screenshots/36_prologue_highspire.jpg) | ![Prologue : Morneval (1.7)](docs/screenshots/37_prologue_morneval.jpg) |
+| ![Prologue : « Tu es revenu… » (1.7)](docs/screenshots/38_prologue_voix.jpg) | ![Prologue : titre (1.7)](docs/screenshots/39_prologue_titre.jpg) |
+| ![Menu des mods (1.7)](docs/screenshots/40_mods.jpg) | |
+
+---
+
+## Contenu du jeu
+
+| Domaine | Contenu |
+|---|---|
+| **Monde** | Une carte continue de 3 072 m × 3 072 m, sans écran de chargement entre les régions. Six régions : **Greenhaven**, **Frostheim**, **Ashen Lands**, **Elderwood**, **Kingdom of Shadows** et **High Crowns**. Le terrain est façonné par région, avec rivières, lacs, glace et lave, routes, villages, châteaux, ruines, grottes, tours, sanctuaires, camps, mines, fermes et pierres de passage. Le monde est streamé en chunks de 32 m avec 3 niveaux de détail, générés sur des threads de travail. |
+| **Héros** | Squelette animé, blend de locomotion, machine à états, transitions, masques haut et bas du corps, IK des pieds sur le terrain, look-at, cape et cheveux simulés (Verlet). L'équipement change l'apparence : casques, armures, épaulières, gantelets, jambières, capes, armes. |
+| **Combat** | Types d'armes : épée, épée longue, dague, hache, marteau, lance, arc, arbalète, bâton, bouclier (plus pioche, hache de bûcheron, canne à pêche, torche), combos, attaque lourde, parade avec fenêtre de timing, esquive avec invulnérabilité, éléments (feu, glace, foudre, nature, ombre, lumière, arcane), faiblesses et résistances, traînées d'armes, particules, hit-stop, vibrations. |
+| **Ennemis** | **27 types d'ennemis** avec IA (patrouille, alerte, poursuite, encerclement, attaques télégraphiées, fuite, meutes, tireurs, lanceurs de sorts, chargeurs, embusqués, volants, essaims). |
+| **Boss** | **8 boss multi-phases**, chacun avec arène, cinématique d'introduction (caméra et titre), changements de phase et récompenses (fragments de couronne). |
+| **Histoire et quêtes** | Quête principale « La Chute des Couronnes » (m1 à m7). Quêtes secondaires, cachées, de chasse, de trésor et de faction : **33 quêtes** au total. Dialogues avec portraits, choix et réputation de faction. |
+| **PNJ** | **29 PNJ nommés** avec rôles (marchand, forgeron, aubergiste, garde, alchimiste, maître d'écurie, ancien, chasseur, prêtre, fermier, enfant, érudit, barde), emplois du temps jour/nuit et boutiques. |
+| **Objets** | **125 objets**, en raretés Commun, Rare, Épique, Légendaire, Mythique et Ancestral, avec **7 panoplies** (bonus 2/4 pièces), consommables, matériaux, reliques et cosmétiques. |
+| **Artisanat** | **49 recettes** sur 4 stations (forge, alchimie, feu de camp, établi). Récolte de bois, pierre, minerais, herbes et cristaux, plus pêche. |
+| **Magie et compétences** | **14 sorts** répartis dans **7 écoles**. Arbre de **30 compétences** en **6 classes** : Guerrier, Archer, Assassin, Mage, Paladin, Chasseur. |
+| **Montures** | **5 montures** : appel au sifflet, galop, endurance. |
+| **Donjons** | **6 donjons** générés par graine : salles, couloirs, énigme à leviers, pièges, coffres et boss. |
+| **Monde vivant** | Cycle jour/nuit, météo dynamique (pluie, neige, cendres, brouillard, orage), faune, vent dans la végétation, lucioles, fumées de cheminée. |
+| **Rendu** | Shaders maison : PBR GGX, ombres douces (Poisson ou PCF), ombres des nuages, brouillard de hauteur, eau (profondeur, écume, reflets), lave, terrain multicouche, herbe instanciée, dissolve, contour, vision à travers les obstacles. Post-traitement : bloom, profondeur de champ, tonemapping ACES, étalonnage par région, vignette, grain, FXAA. Système de particules. |
+| **Audio** | Mixeur logiciel, musiques en fondu enchaîné selon la région, l'heure, le combat et le boss, ambiances superposées, réverbération, panoramique spatial. Sortie AAudio sur Android. **14 musiques, 9 ambiances et 65 effets sonores** au format OGG Vorbis 48 kHz. |
+| **Interface** | HUD (vie, mana, endurance, XP, raccourcis, boussole, minimap), carte du monde, inventaire, équipement, compétences, quêtes, artisanat, collection, bestiaire, réglages, sauvegardes, éditeur de disposition des commandes tactiles. |
+| **Android** | Commandes tactiles personnalisables (position et taille), vibrations, mode immersif, cinq profils graphiques (Ultra, Élevé, Moyen, Faible, Économie d'énergie), contexte EGL conservé lors de la mise en arrière-plan. |
+| **Sauvegarde** | 3 emplacements manuels et une sauvegarde automatique toutes les 3 minutes, avec écriture atomique (fichier temporaire puis renommage). |
+| **Identité visuelle** | Splash SUPERESSENCE STUDIO, mention « Powered by AGR ENGINE », écran titre « LOST KINGDOM / A world waiting to be discovered. / Created by SUPERESSENCE STUDIO. », générique, icône du lanceur à toutes les densités. |
+
+---
+
+## État des fonctionnalités
+
+Légende :
+- ✅ implémenté et vérifié dans le harnais de bureau (exécution réelle du code du jeu, captures d'écran).
+- 🟡 implémenté, mais vérifié seulement partiellement.
+- ❌ absent.
+
+| Fonctionnalité | État | Remarque |
+|---|---|---|
+| Monde ouvert continu, 6 régions, streaming | ✅ | Les traversées de régions sont parcourues par le bot de test. |
+| Héros animé, IK des pieds, cape | ✅ | |
+| Combat, parade, esquive, éléments | ✅ | |
+| 27 ennemis et IA | ✅ | Le combat est joué par le bot ; la cohérence des données est vérifiée par les tests unitaires. |
+| 8 boss multi-phases et intro | 🟡 | Intro et combat d'un boss capturés. Les 8 n'ont pas tous été battus de bout en bout par le bot. |
+| Quêtes, dialogues, choix, réputation | 🟡 | Les références des 33 quêtes (PNJ, objets, ennemis, boss, donjons) sont validées par les tests. La quête principale n'a pas été terminée de bout en bout automatiquement. |
+| Inventaire, équipement, panoplies, raretés | ✅ | |
+| Artisanat, récolte, pêche | ✅ | |
+| Magie (7 écoles), arbre de compétences (6 classes) | ✅ | |
+| Montures | ✅ | |
+| Donjons (énigme, pièges, coffres, boss) | ✅ | Entrée, énigme et sortie jouées par le bot. |
+| Jour/nuit, météo | ✅ | |
+| Shaders et post-traitement | ✅ | Vérifiés sur le rasteriseur logiciel Mesa (llvmpipe), pas sur un GPU mobile. |
+| Audio (musique, ambiances, SFX) | 🟡 | Le chargement et le mixage sont vérifiés (capture WAV du mixage). La sortie AAudio n'a pas été écoutée sur un appareil. |
+| Commandes tactiles et vibrations | 🟡 | Code écrit et éditeur de disposition capturé. Aucun test sur un écran tactile réel. |
+| Profils graphiques | 🟡 | Les réglages s'appliquent. Les performances réelles sur un téléphone ne sont pas mesurées. |
+| Sauvegarde et chargement | ✅ | Test aller-retour automatique dans le scénario du bot. |
+| APK compilé, signé, aligné | ✅ | `apksigner verify`, `zipalign -c` et `aapt2 dump badging` sont vérifiés. |
+| Installation et exécution sur un appareil Android | ❌ **non testé** | Aucun émulateur ni appareil n'est disponible dans l'environnement de construction (pas de KVM). |
+| Doublage vocal | ❌ | Les dialogues sont uniquement textuels. |
+| Modèles 3D d'artistes, motion capture | ❌ | Tout est procédural (voir *Limites*). |
+
+---
+
+## Comment le jeu a été vérifié
+
+1. **Harnais de bureau** (`lk_desktop`). Il exécute *exactement le même code de jeu* que l'APK, sur Linux, dans un contexte EGL OpenGL ES 3.x sans fenêtre (Mesa), avec un pas de temps fixe.
+   - L'option `--autoplay=full` lance un bot qui joue un scénario de 71 étapes : splash, titre, nouvelle partie, village, dialogue, tous les menus, combat, monture, traversée des six régions, météo, boss, donjon et énigme, test sauvegarde/chargement, éditeur de commandes, générique.
+   - Le bot prend des captures d'écran (`build/shots/`) et peut enregistrer le mixage audio (`--wav`).
+2. **AddressSanitizer**. Le même scénario a été exécuté sous ASan. Il a permis de corriger un accès hors limites dans l'IA ennemie et une invalidation de références dans l'ECS.
+3. **Tests unitaires** (`lk_tests`), soit 1 873 vérifications :
+   - l'ECS ;
+   - les mathématiques ;
+   - l'intégrité des données (chaque référence d'une quête, d'un butin, d'une recette ou d'une boutique pointe vers un objet existant) ;
+   - le déterminisme du monde, la présence des 6 régions et l'absence de NaN ;
+   - la génération de chunks aux 3 LOD ;
+   - le décodage des fichiers audio ;
+   - l'orientation de la minimap, de la flèche du joueur et de la flèche de quête ;
+   - la géométrie de la disposition tactile (aucun chevauchement, marges, minimap dégagée) pour 5 formats d'écran.
+   - la caméra libre (`CameraRig::compute`) : 480 configurations synthétiques et 1 920 positions sur le vrai terrain (œil au-dessus du sol, héros entier dans l'image), collision avec un mur, cadrage en vue basse et en vue carte.
+4. **Test tactile automatique** (`--autoplay=touch`). Il injecte de vrais événements tactiles, appuis brefs dans la même image compris, et vérifie l'effet sur le héros : attaque, esquive, saut sans déclencher la parade, attaque chargée, combo mémorisé, doigt glissé depuis l'extérieur ignoré.
+5. **Test des boutons** (`--autoplay=ui`, depuis la 1.6.1). Il appuie sur les boutons des dialogues, de la pause, du journal et des réglages avec de vrais appuis tenus sur plusieurs images, et affiche `UI TEST PASSED`.
+6. **Test de l'herbe** (`--autoplay=grass`). Il vérifie que l'herbe est couchée en marchant, que le sillage se relève et que la couche dense proche existe, et affiche `GRASS TEST PASSED`.
+7. **Test de la caméra** (`--autoplay=camera`). 12 captures d'inclinaison et de zoom, avec vérification par le code de la hauteur de l'œil et de la position du héros à l'écran, puis des gestes tactiles injectés et les comportements automatiques. Il affiche `CAMERA TEST PASSED`.
+8. **APK**. Il est vérifié par `apksigner verify`, `zipalign -c -P 16` et `aapt2 dump badging`. Pour chaque ABI, `readelf` confirme :
+   - que `ANativeActivity_onCreate` est exporté ;
+   - que les segments sont alignés sur 16 Ko ;
+   - que la bibliothèque ne dépend que de bibliothèques système (libandroid, liblog, libEGL, libGLESv3, libaaudio, libm, libdl, libc) ;
+   - qu'elle contient bien le code du jeu complet et non le test de rendu « smoke ».
+
+---
+
+## Limites connues
+
+- **Aucun test sur un appareil réel.** L'APK est construit et vérifié statiquement, mais il n'a jamais été installé sur un téléphone ou un émulateur : l'environnement de construction n'en possède pas. Des problèmes propres aux pilotes GPU mobiles, aux performances ou au tactile sont possibles.
+- **Graphismes en partie procéduraux.** Les trois héros, 12 bâtiments, 6 monstres, la voiture et la moto utilisent des modèles 3D générés par IA (Tripo) et importés. Les PNJ, les autres créatures et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
+- **Audio.** Depuis la 1.13.0, la musique est jouée par des instruments échantillonnés (FluidR3, licence MIT) à partir de partitions écrites dans `tools/compose_music.py` : ce n'est pas un orchestre enregistré en studio. Les ambiances et les effets sont synthétisés par `tools/make_audio.py`.
+- **Performance non mesurée sur mobile.** Le harnais de bureau tourne sur un rasteriseur logiciel, à environ 120 ms par image : ce chiffre ne dit rien d'un GPU mobile. Les profils Faible et Économie d'énergie réduisent la distance de vue, les ombres, l'herbe et le post-traitement.
+- **Signature locale.** L'APK est signé avec une clé locale générée au moment de la construction, qui n'est pas versionnée. Pour une publication sur le Play Store, il faut le re-signer avec votre propre clé (voir ci-dessous) et produire un AAB.
+- **Langue.** L'interface et les dialogues sont en français uniquement.
+
+---
+
+## Compiler
+
+### APK Android
+
+Prérequis :
+- Android SDK avec build-tools 35, platforms/android-35 et cmake ;
+- NDK r26 ou plus récent ;
+- un JDK (javac, version 11 ou plus) pour la petite classe Java des barres système ;
+- Python 3.
+
+```bash
+cd lostkingdom
+ANDROID_SDK=/chemin/vers/android-sdk ./build_apk.sh
+# -> build/apk/LOST-KINGDOM-SUPERESSENCE.apk
+```
+
+- Le script n'utilise **pas Gradle**. Il enchaîne : CMake et NDK pour chaque ABI, `aapt2 compile/link`, `javac` et `d8` (une classe Java), ajout des bibliothèques stockées, `zipalign -P 16`, puis `apksigner`.
+- **Signature** : définissez `LK_KEYSTORE`, `LK_KEYSTORE_PASSWORD` et `LK_KEY_ALIAS` pour utiliser votre clé. Sinon, une clé locale est générée dans `keystore/`, qui est ignoré par git. Les clés ne doivent jamais être commitées.
+- **ABIs** : par défaut `ABIS="arm64-v8a armeabi-v7a x86_64"`.
+- **Installation** : `adb install -r build/apk/LOST-KINGDOM-SUPERESSENCE.apk`.
+
+### Harnais de bureau et tests (Linux, Mesa EGL)
+
+```bash
+cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk -j
+./build/desk/lk_tests assets                     # tests unitaires
+./build/desk/lk_desktop --assets assets --frames 3600 --dt 0.0333 --autoplay=full --wav build/autoplay.wav
+./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
+./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
+./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), story, ssr, bridge, physics, race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
+# import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
+#   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
+# import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
+```
+
+### Régénérer les assets
+
+```bash
+python3 tools/make_font.py       # atlas SDF (polices OFL : Cinzel, Cinzel Decorative, Alegreya Sans)
+python3 tools/make_ui.py         # kit d'interface et icônes
+python3 tools/make_audio.py      # ambiances et effets (numpy, scipy, ffmpeg)
+python3 -I tools/compose_music.py   # bande originale (fluidsynth + banque FluidR3_GM.sf2, ffmpeg)
+python3 tools/make_branding.py   # icônes du lanceur, logos, key art
+python3 tools/import_character.py modele.glb hero --preview apercu.png   # importe un personnage GLB (pose en T, sans squelette)
+```
+
+---
+
+## Architecture
+
+```
+lostkingdom/
+  engine/            AGR Engine (C++17, OpenGL ES 3.0)
+    core/            ECS (sparse sets), maths, bruit, interface plateforme
+    gfx/             renderer, shaders (variantes uber-shader), post-traitement, particules, textures, UI SDF
+    anim/            squelettes, clips, animator multicouche, IK, Verlet
+    audio/           décodeur Vorbis, mixeur, musiques et ambiances, réverbération
+    platform/        Android (NativeActivity, EGL, AAudio, JNI vibreur) et bureau (EGL pbuffer)
+  game/              LOST KINGDOM
+    World.*          plan du monde, terrain, rivières, streaming, collisions
+    Props.*          bâtiments et décor procéduraux
+    Characters.*     héros, ennemis, créatures, armes (maillages skinnés)
+    Animations.cpp   bibliothèque de clips
+    Player / Combat / AI / Spawn
+    Rpg.cpp          inventaire, artisanat, quêtes, dialogues, sauvegardes, réglages
+    Dungeon.cpp      génération des donjons, énigmes, pièges
+    Hud / Menus      interface
+    Data.*           contenu : objets, ennemis, boss, PNJ, quêtes, sorts, compétences, montures, donjons
+    AutoPlay.cpp     bot de test
+  tests/             tests unitaires et prévisualisations
+  tools/             génération des polices, de l'UI, de l'audio et de l'identité visuelle
+  android/           manifeste, ressources, GameActivity.java (barres système)
+  assets/            polices, UI, audio (empaquetés dans l'APK)
+  branding/          logos, icônes, key art
+```
+
+---
+
+## Contrôles
+
+| Commande | Action |
+|---|---|
+| Joystick gauche | Déplacement (pousser fort pour courir) |
+| Glisser à droite | Horizontal : rotation de la caméra. Vertical : inclinaison (du ciel à la vue de dessus). Un glisser suit un seul axe, choisi par sa direction de départ. Pincer : zoom de 4 à 40 m. Double appui : caméra par défaut |
+| Attaque / Lourde | Combo léger ou attaque chargée |
+| Parade | Bloque ; une parade au bon moment déséquilibre l'ennemi |
+| Esquive | Roulade avec invulnérabilité |
+| Sorts 1 à 3 | Sorts équipés |
+| Interagir | Parler, récolter, ouvrir, pêcher |
+| Monture | Siffler la monture, puis monter ou descendre |
+
+La disposition se modifie en jeu dans **Réglages → Commandes → Personnaliser les commandes**.
+
+---
+
+© SUPERESSENCE STUDIO. Polices sous licence SIL Open Font License (voir `tools/fonts/OFL.txt`).

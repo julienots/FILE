@@ -1,0 +1,4 @@
+name = Terrassier
+author = Superessence Studio
+version = 1.0
+description = La pelle creuse des trous énormes et les bombes rasent des collines entières.

@@ -1,0 +1,1138 @@
+// LOST KINGDOM — game runtime (AGR Engine application).
+#pragma once
+#include "../engine/core/App.h"
+#include "../engine/core/ECS.h"
+#include "../engine/gfx/Renderer.h"
+#include "../engine/gfx/Particles.h"
+#include "../engine/gfx/UI.h"
+#include "../engine/gfx/Model.h"
+#include <unordered_map>
+#include "../engine/audio/Audio.h"
+#include "World.h"
+#include "../engine/net/Net.h"
+#include <deque>
+#include <sstream>
+#include "Props.h"
+#include "Characters.h"
+#include "Data.h"
+#include "CameraRig.h"
+#include <memory>
+#include <map>
+#include <set>
+#include <deque>
+#include <iosfwd>
+#include <future>
+
+namespace lk {
+
+inline vec3 perpVec(vec3 f) { return normalize(vec3(-f.z, 0, f.x)); }
+
+// ------------------------------------------------------------------------------------------ components
+struct Visual {
+    Arch arch = Arch::Humanoid;
+    std::shared_ptr<Mesh> mesh, weapon, offhand, capeMesh;
+    std::shared_ptr<Mesh> lodMesh;   // 2.3.6 imported models: far version
+    Animator anim;
+    PoseWorld pw;
+    WeaponType wt = WeaponType::None, ot = WeaponType::None;
+    float tip = 0.8f;
+    float scale = 1.f;
+    vec3 tint{1, 1, 1};
+    float flash = 0, dissolve = 0, rim = 0.5f, emissiveBoost = 0;
+    float breathT = 0, wetT = 0;
+    vec3 hitDir{0, 0, 0}; float hitT = 0;   // 3.10.4 directional flinch: where the last blow came from (world), 1 -> 0
+    float tiltPitch = 0, tiltRoll = 0;
+    // 3.4.0 smoothing of what is drawn (the simulation keeps its exact values): height over steps and bumps,
+    // turning, and the body following the slope of the ground
+    float visY = -1e9f, visYaw = 0, visLastT = -1.f, slopePitch = 0, slopeRoll = 0;
+    float rideY = 0;   // 3.8.1 the horse's body rising and falling with its gait (horse and rider)   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
+    vec3 dissolveColor{1.f, 0.5f, 0.15f};
+    bool outline = true;
+    vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
+    GLuint albedo = 0;   // imported textured model (LIT_TEXTURED)
+    bool cape = false;
+    VerletCloth cloth;
+    vec3 capeColor{0.5f, 0.1f, 0.1f};
+    bool tail = false;
+    VerletChain hair;
+    vec3 hairColor;
+    std::shared_ptr<Mesh> hairMesh;
+    bool footIK = true;
+    float pelvisAdj = 0;
+    bool visible = true;
+    float tipClearRaw = 1.f, tipClear = 1.f;   // weapon tip height above the ground before / after the clearance fix (m)
+    // weapon trail
+    std::deque<std::pair<vec3, vec3>> trail;   // base, tip (world)
+    std::shared_ptr<Mesh> trailMesh;
+    vec3 trailColor{1, 0.9f, 0.7f};
+};
+
+enum class Team : uint8_t { Player, Enemy, Neutral, Animal, Mount };
+
+struct Status { float burn = 0, freeze = 0, slow = 0, root = 0, poison = 0, stun = 0, shield = 0, regen = 0, strength = 0, frostRes = 0, wellFed = 0; };
+
+struct Character {
+    Team team = Team::Neutral;
+    std::string name;
+    float hpGhost = -1;   // 3.9.7 the health bar above an enemy drains behind the real value (-1: not shown yet)
+    vec3 pos, vel;
+    float yaw = 0, radius = 0.45f, height = 1.8f, mass = 1;
+    bool grounded = true, inWater = false, swimming = false;
+    float groundY = 0, airTime = 0;
+    Visual vis;
+    float hp = 100, maxHp = 100, poise = 30, maxPoise = 30;
+    float atk = 10, def = 2;
+    Element element = Element::Physical;
+    float elemDmg = 0;
+    bool dead = false;
+    float deathT = 0, hitStun = 0, invuln = 0, flashT = 0;
+    vec3 knock;
+    Status status;
+    int enemyDef = -1, npcDef = -1, bossDef = -1, mountDef = -1, animal = -1;
+    int level = 1;
+    // combat action
+    const Clip* attackClip = nullptr;
+    int attackIdx = -1;
+    float attackMult = 1;
+    Element attackElem = Element::Physical;
+    std::vector<Entity> hitThisSwing;
+    float lastMotion = 0;
+    float telegraph = 0;
+    uint32_t uid = 0;       // spawn uid (for persistence of kills)
+    float lastHitBy = 0;
+    float speedMul = 1;
+    bool elite = false;
+};
+
+enum class AIState : uint8_t { Idle, Patrol, Alert, Chase, Strafe, Attack, Recover, Flee, Search, Return, Dead, Intro };
+struct AIBrain {
+    AIState state = AIState::Idle;
+    Entity target = NullEntity;
+    vec3 home, lastSeen, patrolTarget;
+    float timer = 0, think = 0, strafeDir = 1, aggro = 0, cooldowns[8] = {0};
+    int pendingAttack = -1;
+    float telegraphT = 0;
+    int phase = 0;
+    bool introDone = false;
+    int summons = 0;
+    float fly = 0;        // dragons
+    std::vector<vec2> path;
+    int pathIdx = 0;
+    float repathT = 0;
+};
+
+enum class NpcActivity : uint8_t { Idle, Walk, Work, Talk, Sleep, Sit, Pray, Flee };
+struct NpcBrain {
+    vec3 home, work, social, bed;
+    NpcActivity act = NpcActivity::Idle;
+    vec3 dest;
+    float timer = 0;
+    bool indoors = false;
+    bool generic = true;
+    bool resident = false;   // 2.6.0 lives inside a building: stays at its post (home), turns to the player
+    int village = -1;
+    float waveCD = 0;
+    ClipId workClip = C_HAMMER_WORK;
+};
+
+struct WorldEvent { int kind = -1; vec3 pos; float t = 0, fallT = 0; bool active = false; uint32_t chestUid = 0; std::vector<Entity> foes; };   // 2.3.6
+
+struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; float forceSpeed = 0; };   // 3.9.5 forceSpeed > 0: heads for dest at that speed (cinematic herds)
+// 1.9.2 the player's domain
+// 1.13.0 co-op: a character driven by the network (the partner's hero; on the guest, the host's enemies)
+struct NetPuppet {
+    uint32_t netId = 0;
+    bool hero = false;
+    vec3 target; float targetYaw = 0, speed = 0, lastUpdate = 0;
+    int16_t clip = -1; uint8_t clipSeq = 0, body = 0;
+};
+struct SoldierBrain {
+    vec3 post; Entity target = NullEntity; float cd = 0, think = 0; int slot = 0;
+    int unit = 0;    // 3.0.0 0 swordsman, 1 archer, 2 knight
+    int fort = -1;   // 3.0.0 >= 0: guard of a conquered fortress (POI index): holds its post, never follows the hero
+};
+struct BaseBuildDef {
+    std::string id, name, desc;
+    int kind, variants;
+    std::vector<std::pair<std::string, int>> cost;
+    int housing = 0, guards = 0;
+    float radius = 3.f;
+    bool unique = false;
+};
+const std::vector<BaseBuildDef>& baseBuildings();
+int baseBuildIndex(const std::string& id);
+struct BaseBuilt { int def; vec2 pos; float rot; int variant; };
+struct PlayerBase {
+    bool founded = false;
+    vec2 center{0, 0};
+    int poi = -1;
+    std::string name = "Domaine du Naufragé";
+    std::vector<BaseBuilt> built;
+    int residents = 0, soldiers = 0, pigs = 0, horses = 0;
+    int lastDay = -1, foalDays = 0;
+    bool escort = false;
+    // 3.0.0 the army and the castle: archers and knights besides the swordsmen, the "charge" order, the size of the
+    // domain (0 village, 1 town, 2 castle), the level of the domain's own dungeon, the fallen (raised by the chapel)
+    int archers = 0, knights = 0;
+    bool charge = false;
+    int level = 0, dunLevel = 0, fallen = 0;
+    std::vector<std::pair<std::string, int>> storage;   // production waiting at the banner
+};
+
+enum class ProjKind : uint8_t { Arrow, Fireball, IceSpike, Arcane, Shadow, Nature, Boulder, Web, Lightning, Holy };
+struct Projectile {
+    ProjKind kind;
+    vec3 pos, vel;
+    float dmg, life = 3, radius = 0.3f, splash = 0, gravity = 0;
+    Element elem;
+    Entity owner = NullEntity, homing = NullEntity;
+    Team team;
+    bool pierce = false;
+    std::vector<Entity> hit;
+    float slow = 0;
+};
+
+struct Pickup { std::string item; int count; Rarity rarity; float t = 0; vec3 pos, vel; };
+
+struct NodeComp { NodeSpawn node; std::shared_ptr<Mesh> mesh; float hits = 0; float shake = 0; };
+
+enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle, Cellar, Amber };
+// 3.10.0 the Amber (Envers.cpp): a rift in the ground (kind 0) or a memory caught in the amber (kind 1)
+struct AmberSpot { int kind = 0, idx = 0; vec3 pos; };
+struct AmberEcho {};   // a creature of the Amber (removed when the hero leaves it)
+struct AmberHerald {}; // 3.10.4 the Herald, the Amber's guardian (one per crossing, once three memories are free)
+// 1.11.0 vehicles (Vehicles.cpp)
+struct VehicleRef { int idx; };
+struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; bool fly = false; };   // 3.4.0 fly: the sky-ship (procedural, no model file)
+const std::vector<VehicleDef>& vehicleDefs();
+// 1.11.1 goals (Goals.cpp): races on the roads, challenges
+struct RaceDef { std::string id, name, from, to; };
+const std::vector<RaceDef>& raceDefs();
+struct RaceTrack { int def = 0; vec2 start{0, 0}, startDir{0, 1}; std::vector<vec2> cps; float length = 0, gold = 0, silver = 0, bronze = 0; };
+struct RaceState { int active = -1, next = 0; float countdown = 0, time = 0, hold = 0; };
+struct ChallengeDef { std::string id, name, desc; int goal, gold; };
+const std::vector<ChallengeDef>& challenges();
+struct VehicleState {
+    int def = 0;
+    vec3 pos;
+    float yaw = 0, speed = 0, steer = 0, spin = 0, pitch = 0, roll = 0, yawRate = 0;
+    // 1.11.2 physics: travel direction (slides behind the heading when the tyres lose grip), vertical speed
+    // (hops over crests, falls), body suspension springs (dive, squat, lean, landing compression; car body only)
+    float velYaw = 0, vy = 0, groundPrev = 0, prevSpeed = 0, airT = 0, slip = 0;
+    float suspP = 0, suspPV = 0, suspR = 0, suspRV = 0, heave = 0, heaveV = 0;
+    bool air = false;
+    float alt = 0, prop = 0; bool landing = false;   // 3.4.0 the sky-ship: height above the ground, propeller angle, landing to let the hero off
+    std::vector<mat4> bones;
+};
+struct Interact { InterKind kind = InterKind::None; int param = 0; std::string text; float radius = 2.f; };
+
+struct ItemStack {
+    std::string id;
+    int count = 1;
+    Rarity rarity = Rarity::Common;
+    int level = 0;          // upgrade +n
+    uint32_t uid = 0;
+    bool isNew = true;
+};
+
+struct QuestState { int idx; int step = 0; std::vector<int> progress; bool done = false; bool tracked = true; };
+
+struct Notification { std::string text; vec3 color; float t = 0; std::string icon; };
+struct FloatText { vec3 pos; std::string text; vec3 color; float t = 0; float size = 22; };
+
+struct DialogState {
+    bool open = false;
+    int npc = -1;
+    Entity ent = NullEntity;
+    std::vector<std::string> lines;
+    int line = 0;
+    float reveal = 0;
+    struct Choice { std::string text, action; };
+    std::vector<Choice> choices;
+    std::string speaker, title;
+    // 3.8.0 scripted conversations: who says each line ('N' the person, 'H' the hero) and the mood of it
+    std::vector<char> who;
+    std::vector<uint8_t> mood;
+    int shownLine = -1;          // the line whose gesture / voice has started
+    float blip = 0, openT = 0;   // voice blips, time since opened (letterbox)
+    char whoAt(int i) const { return i >= 0 && i < (int)who.size() ? who[i] : 'N'; }
+    int moodAt(int i) const { return i >= 0 && i < (int)mood.size() ? mood[i] : 0; }
+};
+struct ConvLine { char who; const char* text; int mood; };
+const std::vector<ConvLine>* conversation(const std::string& key);
+
+struct Input {
+    vec2 move;
+    bool sprint = false;
+    bool attack = false, attackHeld = false, attackRelease = false;
+    float attackHoldT = 0;
+    bool heavy = false;
+    bool dodge = false, jump = false, block = false, interact = false, potion = false, mount = false;
+    bool jumpHeld = false;    // 3.2.0 a finger on Saut (gliding)
+    bool skill[3] = {false, false, false};
+    vec2 camDrag;             // camera drag in pixels: x = yaw, y = pitch (finger moving up = look up)
+    float pinch = 0;
+    bool camReset = false;    // double tap in the camera area: pitch and zoom back to default
+    void clearEdges() { attack = attackRelease = heavy = dodge = jump = interact = potion = mount = false; skill[0] = skill[1] = skill[2] = false; camDrag = vec2(0, 0); pinch = 0; camReset = false; }
+};
+
+// ------------------------------------------------------------------------------------------ dungeons
+enum class TileType : uint8_t { Void, Floor, Wall, Pit, Spikes, Plate, Door, Water, Lava };
+struct DungeonRoom { int x, z, w, h; int kind; bool cleared = false, visited = false; };
+struct DungeonState {
+    int def = -1;
+    bool active = false;
+    int levelOverride = 0;          // 3.0.0 the domain's dungeon: level chosen by the player (0 = the dungeon's own)
+    vec3 origin;                    // world position of tile (0,0)
+    float roomW = 0, roomD = 0;     // 2.6.0 interior room size (metres)
+    int W = 0, H = 0;
+    std::vector<TileType> tiles;
+    std::vector<DungeonRoom> rooms;
+    Mesh floor, walls, props;
+    Chunk realm;   // 2.2.2 celestial realm: terrain-shaded islands, trees, grass (built like a world chunk)
+    std::vector<Collider> colliders;
+    std::vector<vec4> lights;
+    std::vector<vec4> emitters;
+    vec3 entrance, exitPos, bossPos;
+    int gateRoom = -1;
+    bool gateOpen = false;
+    // puzzles: rune braziers (light in order), pressure plates, levers
+    std::vector<int> puzzleOrder;
+    std::vector<vec3> braziers;
+    struct Sigil { vec3 p; float r; vec3 c, c2; int kind; };   // 3.3.1 rune circles on the floor, animated in the FX shader
+    std::vector<Sigil> sigils;
+    std::vector<bool> brazierLit;
+    int puzzleProgress = 0;
+    bool puzzleSolved = false;
+    vec3 gatePos; float gateRot = 0;
+    std::vector<std::pair<vec3, float>> traps;   // spikes: pos, phase
+    std::vector<vec3> blades;                    // swinging blades
+    std::vector<vec3> fireJets;
+    bool completed = false;
+    bool bossDefeated = false;
+    vec3 returnPos;                               // overworld position to return to
+    int theme = 0;
+    // 2.4.1 building interiors use the same machinery (an off-map room, theme 9, no definition)
+    bool interior = false; int interiorKind = -1, interiorRegion = 0, interiorStruct = -1; std::string interiorName;
+    vec3 bedPos, forgePos; bool hasBed = false, hasForge = false;
+};
+
+// ------------------------------------------------------------------------------------------ settings
+// HUD orientation helpers (pure functions, unit-tested).
+// Screen rotation of an up-pointing sprite so that it shows world heading `yaw` ((sin yaw, cos yaw) in x/z)
+// on a map whose "up" is the camera forward (-sin camYaw, -cos camYaw). camYaw = 0 gives the world map (north up).
+inline float minimapArrowAngle(float yaw, float camYaw) { return PI - yaw + camYaw; }
+inline vec2 minimapProject(vec2 worldOffset, float camYaw) { return rotate(worldOffset, camYaw); }
+
+// Default touch layout: button centres in UI units relative to the bottom-right corner (mirrored for left-handed).
+// Three arcs around the attack button (radius ~158: dodge/block/jump, ~275: spells, ~390: interact/potion/mount);
+// interact is leftmost so its label has room. No two buttons overlap (checked by unit tests).
+constexpr int LAYOUT_VERSION = 5;   // 2.0.2: potion moved to the right edge
+inline float ctlSize(int id) { return id == 0 ? 136.f : (id >= 4 && id <= 6 ? 96.f : (id == 7 || id == 9 ? 78.f : (id == 10 ? 92.f : 100.f))); }  // attack, spells, potion/mount, others
+inline const vec2* defaultLayoutPos() {
+    static const vec2 def[11] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-62, -250}, {-540, -154}, {-430, -411}, {-345, -205}};
+    return def;
+}
+
+struct ControlLayout { vec2 pos[11]; float scale = 1.f; float opacity = 0.85f; bool leftHanded = false; };
+enum CtlId { CTL_ATTACK = 0, CTL_DODGE, CTL_JUMP, CTL_BLOCK, CTL_SKILL1, CTL_SKILL2, CTL_SKILL3, CTL_POTION, CTL_INTERACT, CTL_MOUNT, CTL_SPRINT, CTL_COUNT };
+
+struct Settings {
+    QualityProfile profile = QualityProfile::High;
+    float master = 0.9f, music = 0.6f, sfx = 0.9f, ambience = 0.7f;
+    float camSensitivity = 1.f, joystickDeadzone = 0.12f;
+    bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false, invertCameraY = false, cameraSmooth = false;
+    bool firstPerson = false;   // 3.6.0 first-person view (Settings)
+    float uiScale = 1.f;
+    ControlLayout layout;
+    bool chromatic = false;
+    bool importedHero = true;   // imported 3D model for the hero (off = procedural hero whose armour changes with equipment)
+};
+
+// ------------------------------------------------------------------------------------------ mods
+struct ModInfo {
+    std::string id, name, author, version, desc;
+    bool enabled = true, applied = false;
+    int patches = 0, errors = 0;
+    std::string firstError;
+};
+
+// ------------------------------------------------------------------------------------------ cinematics
+// One shot of a multi-shot cinematic (Cinematics.cpp): the camera glides from `from` to `to` while looking from
+// `lookFrom` to `lookTo`; narration typed at the bottom; optional speaker, title card and per-shot ambience.
+struct CineShot {
+    vec3 from, to, lookFrom, lookTo;
+    float dur = 6.f, fov = 38.f * DEG;
+    std::string text, speaker, title, subtitle;
+    vec3 speakerColor{1, 1, 1};
+    float tod = -1;               // time of day (-1: keep)
+    int weather = -1;             // Game::Weather (-1: keep)
+    std::string music = "-";      // "-": keep, "": silence, else track name
+    std::string sfx;              // played at the start ("thunder" repeats with lightning)
+    vec3 fogTint{0, 0, 0}, magic{0, 0, 0};
+    float fogMul = 0.3f;          // cinematics see far: fog density multiplier
+    float shake = 0;
+    bool heroDown = false, heroRise = false, wristGlow = false;
+    float riftFrom = -1, riftTo = -1;   // 3.9.5 opening of the sky breach over the shot (-1: open, as in the game)
+    int herd = 0; float herdSpeed = 1.6f; vec3 herdAt, herdDir{1, 0, 0};   // 3.9.5 mammoths walking (or running) through the shot
+    bool meteors = false;              // 3.9.5 fragments of other worlds fall from the breach
+};
+// 1.13.0 two players on the same Wi-Fi (Coop.cpp)
+struct CoopHeroState {
+    vec3 pos; float yaw = 0, speed = 0, hp = 100, maxHp = 100, def = 3;
+    uint8_t body = 0, hero = 0, flags = 0;   // flags: 1 dead, 2 blocking, 4 airborne
+    int16_t clip = -1, stance = 0; uint8_t clipSeq = 0;
+};
+struct CoopEvent { uint32_t seq = 0; uint8_t type = 0; std::vector<uint8_t> data; };
+struct CoopFound { agr::NetAddr addr; std::string name; int level = 0; float seen = 0; };
+struct CoopState {
+    enum Mode { Off, Host, Guest } mode = Off;
+    agr::UdpSocket sock;
+    agr::NetAddr peer;
+    bool connected = false, joining = false;
+    float lastRecv = 0, sendT = 0, discoverT = 0, joinT = 0;
+    std::string peerName; int peerLevel = 0;
+    Entity partner = NullEntity;              // the other player's hero (puppet)
+    std::unordered_map<uint32_t, Entity> puppets;   // guest: host enemy id -> local puppet
+    uint32_t outSeq = 0, inSeq = 0, ackedByPeer = 0;
+    std::deque<CoopEvent> outbox;
+    std::vector<CoopFound> found;
+    std::string manualIp, status;
+    uint8_t myClipSeq = 0; int16_t myLastClip = -1;
+    int enemyCursor = 0;
+    std::string peerBase; int peerBaseParts = 0, peerBaseGot = 0; std::vector<std::string> peerBaseChunks; bool peerBaseApplied = false;
+    std::string peerLook; bool peerLookDirty = false;
+    int sentHits = 0, recvHits = 0, sentDamage = 0, recvDamage = 0, sentKills = 0, recvKills = 0, snapshots = 0;
+};
+
+struct ChapterDef { std::string id, title, summary; };   // 1.12.0 story chapters (Story.cpp)
+const std::vector<ChapterDef>& chapters();
+struct CinematicState {
+    bool active = false;
+    std::string id;
+    std::vector<CineShot> shots;
+    int index = 0;
+    float t = 0, reveal = 0, fade = 0, waitLoad = 0, loadReady = 0;   // loadReady: 0..1 progress of the scenery around the shot (2.1.0 loading bar)
+    float savedTod = 8; int savedWeather = 0; std::string savedMusic;
+};
+
+// ------------------------------------------------------------------------------------------ game
+enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop, Bag, NewGame };
+
+class Game : public App {
+public:
+    // App
+    bool init(int w, int h) override;
+    void frame(float dt) override;
+    void resize(int w, int h) override;
+    void touch(const TouchEvent& e) override;
+    bool back() override;
+    void pause() override;
+    void resume() override;
+    void contextLost() override;
+    void lowMemory() override;
+    void shutdown() override;
+    int targetFps() const override { return renderer.settings.fpsCap; }
+    void renderAudio(float* out, int frames, int rate) override { audio.render(out, frames, rate); }
+
+    // ---- core ---------------------------------------------------------------------------------
+    int W = 1, H = 1;
+    bool gpuReady = false;
+    Renderer renderer;
+    ParticleSystem particles;
+    UI ui;
+    AudioEngine audio;
+    World world;
+    Registry reg;
+    Settings settings;
+    GameState state = GameState::Splash;
+    Menu menu = Menu::None;
+    double gameTime = 0;      // seconds of play (persisted)
+    float timeOfDay = 8.f;    // hours 0..24
+    int day = 1;
+    float realTime = 0, splashT = 0, stateT = 0;
+    float timeScale = 1.f, hitStop = 0;
+    Input input;
+    std::string pendingScreenshot;
+
+    // ---- player ---------------------------------------------------------------------------------
+    Entity player = NullEntity;
+    Entity mountEnt = NullEntity;
+    bool riding = false;
+    bool mountCalled = false;
+    int level = 1;
+    int xp = 0;
+    int gold = 50;
+    int skillPoints = 0;
+    float mp = 50, maxMp = 50, stamina = 100, maxStamina = 100;
+    float critChance = 0.05f, critDmg = 1.6f, moveSpeedMul = 1;
+    float resist[(int)Element::Count] = {0};
+    std::vector<ItemStack> inventory;
+    ItemStack equipment[SL_COUNT];
+    std::string dye;              // cosmetic colour
+    std::set<std::string> skills;  // unlocked skill nodes
+    std::vector<std::string> knownSpells;
+    int equippedSpells[3] = {0, -1, -1};
+    float spellCD[16] = {0};
+    std::vector<std::string> ownedMounts;
+    int activeMount = -1;
+    int comboStep = 0;
+    int comboHits = 0; float comboHitT = 0, comboPop = 0;   // 3.10.5 hit counter: +1 % damage per hit (max +30 %), lost after 2.5 s or a blow taken
+    float frozenTimeT = 0;   // 3.10.5 perfect dodge: enemies slowed to 25 % for this long (real seconds), the hero's blows +25 %
+    bool perfectDodgeCheck();
+    float comboTimer = 0, chargeT = 0;
+    // input buffering: a tap during an animation is kept for a short time and executed as soon as possible
+    float attackBuf = 0, dodgeBuf = 0; bool attackBufHeavy = false, attackBufCharged = false;
+    int attackFinger = -1, dodgeFinger = -1, blockFinger = -1;
+    // 1.11.2 jump while sprinting: slide the sprint finger (held on Esquive) onto Saut; joystick sprint after 0.5 s at the edge
+    bool dodgeSlideJump = false; float joyEdgeT = 0, lastTouchT = 0;
+    float jumpBuf = 0; bool sprintJump = false;
+    float slopeMul = 1.f; int landRolls = 0;   // 1.11.2 speed factor on the current slope; landing rolls done (tests)   // jump pressed just before landing; a jump taken at sprint speed keeps it
+    float btnFlash[CTL_COUNT] = {};
+    bool mountNearby = false;   // 2.3.3 the mount button only shows when your horse is close (call it from the garage)
+    bool sprintLock = false;   // 2.0.1 the run button: tap to keep running while the stick is held, tap again to walk
+    bool ctlVisible(int id) const;
+    bool charging = false;
+    float potionCD = 0, dodgeCD = 0, parryT = 0, blockT = 0;
+    float staminaRegenDelay = 0;
+    // 2.4.0 swimming: dive (dodge button), air under water, fast crawl (sprint), wake and bubbles
+    bool diving = false, underwaterView = false; float breath = 1.f, swimFxT = 0, swimStrokeT = 0;
+    static constexpr float BREATH_SECONDS = 22.f;
+    vec3 respawnPos;
+    Entity lockTarget = NullEntity;
+    Entity interactTarget = NullEntity;
+    float fishingT = -1, fishBite = -1;
+    int lastRegion = -1;
+    float regionBannerT = 0;
+    std::string regionBanner, regionBannerSub;
+
+    // ---- progression state ----------------------------------------------------------------------
+    std::vector<QuestState> questLog;
+    std::set<std::string> questsDone;
+    int trackedQuest = -1;
+    std::set<std::string> discovered;      // poi ids
+    std::set<std::string> defeatedBosses;
+    std::map<std::string, int> bestiary;   // enemy id -> kills
+    std::set<std::string> loreFound;
+    std::set<std::string> storyFlags;        // 1.7.0: story choices / events (saved as "flag <id>")
+    std::set<std::string> relicsFound;
+    std::set<std::string> talkedTo;
+    std::set<uint32_t> killedUnique;       // elite / unique spawns
+    std::set<uint32_t> openedChests;
+    std::map<std::string, double> clearedSpawns;  // chunk key -> respawn time
+    int reputation[FA_COUNT] = {0};
+    std::vector<uint8_t> fog;              // map discovery 128x128
+    std::set<std::string> dungeonsDone;
+    std::set<std::string> treasuresFound;
+    int saveSlot = 0;
+    float autosaveT = 0;
+    double playSeconds = 0;
+
+    // ---- UI state -------------------------------------------------------------------------------
+    std::deque<Notification> notes;
+    std::vector<FloatText> floatTexts;
+    DialogState dialog;
+    int shopNpc = -1;
+    int menuTab = 0, selItem = -1, selSlot = -1, selRecipe = -1, selSkill = -1, selQuest = -1, selEnemy = -1, selLore = -1;
+    int craftStation = ST_ANY;
+    float mapZoom = 1.f; vec2 mapPan;
+    std::string bossBarName;
+    Entity bossEnt = NullEntity;
+    float bossBarShow = 0;
+    float deathT = 0;
+    float levelUpT = 0;
+    float fps = 60, fpsAcc = 0; int fpsFrames = 0;
+    bool layoutEdit = false; int layoutDrag = -1;
+    float titleCamT = 0;
+    int titleSel = 0;
+    float creditsT = 0;
+    std::string toastHint;
+    float hintT = 0;
+    GLuint mapTex = 0;
+    RenderTarget iconRT; bool iconsReady = false;
+    // 3.5.0 the 3D model of every item (ItemModels.cpp): inventory icons, the rotating showcase, items on the ground
+    struct ItemModel { std::shared_ptr<Mesh> mesh; vec3 center; float radius = 0.3f; bool longAxis = false; };
+    std::map<std::string, ItemModel> itemModels;
+    const ItemModel* itemModel(const std::string& id);
+    RenderTarget showcaseRT[2]; int showcaseUsed = 0; float showcaseT = -1.f;
+    void itemShowcase(const std::string& id, Rect r, Rarity rar);
+    // 3.6.0 first-person view: where the eye is and where it looks (Render.cpp), the hands and weapon drawn in view
+    bool fpActive = false; float fpYaw = 0, fpPitch = 0, fpBob = 0;
+    vec3 fpEye, fpFwd{0, 0, 1}, fpRight{1, 0, 0}, fpUp{0, 1, 0};
+    std::shared_ptr<Mesh> fpArmMesh;
+    void renderViewModel(Character& c);
+    // 3.7.1 the living soundscape (Game.cpp)
+    void updateSoundscape(float dt);
+    float sndT[5] = {3.f, 8.f, 6.f, 5.f, 4.f}, coastNear = 0;
+    // 3.7.0 birds in 3D (Birds.cpp)
+    struct Flock { int kind = 0, n = 0; vec3 anchor, vel; float t = 0, life = 20, radius = 20, speed = 0.2f, scale = 1; vec3 tint{0.2f}; std::vector<vec4> offs; };
+    std::vector<Flock> flocks; float flockT = 6.f;
+    std::shared_ptr<Mesh> birdMesh[3];
+    void spawnFlock(vec3 around);
+    void updateBirds(float dt);
+    void renderBirds();
+    // 3.6.0 the underground base (Cellar.cpp)
+    struct CellarState { bool owned = false; vec3 hatch; uint32_t seed = 1; int mined = 0; std::vector<uint8_t> cells; } cellar;
+    std::map<int, int> cellarHits; Entity cellarEnt = NullEntity;
+    void initCellar(uint32_t seed);
+    void rebuildCellar();
+    void buildCellar();
+    void enterCellar();
+    bool inCellar() const;
+    bool mineCellar(Character& c);
+    bool placeCellarHatch();
+    void spawnCellarHatch();
+    // ---- 3.10.0 the Amber: the reflection of the kingdom where Malgrath got his eternity (Envers.cpp)
+    bool amber = false;                 // the hero is in the Amber
+    float amberK = 0;                   // 0 kingdom .. 1 Amber (blend of the look)
+    float amberEternity = 0;            // 0..100: the Amber slowly claims the hero; at 100 it throws him out
+    float amberEchoT = 0, amberShiftT = -1, amberHintT = 0;
+    vec3 worldTint{1, 1, 1};            // multiplies the whole landscape (the Amber turns it to honey)
+    std::vector<vec3> amberRifts, amberMemories;
+    std::vector<Entity> amberSpots;
+    bool amberRiftNear = false;
+    bool amberHeraldSpawned = false;   // this crossing
+    void initAmber();
+    void updateAmber(float dt);
+    void enterAmber(int rift);
+    void exitAmber(bool forced);
+    void applyAmberEnvironment();
+    void drawAmberHud();
+    void onAmberSpot(Entity e);
+    void renderCellarHatch();
+    void renderFairBunting();   // 3.9.0
+    std::string saveCellar() const;
+    void loadCellar(std::istringstream& l);
+    // 3.6.0 felling trees (Forestry.cpp)
+    bool tryChopTree(Character& c);
+    void updateForestry(float dt);
+    void renderFallingTrees();
+    struct FallingTree { std::shared_ptr<Mesh> props, foliage; vec3 pos, dir; float t = 0, angle = 0, scale = 1; };
+    std::vector<FallingTree> fallingTrees;
+    std::map<uint32_t, int> treeHits;
+    float regrowT = 5.f; int treesFelled = 0;
+    // 3.5.0 schools of fish (Underwater.cpp)
+    void renderFish();
+    std::shared_ptr<Mesh> fishMesh; std::vector<InstanceData> fishInst;
+    std::map<std::string, vec4> iconUV;      // 3D-rendered item icons (uv rect in iconRT)
+    RenderTarget portraitRT; int portraitNpc = -2;
+    RenderTarget portraitLiveRT[2];   // 3.8.0 the speaking faces, rendered live from the characters
+    std::map<std::string, std::string> convQueue;   // npc id -> conversation to play at the next talk (quest endings)
+    float dlgCamK = 0; vec3 dlgEye, dlgLook; bool dlgCamInit = false;
+    float heroIdleT = 0;
+    vec3 camFocusTmp;   // autoplay: a point to frame
+    // 3.8.1 riding: inertia of the rider (spring), the last speed, hoof beats, the gait shake on the camera
+    float rideLean = 0, rideLeanV = 0, rideHsPrev = 0, rideBob = 0, ridePhasePrev = 0, rideSnortT = 4.f, rideCreakT = 0, rideSlope = 0;
+    void playConversation(const std::string& key, bool prepend);
+    void dialogLineStart();
+    void updateDialogScene(float dt);
+    bool renderLivePortrait(RenderTarget& rt, Entity e);
+
+    // ---- camera ---------------------------------------------------------------------------------
+    Camera cam;
+    float camYaw = 0.78f, camPitch = CameraRig::PITCH_DEFAULT, camDist = 15.5f, camDistTarget = 15.5f;
+    vec3 camFocus;
+    vec3 camLookAhead;               // smoothed run-direction offset of the aim point
+    float camIdleT = 0;              // seconds since the last camera drag / pinch
+    float camResetT = 0;             // > 0 while a double-tap reset is easing pitch and zoom back
+    float camCineBlend = 0;          // 1 -> 0: glide from the last cinematic shot back to the gameplay camera
+    vec3 cineLastEye, cineLastLook;
+    CameraRigOut camRig;             // last rig result (environment, tests, smoothing state)
+    vec3 camRigFocusPrev;
+    // horizon relief (1.6.1): built once on a background thread after the world plan, kept on the CPU so it can
+    // be re-uploaded after a GL context loss
+    std::shared_ptr<Mesh> farTerrain;
+    std::shared_ptr<MeshBuilder> farTerrainData;
+    std::future<std::shared_ptr<MeshBuilder>> farTerrainBuild;
+    float shake = 0;
+    float cinematicT = -1;
+    vec3 cineFrom, cineTo, cineLook;
+    std::string cinematicText;
+    CinematicState cine;                       // multi-shot cinematics (prologue, story scenes)
+    std::vector<Entity> cineHerd;              // 3.9.5 animals spawned for a shot, removed with it
+    float cinematicRift(float* flash) const;
+    bool pendingPrologue = false;
+    void startShots(std::vector<CineShot> shots, const std::string& id);
+    void startPrologue();
+    // 2.2.0 personal map pins (up to 6), dust teleport (the hero crumbles to golden dust rising to the sky, then re-forms), quick bag
+    std::vector<vec2> mapPins;
+    struct TeleFx { bool active = false; int phase = 0; float t = 0; vec3 dest; std::string msg; } tele;
+    void startDustTeleport(vec3 dest, const std::string& msg);
+    void updateTeleportFx(float dt);
+    void drawPinsHud();
+    int bagCat = 0;
+    // 2.1.0 interactive tutorial after the prologue: each step is validated by the real action (walk, turn the camera, run, jump, roll, attack, talk)
+    int tutStep = -1; float tutT = 0, tutOkT = 0, tutAcc = 0; vec3 tutStart;
+    void startTutorial();
+    void updateTutorial(float dt);
+    void drawTutorial(float dt);
+    // 2.1.0 loading: the world is held behind a black screen with a progress bar until the scenery around the hero is in
+    bool loadGate = false; float loadGateT = 0, loadGateReady = 0, loadGateFade = 0, loadGateHold = 0.6f; int loadTip = 0;   // loadGateHold: shortest time on screen (no flash)
+    void drawLoadOverlay(float W, float H, float progress, float alpha, float t);
+    void beginShot();
+    void updateCinematicShots(float dt);
+    void endCinematicShots(bool skipped);
+    bool cinematicCamera(vec3& eye, vec3& look, float& fov) const;
+    void applyCinematicEnvironment();
+    void drawCinematicShots();
+    void unlockLore(const std::string& id, bool announce = true);
+    // hero wheel (Heroes.cpp, 1.8.0)
+    std::set<std::string> unlockedHeroes;      // saved as "heroes"
+    int activeHero = 0;                        // index in heroes(), saved as "hero <id>"
+    bool flying = false, usedDoubleJump = false, meteorPending = false;
+    float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
+    float geyserT = 0, geyserCD = 0; int geyserLaunches = 0, geyserLast = -1;   // 2.8.0 launch geysers (no air braking while launched)
+    void updateGeysers(float dt);
+    // 3.2.0 the treasure hunt (TreasureHunt.cpp): key items, bags and slots, star shards, totems and orbs
+    int invCap = 40, shards = 0, phoenixDay = -1, compassTarget = -1;
+    bool gliding = false;
+    struct ItemGetFx { std::string icon, title, name, desc; vec3 color{1, 1, 1}; bool big = false; float t = 0; };
+    std::deque<ItemGetFx> itemGets;
+    struct TreasureBonus { float hp = 0, stamina = 0, mp = 0, atk = 0; };
+    bool hasPower(int kp) const;
+    float gravityScale() const;
+    int bagUsed() const;
+    int bagCapacity() const;
+    int orbsTaken() const;
+    int totemsTaken() const;
+    int treasureTotal(int type) const;
+    TreasureBonus treasureBonus() const;
+    void itemGet(const std::string& icon, const std::string& title, const std::string& name, const std::string& desc, vec3 color, bool big);
+    void collectTreasure(const NodeSpawn& ns);
+    void updateTreasures(float dt);
+    void treasurePhysics(Character& c, float dt);
+    bool tryPhoenix(Character& c);
+    void drawTreasureHud();
+    std::shared_ptr<Mesh> lootBeamMesh;
+    int shopSell = -1;   // 3.2.0 the item selected for sale
+    double bagFullT = -100;
+    float heroCD[3] = {0, 0, 0};
+    float heroAura = 0;
+    // 1.9.2 night hunters director
+    std::vector<Entity> nightHunters;
+    float hunterT = 30.f, hunterSafeT = 0;
+    int huntsSurvived = 0;
+    void updateNightHunters(float dt);
+    bool playerInSafeZone();
+    // 1.11.0 vehicles
+    struct VehicleAsset { SkinnedModelData data; std::shared_ptr<Mesh> mesh; Texture tex; bool tried = false, ok = false; };
+    std::map<std::string, VehicleAsset> vehicleAssets;
+    std::vector<VehicleState> vehicles;
+    std::vector<Entity> vehicleEnts;
+    int driving = -1;
+    std::set<std::string> vehiclesUnlocked;   // 3.4.0 the vehicles are earned in the story (the horse is yours from the start)
+    bool vehicleUnlocked(int i) const;
+    void refreshVehicleUnlocks(bool announce);
+    void updateAirship(float dt, vec3 want, float mag);
+    void renderAirship(VehicleState& v);
+    std::shared_ptr<Mesh> airshipMesh, airshipProp;
+    VehicleAsset* vehicleAsset(const std::string& model);
+    void initVehicles();
+    void spawnVehicleEntities();
+    vec3 vehicleLocal(const VehicleState& v, vec3 p) const;
+    void enterVehicle(int i);
+    void exitVehicle();
+    // 2.2.1 call a vehicle to your side (garage button under the minimap), speedometer while driving
+    bool garageOpen = false;
+    bool torchOn = false; float torchK = 0;   // 3.10.3 the torch held in the left hand (lights the area around the hero)
+    std::shared_ptr<Mesh> torchMesh;
+    void setTorch(bool on);
+    void summonVehicle(int i);
+    void summonHorse();
+    void drawSpeedometer();
+    void updateDriving(float dt, vec3 want, float mag);
+    void renderVehicles();
+    // 1.11.1 goals
+    std::vector<RaceTrack> races;
+    RaceState race;
+    std::map<std::string, float> raceBest;
+    std::string raceResult;
+    float raceResultT = 0, challengeT = 0;
+    void buildRaces();
+    void updateRaces(float dt);
+    void raceFx(float dt, std::vector<std::pair<float, PointLight>>& lights);
+    void drawRaceHud();
+    int challengeProgress(const ChallengeDef& c) const;
+    void updateChallenges(float dt);
+    void drawObjectives(Rect c);
+    // 1.13.0 co-op (Coop.cpp)
+    CoopState coop;
+    float forestHaze = 0, morningMist = 0;   // 1.13.0 atmosphere (Game.cpp updateEnvironment)
+    static constexpr uint16_t COOP_PORT = 47777;
+    bool coopHost();
+    bool coopJoin(const agr::NetAddr& host);
+    void coopLeave(bool notifyPeer = true);
+    void updateCoop(float dt);
+    void coopSend(float dt);
+    void coopReceive();
+    void coopHandle(const uint8_t* d, int n, const agr::NetAddr& from);
+    void coopEvent(uint8_t type, const agr::ByteWriter& w);
+    void coopHandleEvent(uint8_t type, agr::ByteReader& r);
+    void coopWriteHero(agr::ByteWriter& w);
+    void coopApplyPartner(const CoopHeroState& s);
+    std::string coopLookString() const;
+    void coopBuildPartnerLook(Character& c, const std::string& look);
+    Entity coopEnsurePartner();
+    void updateNetPuppet(Entity e, Character& c, NetPuppet& np, float dt);
+    bool coopIsRemoteEnemy(Entity e) const;   // guest: an enemy simulated by the host
+    void coopOnLocalHit(Entity dst, float dmg, Element elem, vec3 dir, float poise);    // guest -> host
+    void coopOnPartnerDamaged(float dmg, Element elem, vec3 dir);                       // host -> guest
+    void coopOnEnemyKilled(Entity e);                                                   // host -> guest
+    Entity coopNearestPlayer(vec3 p, float* dist = nullptr);                            // host: the hero or the partner
+    void coopSendBase();
+    void coopApplyPeerBase();
+    void drawCoopMenu(Rect c);
+    void drawCoopHud();
+    void buildHeroLook(Character& c, int heroIdx, const std::string* eq, const std::string& dyeId);
+    // 1.12.0 story chapters, Alaric's reveal, the ending choice (Story.cpp)
+    std::string pendingChapter; float pendingChapterT = 0;
+    bool endingChoice = false, replayingChapter = false; float endingChoiceT = 0;
+    std::vector<CineShot> chapterShots(const std::string& id);
+    void queueChapter(const std::string& id);
+    void startChapter(const std::string& id);
+    void onChapterEnd(const std::string& id);
+    void chooseEnding(bool seal);
+    void updateStory(float dt);
+    Rect endingChoiceRect(int i) const;
+    void drawEndingChoice(float dt);
+    float drawStoryPanel(Rect r);
+    // 1.9.2 domain: found it, build, recruit, raise livestock
+    PlayerBase base;
+    std::vector<Entity> soldierEnts, livestockEnts;
+    bool buildMode = false, buildOk = false;
+    int buildDef = -1, buildVariant = 0;
+    float buildRot = 0;
+    vec2 buildPos{0, 0};
+    std::string buildWhy;
+    std::shared_ptr<Mesh> buildGhost;
+    std::vector<std::pair<int, mat4>> buildGhostModels;
+    vec3 buildGhostKey{-1, -1, -1};
+    bool canFoundBase(std::string& why);
+    void foundBase();
+    void applyBaseToWorld();
+    void clearBase();
+    int baseCount(const std::string& id) const;
+    int baseHousing() const;
+    int baseGuardCap() const;
+    bool baseCanAfford(const BaseBuildDef& d) const;
+    void startBuilding(int def);
+    void updateBuildMode();
+    bool placeBuilding();
+    void updateBase(float dt);
+    void updateSoldier(Entity e, Character& c, SoldierBrain& sb, float dt);
+    void refreshBaseNpcs();
+    void baseNewDay();
+    void drawBaseMenu(Rect c);
+    void drawBuildHud();
+    void renderBuildGhost();
+    void saveBase(std::ostream& o) const;
+    // 3.0.0 army, castle, the domain's dungeon, the Iron Legion's fortresses
+    int armySize() const { return base.soldiers + base.archers + base.knights; }
+    float baseRadius() const;      // levelled ground of the domain (grows with its level)
+    float baseBuildRadius() const; // buildings must fit inside
+    bool upgradeBase(std::string& why, bool doIt);
+    std::map<int, std::vector<Entity>> fortGarrison, fortGuards;   // POI index -> spawned enemies / allied guards
+    int fortTributeDay = -1;
+    bool fortConquered(const std::string& id) const { return storyFlags.count("conq_" + id) > 0; }
+    int conqueredForts() const;
+    void updateFortresses(float dt);
+    void onWarlordKilled(vec3 pos);
+    Entity spawnArmyUnit(int unit, vec3 pos, int slot, int fort);
+    bool loadBaseLine(const std::string& k, std::istream& l, PlayerBase* into = nullptr);
+    float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
+    float birdFlushCD = 0;
+    void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires
+    const HeroDef& hero() const;
+    bool heroUnlocked(int i) const;
+    void unlockHero(const std::string& id, bool announce = true);
+    bool switchHero(int i);
+    bool heroHasPowers() const;
+    void castHeroPower(int slot);
+    // 3.10.6 ultimates: a gauge filled by the hero's blows; each hero has one huge power
+    float ultCharge = 0, ultT = -1, ultStepT = 0, ultSlowT = 0, ultBannerT = 0;
+    int ultKind = -1, ultStep = 0;
+    vec3 ultCenter;
+    std::vector<Entity> ultTargets;
+    std::string ultName;
+    bool castUltimate();
+    void updateUltimate(float dt);
+    void updateHeroAbilities(float dt);
+    // 3.0.1 shader effects of the powers and spells (Vfx.cpp): magic circles, shockwaves, beams, pillars,
+    // vortices, explosion / shield / orb spheres, blade slashes, burning ground; each one lights its surroundings
+    struct Vfx {
+        int shape = 0, style = 0;
+        vec3 pos, dir{0, 1, 0};
+        float radius = 1, length = 1, age = 0, life = 1, intensity = 1.35f, seed = 0, grow = 0, yaw = 0, tilt = 0;
+        vec3 col{1, 1, 1}, col2{1, 1, 1};
+        Entity follow = NullEntity; vec3 followOff{0, 0, 0};
+        float light = 1.f;   // point light strength (0 = none)
+    };
+    std::vector<Vfx> vfxList;
+    Vfx& vfxAdd(int shape, int style, vec3 pos, vec3 col, vec3 col2, float radius, float life);
+    void vfxShockwave(vec3 p, vec3 col, float radius, float life = 0.7f);
+    void vfxCircle(vec3 p, vec3 col, float radius, float life = 1.2f, Entity follow = NullEntity, vec3 dir = vec3(0, 1, 0));
+    void vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life = 0.6f, float light = 1.2f);
+    void vfxPillar(vec3 p, vec3 col, float radius, float height, float life = 1.f);
+    void vfxVortex(vec3 p, vec3 col, float radius, float height, float life = 1.f, Entity follow = NullEntity);
+    void vfxSphere(vec3 p, vec3 col, vec3 col2, float radius, float life, int style, float grow = 0, Entity follow = NullEntity);
+    void vfxSlash(vec3 p, float yaw, float tilt, vec3 col, float radius, float life = 0.32f);
+    void vfxGround(vec3 p, vec3 col, vec3 col2, float radius, float life);
+    void vfxRays(vec3 p, vec3 col, float radius, float life);
+    void updateVfx(float dt);
+    void renderVfx(std::vector<std::pair<float, PointLight>>& lights);
+    bool heroJump();
+    void heroFlightPhysics(Character& c, float dt);
+    void drawHeroWheel();
+    // mods (Mods.cpp)
+    std::vector<ModInfo> mods;
+    void scanMods();
+    void saveModList();
+    void refreshLiveModFlags();   // 3.9.7 settings that follow the Mods switches at once (no restart): game.all_heroes
+    void applyMods(bool force = false);   // force: tests only (patches are meant to be applied once per launch)
+    void pollModImport();
+    float dofFocus = 20, dofAmount = 0;
+
+    // ---- environment -----------------------------------------------------------------------------
+    Environment env;
+    enum Weather { W_CLEAR = 0, W_CLOUDY, W_RAIN, W_STORM, W_SNOW, W_FOG, W_ASHFALL, W_SANDSTORM, W_COUNT };
+    int weather = W_CLEAR, weatherNext = W_CLEAR;
+    float weatherBlend = 1, weatherTimer = 120, rainAmt = 0, snowAmt = 0, fogAmt = 0, stormAmt = 0, ashAmt = 0, sandAmt = 0, lightningT = 0, lightningFlash = 0;
+    float thunderDelay = -1.f, thunderVol = 0.5f, thunderPitch = 1.f;   // 3.9.3 thunder follows the bolt by its distance
+    vec3 regionTint;  // smoothed per-region grading blend
+    float regionW[R_COUNT] = {1, 0, 0, 0, 0, 0};
+
+    // ---- dungeon ---------------------------------------------------------------------------------
+    DungeonState dungeon;
+    std::string dungeonPrompt;
+    int nearDungeon = -1;
+    float transitionT = -1;
+    std::function<void()> onTransition;
+
+    // ---- shared meshes ---------------------------------------------------------------------------
+    std::map<std::string, std::shared_ptr<Mesh>> meshCache;
+    // Imported humanoid models (assets/models/<id>.lkm + <id>.jpg, made by tools/import_character.py).
+    // Looked up lazily by id: "hero", an enemy id ("bandit", "skeleton"...), "npc_<id>", "villager_m/f".
+    // Absent files are cached as null, so the procedural look is used without retrying.
+    struct ImportedModel { SkinnedModelData data; std::shared_ptr<Mesh> mesh, lodMesh; Texture tex; Skeleton skel; };
+    std::unordered_map<std::string, std::unique_ptr<ImportedModel>> importedModels;
+    ImportedModel* importedModel(const std::string& id, Arch arch = Arch::Humanoid);
+    bool applyImportedModel(Visual& v, const std::string& id, Arch arch = Arch::Humanoid);
+    bool useHeroModel() { return settings.importedHero && importedModel("hero") != nullptr; }
+    std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[(int)NodeType::NodeTypeCount];
+    std::map<uint32_t, Entity> nodeEntities;   // uid -> entity
+    std::set<uint32_t> spawnedChunks;          // chunk hash with spawned creatures
+    std::map<uint32_t, std::vector<Entity>> chunkSpawns;
+    std::vector<int> villageNpcsSpawned;
+
+    // ---- audio ids --------------------------------------------------------------------------------
+    std::map<std::string, SoundId> sfx;
+    void play(const std::string& s, float vol = 1, float pitch = 1);
+    std::string variant(const std::string& base);
+    // 2.3.6 random world events (Events.cpp)
+    WorldEvent worldEvent; float eventTimer = 150.f; int eventsDone = 0;
+    // 2.4.0 digging and bombs (Dig.cpp)
+    bool digMode = false; int digsDone = 0;
+    // 2.6.0 per-game options (chosen on the new-game screen, saved with the game) and several games side by side
+    struct GameOpts { int difficulty = 1; bool events = true; bool prologue = true; };
+    GameOpts gameOpts, newOpts;
+    int newSlot = 0;
+    static constexpr int GAME_SLOTS = 6;
+    int latestSlot() const;                       // the most recently saved game (-1 none)
+    float difficultyEnemyHp() const { static const float k[4] = {0.7f, 1.f, 1.3f, 1.65f}; return k[std::clamp(gameOpts.difficulty, 0, 3)] * gameTuning().enemyHp; }
+    float difficultyEnemyAtk() const { static const float k[4] = {0.6f, 1.f, 1.35f, 1.75f}; return k[std::clamp(gameOpts.difficulty, 0, 3)] * gameTuning().enemyAtk; }
+    void drawNewGameMenu();
+    struct Bomb { vec3 pos, vel; float fuse = 2.2f; int bounces = 0; };
+    std::vector<Bomb> bombs;
+    void playerDig();
+    // 2.4.1 building interiors (Interiors.cpp)
+    int nearDoor = -1;
+    bool enterableKind(int kind) const;
+    vec3 doorOf(const Structure& s) const;
+    void buildInterior(int structIdx);
+    void enterInterior(int structIdx);
+    bool updateInterior(float dt);   // true when it handled the frame (inside a building)
+    void findDoor();
+    void throwBomb();
+    void updateBombs(float dt);
+    void explodeAt(vec3 p, float radius, float depth, float dmg, Entity src);
+    bool startWorldEvent(int kind);
+    void updateWorldEvents(float dt);
+    void drawWorldEventHud();
+    void play3D(const std::string& s, vec3 p, float vol = 1, float pitch = 1, float range = 32);
+    float footstepT = 0;
+
+    // ============================================================== methods (split across files)
+    // Game.cpp
+    void newGame();
+    void startPlaying();
+    void updatePlaying(float dt);
+    void renderWorld(float dt);
+    void renderCharacter(Entity e, Character& c);
+    void updateCamera(float dt);
+    bool cameraBlocked(vec3 p) const;   // solid scenery for the camera (buildings, walls)
+    void updateGrassPushers();          // env.pushers: grass bent by the hero, his trail and nearby characters
+    struct GrassMark { vec3 p; float t; };
+    std::deque<GrassMark> grassTrail;
+    vec3 grassTrailLast;
+    void updateEnvironment(float dt);
+    void updateAmbientFx(float dt);
+    void updateAudioDirector(float dt);
+    void loadAssets();
+    void buildSharedMeshes();
+    float groundAt(float x, float z) const;
+    float waterAt(float x, float z, bool* lava = nullptr, bool* frozen = nullptr) const;
+    bool collideStatic(vec3& p, float r, float feet, float* step = nullptr) const;
+    void notify(const std::string& text, vec3 color = vec3(1, 0.92f, 0.7f), const std::string& icon = "");
+    void floatText(vec3 p, const std::string& t, vec3 col, float size = 22);
+    void haptic(int ms, int amp);
+    void addShake(float s) { if (settings.cameraShake) shake = std::max(shake, s); }
+    void startCinematic(vec3 from, vec3 to, vec3 look, float dur, const std::string& text);
+    void fadeTransition(std::function<void()> fn);
+    void requestScreenshot(const std::string& path) { pendingScreenshot = path; }
+
+    // Spawning (Spawn.cpp)
+    Entity spawnPlayer(vec3 pos);
+    Entity spawnEnemy(int def, vec3 pos, bool elite = false, uint32_t uid = 0);
+    Entity spawnBoss(int bossIdx, vec3 pos);
+    Entity spawnNpc(int def, vec3 pos, int village);
+    Entity spawnVillager(vec3 pos, int village, uint32_t seed);
+    Entity spawnAnimal(int kind, vec3 pos);
+    Entity spawnMount(int def, vec3 pos);
+    Entity spawnPickup(const std::string& item, int count, Rarity r, vec3 pos);
+    void spawnNode(const NodeSpawn& n);
+    void updateSpawning(float dt);
+    void despawnFar();
+    void setupVisualHumanoid(Visual& v, const HumanoidLook& L, WeaponType wt, WeaponType ot, float scale);
+    void setupVisualCreature(Visual& v, Arch a, const CreatureLook& L, float scale);
+    std::shared_ptr<Mesh> cachedMesh(const std::string& key, const std::function<void(MeshBuilder&)>& build);
+    std::shared_ptr<Mesh> weaponMesh(WeaponType t, int tier, vec3 accent, float* tip = nullptr);
+
+    // Player.cpp
+    void updatePlayer(float dt);
+    void playerAttack(bool heavy, bool charged);
+    void playerDodge();
+    bool playerJump(bool buffered = false);   // false: not possible now (kept in the jump buffer)
+    void playerInteract();
+    void castSpell(int slot);
+    void usePotion();
+    void toggleMount();
+    void recomputeStats();
+    void rebuildPlayerVisual();
+    void gainXp(int amount);
+    void findInteractTarget();
+    void updateFishing(float dt);
+    Character& pc();
+
+    // Combat.cpp
+    void updateCharacters(float dt);
+    void updateAttack(Entity e, Character& c, float dt);
+    void startAttack(Entity e, Character& c, const Clip* clip, float mult, Element elem, float speed = 1.f);
+    float dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 dir, float poiseDmg, bool canCrit = true, bool isSpell = false);
+    void areaDamage(Entity src, vec3 center, float radius, float amount, Element elem, Team team, float poise);
+    void killCharacter(Entity e, Character& c, Entity killer);
+    void dropLoot(Character& c, vec3 pos);
+    void updateProjectiles(float dt);
+    void fireProjectile(Entity owner, ProjKind k, vec3 from, vec3 dir, float speed, float dmg, Element e, Team team, Entity homing = NullEntity);
+    void updateStatus(Entity e, Character& c, float dt);
+    void applyStatus(Character& c, Element e, float power);
+    void updateTrails(Character& c, float dt);
+    void physicsStep(Entity e, Character& c, float dt);
+    Entity findTarget(vec3 pos, float yaw, float range, Team team, float cone = 0.6f);
+    void hitFx(vec3 p, vec3 dir, Element e, float scale, bool metal);
+
+    // AI.cpp
+    void updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt);
+    void updateBossAI(Entity e, Character& c, AIBrain& ai, float dt);
+    void updateNpc(Entity e, Character& c, NpcBrain& nb, float dt);
+    void updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt);
+    void executeEnemyAttack(Entity e, Character& c, AIBrain& ai, const AttackDef& a);
+    vec2 steer(Character& c, vec3 target, float dt);
+    bool canSee(const Character& a, const Character& b, float range, float fov);
+
+    // Rpg.cpp
+    bool addItem(const std::string& id, int count = 1, Rarity r = Rarity::Count, bool notifyUser = true);
+    int countItem(const std::string& id) const;
+    bool removeItem(const std::string& id, int count);
+    void equip(int invIndex);
+    void unequip(int slot);
+    void useItem(int invIndex);
+    void sellItem(int invIndex);
+    bool buyItem(const std::string& id, int price);
+    bool canCraft(const Recipe& r) const;
+    bool craft(int recipeIdx);
+    bool upgradeItem(int slot);
+    void startQuest(const std::string& id);
+    void advanceQuests(StepKind kind, const std::string& target, int amount = 1);
+    void completeQuest(QuestState& q);
+    bool questActive(const std::string& id) const;
+    QuestState* questState(const std::string& id);
+    void checkQuestGivers();
+    void openDialog(Entity npcEnt);
+    void spawnResident();            // 2.6.0 the inhabitant of the building the player entered
+    std::map<uint32_t, int> mealDay; // 2.6.0 house -> day of the last shared meal
+    void dialogAction(const std::string& action);
+    void discover(const std::string& poi);
+    bool unlockSkill(int idx);
+    void learnSpell(const std::string& id);
+    void addReputation(int faction, int amount);
+    int itemPrice(const std::string& id, bool selling) const;
+    std::string questObjectiveText() const;
+    vec3 questMarker(bool* has) const;
+    void restAtInn();
+    bool saveGame(int slot);
+    bool loadGame(int slot);
+    std::string saveSummary(int slot) const;
+    void saveSettings();
+    void reportProfile();
+    bool settingsFileFound = false;
+    void updateDynamicResolution(float dtRaw);
+    float drsAcc = 0, drsStable = 0, drsWaitUp = 8; int drsFrames = 0; bool drsJustRaised = false;
+    void loadSettings();
+    void applyGraphicsProfile(QualityProfile p);
+
+    // Dungeon.cpp
+    void enterDungeon(int idx);
+    void exitDungeon();
+    void buildDungeon(int idx);
+    void updateDungeon(float dt);
+    void renderDungeon();
+    bool dungeonFloor(float x, float z, float& y) const;
+
+    // Hud.cpp / Menus.cpp
+    void updateTouchControls();
+    void drawHud(float dt);
+    void drawMinimap(Rect r);
+    void drawDialog();
+    void drawMenus(float dt);
+    void drawTitle(float dt);
+    void drawSplash(float dt);
+    void drawCredits(float dt);
+    void drawNotifications(float dt);
+    void drawLayoutEditor();
+    void renderItemIcons();
+    void renderPortrait(int npc);
+    bool itemIcon(const std::string& id, Rect r, float alpha = 1.f);
+    vec2 worldToScreen(vec3 p, bool* onScreen = nullptr) const;
+    std::vector<int> touchCaptured;   // finger ids owned by controls
+    int joyFinger = -1, camFinger = -1;
+    float lastCamTapT = -10.f; vec2 lastCamTapPos;
+    struct CamDragAxis { vec2 acc; int axis = -1; };   // per finger: movement before the drag starts (axis >= 0: started)
+    std::map<int, CamDragAxis> camDragAxis;
+    vec2 joyOrigin, joyPos;
+    float pinchDist = 0;
+    std::map<int, float> btnHold;
+
+    // AutoPlay.cpp (desktop automated play-test)
+    bool autoplay = false;
+    std::string autoplayScenario;
+    float autoplayT = 0;
+    int autoplayStep = 0;
+    void updateAutoplay(float dt);
+};
+
+extern Game* gGame;
+float skillBonus(const std::set<std::string>& skills, float SkillNode::*field);
+float skillBonusPublic(const std::set<std::string>& skills, int which);  // 0 bow, 1 dagger, 2 beasts
+
+}  // namespace lk

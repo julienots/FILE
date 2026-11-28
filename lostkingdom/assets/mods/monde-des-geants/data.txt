@@ -1,0 +1,5 @@
+# Monde des géants (mod livré avec LOST KINGDOM 2.7.0)
+game.enemy_scale = 2
+game.enemy_hp = 2.2
+game.enemy_atk = 1.4
+game.xp = 2

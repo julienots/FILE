@@ -1,0 +1,4 @@
+name = Méga-bombes
+author = Superessence Studio
+version = 1.0
+description = Bombes géantes et pelle de géant : cratères de 8 m, trous profonds.

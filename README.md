@@ -1,5 +1,7 @@
 # 🌙 NOCTÉA — by Superessence Studio
 
+> **Aussi dans ce dépôt : LOST KINGDOM** — action-RPG en monde ouvert (C++ / OpenGL ES 3, AGR Engine) par Superessence Studio. Documentation et état honnête des fonctionnalités : [`lostkingdom/README.md`](lostkingdom/README.md) · APK : [`release/LOST-KINGDOM-SUPERESSENCE.apk`](release/LOST-KINGDOM-SUPERESSENCE.apk)
+
 **Retrouvez le calme. Retrouvez le sommeil.**
 
 NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) de méditation guidée, de respiration, d'histoires du soir et d'ambiances sonores, éditée par **Superessence Studio**.

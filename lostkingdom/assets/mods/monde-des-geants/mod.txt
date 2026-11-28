@@ -1,0 +1,4 @@
+name = Monde des géants
+author = Superessence Studio
+version = 1.0
+description = Tous les ennemis font deux fois leur taille et deux fois plus de vie, mais rapportent deux fois plus d'expérience.

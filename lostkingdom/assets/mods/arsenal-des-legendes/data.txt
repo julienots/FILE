@@ -1,0 +1,221 @@
+# Arsenal des légendes (mod livré avec LOST KINGDOM 3.2.0, format 2.0)
+# 24 armes nouvelles. Chacune tombe d'une créature précise (activez aussi le Bestiaire légendaire pour toutes les obtenir).
+
+item.add = lame_cendre | sword_ember | Lame de cendre | Elle fume encore quand on la sort du fourreau.
+item.lame_cendre.rarity = epique
+item.lame_cendre.atk = 32
+item.lame_cendre.crit = 0.09
+item.lame_cendre.elem_dmg = 12
+item.lame_cendre.color = #ff7030
+item.lame_cendre.value = 1280
+enemy.ember_elemental.loot = lame_cendre | 0.027
+
+item.add = croc_spectral | dagger_shadow | Croc spectral | Une dague taillée dans un rayon de lune.
+item.croc_spectral.rarity = legendaire
+item.croc_spectral.atk = 30
+item.croc_spectral.crit = 0.24
+item.croc_spectral.elem_dmg = 14
+item.croc_spectral.color = #8aa0ff
+item.croc_spectral.value = 1200
+enemy.specter.loot = croc_spectral | 0.020
+
+item.add = hache_glacier | axe_nordic | Hache des glaciers | Le froid mord avant la lame.
+item.hache_glacier.rarity = epique
+item.hache_glacier.atk = 34
+item.hache_glacier.crit = 0.08
+item.hache_glacier.elem_dmg = 12
+item.hache_glacier.color = #e8f4ff
+item.hache_glacier.value = 1360
+enemy.frost_troll.loot = hache_glacier | 0.027
+
+item.add = marteau_mousse | hammer_iron | Marteau moussu | Lourd, humide, et terriblement efficace.
+item.marteau_mousse.rarity = rare
+item.marteau_mousse.atk = 30
+item.marteau_mousse.crit = 0.05
+item.marteau_mousse.elem_dmg = 0
+item.marteau_mousse.color = #5a8a3a
+item.marteau_mousse.value = 1200
+enemy.blight_treant.loot = marteau_mousse | 0.033
+
+item.add = arc_cristal | bow_elder | Arc de cristal | Ses flèches sifflent une note pure.
+item.arc_cristal.rarity = legendaire
+item.arc_cristal.atk = 34
+item.arc_cristal.crit = 0.12
+item.arc_cristal.elem_dmg = 14
+item.arc_cristal.color = #a0f0ff
+item.arc_cristal.value = 1360
+enemy.giant_spider.loot = arc_cristal | 0.020
+
+item.add = dague_sang | dagger_viper | Dague de la veuve | Une goutte suffit.
+item.dague_sang.rarity = legendaire
+item.dague_sang.atk = 32
+item.dague_sang.crit = 0.26
+item.dague_sang.elem_dmg = 16
+item.dague_sang.color = #c01030
+item.dague_sang.value = 1280
+enemy.forest_spider.loot = dague_sang | 0.020
+
+item.add = poing_ambre | hammer_titan | Poing d'ambre | Un scarabée dort dans la tête du marteau.
+item.poing_ambre.rarity = legendaire
+item.poing_ambre.atk = 54
+item.poing_ambre.crit = 0.06
+item.poing_ambre.elem_dmg = 16
+item.poing_ambre.color = #ffb030
+item.poing_ambre.value = 2160
+enemy.sandstone_golem.loot = poing_ambre | 0.017
+
+item.add = lame_obsidienne | sword_steel | Lame d'obsidienne | Coupante comme du verre, solide comme la nuit.
+item.lame_obsidienne.rarity = epique
+item.lame_obsidienne.atk = 36
+item.lame_obsidienne.crit = 0.1
+item.lame_obsidienne.elem_dmg = 0
+item.lame_obsidienne.color = #201820
+item.lame_obsidienne.value = 1440
+enemy.ash_knight.loot = lame_obsidienne | 0.027
+
+item.add = sceptre_aurore | staff_aurora | Sceptre d'aurore vive | Il projette des aurores sur les murs.
+item.sceptre_aurore.rarity = mythique
+item.sceptre_aurore.atk = 44
+item.sceptre_aurore.crit = 0.1
+item.sceptre_aurore.elem_dmg = 24
+item.sceptre_aurore.color = #ff80e0
+item.sceptre_aurore.value = 1760
+enemy.crystal_golem.loot = sceptre_aurore | 0.017
+
+item.add = epee_fantome | longsword_fallen | Épée du chevalier fantôme | Elle traverse les boucliers comme de la brume.
+item.epee_fantome.rarity = mythique
+item.epee_fantome.atk = 52
+item.epee_fantome.crit = 0.11
+item.epee_fantome.elem_dmg = 18
+item.epee_fantome.color = #a0b0ff
+item.epee_fantome.value = 2080
+enemy.dark_knight.loot = epee_fantome | 0.017
+
+item.add = lance_soleil | spear_crown | Lance du Champion | Elle brille même à minuit.
+item.lance_soleil.rarity = legendaire
+item.lance_soleil.atk = 44
+item.lance_soleil.crit = 0.1
+item.lance_soleil.elem_dmg = 16
+item.lance_soleil.color = #ffd060
+item.lance_soleil.value = 1760
+enemy.sun_guard.loot = lance_soleil | 0.020
+
+item.add = couronne_gobeline | dagger_iron | Couteau du Seigneur gobelin | Rouillé, ébréché, mais il porte bonheur.
+item.couronne_gobeline.rarity = rare
+item.couronne_gobeline.atk = 18
+item.couronne_gobeline.crit = 0.18
+item.couronne_gobeline.elem_dmg = 0
+item.couronne_gobeline.color = #4a8a2a
+item.couronne_gobeline.value = 720
+enemy.goblin.loot = couronne_gobeline | 0.067
+
+item.add = baton_ombre | staff_ember | Bâton des ombres | Les fétiches qui y pendent murmurent.
+item.baton_ombre.rarity = epique
+item.baton_ombre.atk = 32
+item.baton_ombre.crit = 0.08
+item.baton_ombre.elem_dmg = 14
+item.baton_ombre.color = #6030a0
+item.baton_ombre.value = 1280
+enemy.goblin_shaman.loot = baton_ombre | 0.027
+
+item.add = massue_lave | hammer_titan | Massue de lave | Elle laisse des traces de roche fondue.
+item.massue_lave.rarity = legendaire
+item.massue_lave.atk = 56
+item.massue_lave.crit = 0.05
+item.massue_lave.elem_dmg = 18
+item.massue_lave.color = #ff4010
+item.massue_lave.value = 2240
+enemy.ember_elemental.loot = massue_lave | 0.020
+
+item.add = sceptre_couronne | staff_abyss | Sceptre du roi squelette | Il commande encore à des armées endormies.
+item.sceptre_couronne.rarity = mythique
+item.sceptre_couronne.atk = 48
+item.sceptre_couronne.crit = 0.1
+item.sceptre_couronne.elem_dmg = 22
+item.sceptre_couronne.color = #ffd870
+item.sceptre_couronne.value = 1920
+enemy.skeleton.loot = sceptre_couronne | 0.017
+
+item.add = fouet_reine | dagger_tide | Ruban de la reine momifiée | Des bandelettes d'or tressées en lame.
+item.fouet_reine.rarity = legendaire
+item.fouet_reine.atk = 34
+item.fouet_reine.crit = 0.22
+item.fouet_reine.elem_dmg = 16
+item.fouet_reine.color = #d8c088
+item.fouet_reine.value = 1360
+enemy.mummy.loot = fouet_reine | 0.020
+
+item.add = lame_salamandre | scimitar_dune | Cimeterre de la salamandre | Il ondule comme une flamme.
+item.lame_salamandre.rarity = epique
+item.lame_salamandre.atk = 38
+item.lame_salamandre.crit = 0.1
+item.lame_salamandre.elem_dmg = 14
+item.lame_salamandre.color = #ff9020
+item.lame_salamandre.value = 1520
+enemy.salamander.loot = lame_salamandre | 0.027
+
+item.add = dard_empereur | spear_trident | Dard de l'empereur | Le dard du Scorpion empereur, monté sur une hampe.
+item.dard_empereur.rarity = legendaire
+item.dard_empereur.atk = 46
+item.dard_empereur.crit = 0.14
+item.dard_empereur.elem_dmg = 18
+item.dard_empereur.color = #3a2010
+item.dard_empereur.value = 1840
+enemy.sand_scorpion.loot = dard_empereur | 0.020
+
+item.add = pince_titan | axe_steel | Pince du crabe titan | Il faut deux mains. Et du courage.
+item.pince_titan.rarity = epique
+item.pince_titan.atk = 40
+item.pince_titan.crit = 0.07
+item.pince_titan.elem_dmg = 0
+item.pince_titan.color = #e05030
+item.pince_titan.value = 1600
+enemy.sea_crab.loot = pince_titan | 0.027
+
+item.add = harpe_abysses | bow_coral | Arc des abysses | Sa corde chante comme une sirène.
+item.harpe_abysses.rarity = legendaire
+item.harpe_abysses.atk = 40
+item.harpe_abysses.crit = 0.12
+item.harpe_abysses.elem_dmg = 18
+item.harpe_abysses.color = #2040a0
+item.harpe_abysses.value = 1600
+enemy.siren.loot = harpe_abysses | 0.020
+
+item.add = aile_givre | sword_aurora | Aile de givre | Taillée dans une écaille de wyverne.
+item.aile_givre.rarity = legendaire
+item.aile_givre.atk = 46
+item.aile_givre.crit = 0.12
+item.aile_givre.elem_dmg = 18
+item.aile_givre.color = #a8e0ff
+item.aile_givre.value = 1840
+enemy.drakeling.loot = aile_givre | 0.020
+
+item.add = bois_aurore | bow_aurora | Bois d'aurore | Un arc fait d'un bois de cerf d'aurore.
+item.bois_aurore.rarity = mythique
+item.bois_aurore.atk = 48
+item.bois_aurore.crit = 0.13
+item.bois_aurore.elem_dmg = 24
+item.bois_aurore.color = #ffe0ff
+item.bois_aurore.value = 1920
+enemy.aurora_wraith.loot = bois_aurore | 0.017
+
+item.add = faux_cendre | axe_warlord | Faux du cavalier de cendre | Elle fauche la fumée et ce qu'elle cache.
+item.faux_cendre.rarity = mythique
+item.faux_cendre.atk = 56
+item.faux_cendre.crit = 0.1
+item.faux_cendre.elem_dmg = 20
+item.faux_cendre.color = #504040
+item.faux_cendre.value = 2240
+enemy.steppe_rider.loot = faux_cendre | 0.017
+
+item.add = massue_geant | hammer_giant | Massue du géant des cimes | Personne n'avait réussi à la soulever. Jusqu'à toi.
+item.massue_geant.rarity = ancestral
+item.massue_geant.atk = 72
+item.massue_geant.crit = 0.07
+item.massue_geant.elem_dmg = 24
+item.massue_geant.color = #8a8a9a
+item.massue_geant.value = 2880
+enemy.rock_troll.loot = massue_geant | 0.017
+
+# a gift to start with (after its item.add)
+game.start_item = couronne_gobeline | 1

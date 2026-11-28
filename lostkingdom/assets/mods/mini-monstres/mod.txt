@@ -1,0 +1,4 @@
+name = Mini-monstres
+author = Superessence Studio
+version = 1.0
+description = Les ennemis rétrécissent de moitié : petits, rapides à vaincre et franchement ridicules.

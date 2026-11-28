@@ -1,0 +1,2 @@
+# Nuit éternelle (mod livré avec LOST KINGDOM 2.7.0)
+game.hour = 23.5

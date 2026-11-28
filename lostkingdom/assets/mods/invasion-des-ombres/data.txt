@@ -1,0 +1,150 @@
+# Invasion des ombres (mod livré avec LOST KINGDOM 3.2.0, format 2.0)
+# La nuit, des versions d'ombre des créatures parcourent chaque région. Plus dures, mais riches.
+game.xp = 1.4
+game.gold = 1.6
+
+enemy.add = ombre_loup | wolf | Loup des ombres | Une ombre de loup, venue avec la nuit.
+enemy.ombre_loup.region = greenhaven
+enemy.ombre_loup.tint = #3a2a5a
+enemy.ombre_loup.scale = 1.2
+enemy.ombre_loup.spawn = 2
+enemy.ombre_loup.night = 1
+enemy.ombre_loup.loot = star_shard | 0.25
+enemy.ombre_loup.loot = elixir_titan | 0.05
+
+enemy.add = ombre_bandit | bandit | Bandit des ombres | Une ombre de bandit, venue avec la nuit.
+enemy.ombre_bandit.region = greenhaven
+enemy.ombre_bandit.tint = #3a2a5a
+enemy.ombre_bandit.scale = 1.2
+enemy.ombre_bandit.spawn = 2
+enemy.ombre_bandit.night = 1
+enemy.ombre_bandit.loot = star_shard | 0.25
+enemy.ombre_bandit.loot = elixir_titan | 0.05
+
+enemy.add = ombre_draugr | draugr | Draugr des ombres | Une ombre de draugr, venue avec la nuit.
+enemy.ombre_draugr.region = frostheim
+enemy.ombre_draugr.tint = #3a2a5a
+enemy.ombre_draugr.scale = 1.2
+enemy.ombre_draugr.spawn = 2
+enemy.ombre_draugr.night = 1
+enemy.ombre_draugr.loot = star_shard | 0.25
+enemy.ombre_draugr.loot = elixir_titan | 0.05
+
+enemy.add = ombre_troll | frost_troll | Troll des ombres | Une ombre de troll, venue avec la nuit.
+enemy.ombre_troll.region = frostheim
+enemy.ombre_troll.tint = #3a2a5a
+enemy.ombre_troll.scale = 1.2
+enemy.ombre_troll.spawn = 2
+enemy.ombre_troll.night = 1
+enemy.ombre_troll.loot = star_shard | 0.25
+enemy.ombre_troll.loot = elixir_titan | 0.05
+
+enemy.add = ombre_chevalier | ash_knight | Chevalier des ombres | Une ombre de chevalier, venue avec la nuit.
+enemy.ombre_chevalier.region = ashen
+enemy.ombre_chevalier.tint = #3a2a5a
+enemy.ombre_chevalier.scale = 1.2
+enemy.ombre_chevalier.spawn = 2
+enemy.ombre_chevalier.night = 1
+enemy.ombre_chevalier.loot = star_shard | 0.25
+enemy.ombre_chevalier.loot = elixir_titan | 0.05
+
+enemy.add = ombre_salamandre | salamander | Salamandre des ombres | Une ombre de salamandre, venue avec la nuit.
+enemy.ombre_salamandre.region = ashen
+enemy.ombre_salamandre.tint = #3a2a5a
+enemy.ombre_salamandre.scale = 1.2
+enemy.ombre_salamandre.spawn = 2
+enemy.ombre_salamandre.night = 1
+enemy.ombre_salamandre.loot = star_shard | 0.25
+enemy.ombre_salamandre.loot = elixir_titan | 0.05
+
+enemy.add = ombre_sylvain | blight_treant | Sylvain des ombres | Une ombre de sylvain, venue avec la nuit.
+enemy.ombre_sylvain.region = elderwood
+enemy.ombre_sylvain.tint = #3a2a5a
+enemy.ombre_sylvain.scale = 1.2
+enemy.ombre_sylvain.spawn = 2
+enemy.ombre_sylvain.night = 1
+enemy.ombre_sylvain.loot = star_shard | 0.25
+enemy.ombre_sylvain.loot = elixir_titan | 0.05
+
+enemy.add = ombre_cerf | spirit_stag | Cerf des ombres | Une ombre de cerf, venue avec la nuit.
+enemy.ombre_cerf.region = elderwood
+enemy.ombre_cerf.tint = #3a2a5a
+enemy.ombre_cerf.scale = 1.2
+enemy.ombre_cerf.spawn = 2
+enemy.ombre_cerf.night = 1
+enemy.ombre_cerf.loot = star_shard | 0.25
+enemy.ombre_cerf.loot = elixir_titan | 0.05
+
+enemy.add = ombre_spectre | specter | Spectre noir | Une ombre de spectre noir, venue avec la nuit.
+enemy.ombre_spectre.region = ombres
+enemy.ombre_spectre.tint = #3a2a5a
+enemy.ombre_spectre.scale = 1.2
+enemy.ombre_spectre.spawn = 2
+enemy.ombre_spectre.night = 1
+enemy.ombre_spectre.loot = star_shard | 0.25
+enemy.ombre_spectre.loot = elixir_titan | 0.05
+
+enemy.add = ombre_golem | stone_golem | Golem des ombres | Une ombre de golem, venue avec la nuit.
+enemy.ombre_golem.region = highcrowns
+enemy.ombre_golem.tint = #3a2a5a
+enemy.ombre_golem.scale = 1.2
+enemy.ombre_golem.spawn = 2
+enemy.ombre_golem.night = 1
+enemy.ombre_golem.loot = star_shard | 0.25
+enemy.ombre_golem.loot = elixir_titan | 0.05
+
+enemy.add = ombre_pilleur | dust_raider | Pilleur des ombres | Une ombre de pilleur, venue avec la nuit.
+enemy.ombre_pilleur.region = ambre
+enemy.ombre_pilleur.tint = #3a2a5a
+enemy.ombre_pilleur.scale = 1.2
+enemy.ombre_pilleur.spawn = 2
+enemy.ombre_pilleur.night = 1
+enemy.ombre_pilleur.loot = star_shard | 0.25
+enemy.ombre_pilleur.loot = elixir_titan | 0.05
+
+enemy.add = ombre_noye | drowned | Noyé des ombres | Une ombre de noyé, venue avec la nuit.
+enemy.ombre_noye.region = corail
+enemy.ombre_noye.tint = #3a2a5a
+enemy.ombre_noye.scale = 1.2
+enemy.ombre_noye.spawn = 2
+enemy.ombre_noye.night = 1
+enemy.ombre_noye.loot = star_shard | 0.25
+enemy.ombre_noye.loot = elixir_titan | 0.05
+
+enemy.add = ombre_cavalier | steppe_rider | Cavalier des ombres | Une ombre de cavalier, venue avec la nuit.
+enemy.ombre_cavalier.region = steppes
+enemy.ombre_cavalier.tint = #3a2a5a
+enemy.ombre_cavalier.scale = 1.2
+enemy.ombre_cavalier.spawn = 2
+enemy.ombre_cavalier.night = 1
+enemy.ombre_cavalier.loot = star_shard | 0.25
+enemy.ombre_cavalier.loot = elixir_titan | 0.05
+
+enemy.add = ombre_jaguar | jaguar | Jaguar des ombres | Une ombre de jaguar, venue avec la nuit.
+enemy.ombre_jaguar.region = jungle
+enemy.ombre_jaguar.tint = #3a2a5a
+enemy.ombre_jaguar.scale = 1.2
+enemy.ombre_jaguar.spawn = 2
+enemy.ombre_jaguar.night = 1
+enemy.ombre_jaguar.loot = star_shard | 0.25
+enemy.ombre_jaguar.loot = elixir_titan | 0.05
+
+enemy.add = ombre_esprit | aurora_wraith | Esprit des ombres | Une ombre de esprit, venue avec la nuit.
+enemy.ombre_esprit.region = aurore
+enemy.ombre_esprit.tint = #3a2a5a
+enemy.ombre_esprit.scale = 1.2
+enemy.ombre_esprit.spawn = 2
+enemy.ombre_esprit.night = 1
+enemy.ombre_esprit.loot = star_shard | 0.25
+enemy.ombre_esprit.loot = elixir_titan | 0.05
+
+enemy.add = ombre_wyverne | mountain_wyvern | Wyverne des ombres | Une ombre de wyverne, venue avec la nuit.
+enemy.ombre_wyverne.region = titans
+enemy.ombre_wyverne.tint = #3a2a5a
+enemy.ombre_wyverne.scale = 1.2
+enemy.ombre_wyverne.spawn = 2
+enemy.ombre_wyverne.night = 1
+enemy.ombre_wyverne.loot = star_shard | 0.25
+enemy.ombre_wyverne.loot = elixir_titan | 0.05
+
+lore.add = invasion_ombres | L'Invasion des ombres | Chaque nuit, les ombres prennent la forme de ce qu'elles touchent. Les veilleurs de Gravemoor disent qu'elles cherchent les totems endormis.

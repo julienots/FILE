@@ -1,0 +1,4 @@
+name = Armurerie légendaire
+author = Superessence Studio
+version = 1.0
+description = Les armes de fer et de départ frappent bien plus fort, le bouclier de bois protège mieux.

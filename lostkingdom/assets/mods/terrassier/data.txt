@@ -1,0 +1,7 @@
+# Terrassier (mod livré avec LOST KINGDOM 2.7.0)
+dig.radius = 3.5
+dig.depth = 2.5
+bomb.radius = 12
+bomb.depth = 10
+bomb.damage = 400
+bomb.fuse = 1.2
