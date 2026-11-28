@@ -25,13 +25,16 @@ data class Line(
 object ScriptParser {
     const val NARRATOR = "NARRATEUR"
 
+    // \b de Java ne connaît pas les lettres accentuées (« ÂGÉ ») : on borne par \p{L}.
+    private fun kw(p: String) = Regex("(?<!\\p{L})$p(?!\\p{L})", setOf(RegexOption.IGNORE_CASE))
+
     private val keywords: List<Pair<Regex, VoiceType>> = listOf(
-        Regex("""\b(ma\s*voix|moi|original|narrat\w*)\b""", RegexOption.IGNORE_CASE) to VoiceType.ORIGINAL,
-        Regex("""\b(femme|fille|f[ée]minine?|woman|female|dame)\b""", RegexOption.IGNORE_CASE) to VoiceType.FEMME,
-        Regex("""\b(homme|gar[çc]on|masculine?|man|male)\b""", RegexOption.IGNORE_CASE) to VoiceType.HOMME,
-        Regex("""\b(enfant|b[ée]b[ée]|child|kid|petit)\b""", RegexOption.IGNORE_CASE) to VoiceType.ENFANT,
-        Regex("""\b([âa]g[ée]e?|vieux|vieille|old|papi|mamie|grand-?p[èe]re|grand-?m[èe]re)\b""", RegexOption.IGNORE_CASE) to VoiceType.AGE,
-        Regex("""\b(robot|ia|ai|machine|android[e]?)\b""", RegexOption.IGNORE_CASE) to VoiceType.ROBOT,
+        kw("""(ma\s*voix|moi|original|narrat\w*)""") to VoiceType.ORIGINAL,
+        kw("""(femme|fille|f[ée]minine?|woman|female|dame)""") to VoiceType.FEMME,
+        kw("""(homme|gar[çc]on|masculine?|man|male)""") to VoiceType.HOMME,
+        kw("""(enfant|b[ée]b[ée]|child|kid|petit)""") to VoiceType.ENFANT,
+        kw("""([âa]g[ée]e?|vieux|vieille|old|papi|mamie|grand-?p[èe]re|grand-?m[èe]re)""") to VoiceType.AGE,
+        kw("""(robot|ia|ai|machine|android[e]?)""") to VoiceType.ROBOT,
     )
 
     /** Retourne le type de voix correspondant à un mot-clé (« femme », « robot »…), ou null. */

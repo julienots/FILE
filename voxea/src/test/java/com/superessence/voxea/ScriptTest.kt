@@ -54,5 +54,9 @@ class ScriptTest {
         assertEquals(VoiceType.AGE, ScriptParser.parse("PAPI [VIEUX] : a").single().voiceHint)
         assertEquals(VoiceType.ROBOT, ScriptParser.parse("R2 (robot) : a").single().voiceHint)
         assertEquals(VoiceType.ORIGINAL, ScriptParser.parse("MOI [MA VOIX] : a").single().voiceHint)
+        assertEquals(VoiceType.AGE, ScriptParser.parse("PAPI JO [ÂGÉ] : a").single().voiceHint)
+        assertEquals(VoiceType.AGE, ScriptParser.parse("MAMIE (âgée) : a").single().voiceHint)
+        assertEquals(VoiceType.FEMME, ScriptParser.parse("ÉLODIE [FÉMININE] : a").single().voiceHint)
+        assertEquals(VoiceType.ENFANT, ScriptParser.parse("BÉBÉ [BÉBÉ] : a").single().voiceHint)
     }
 }
