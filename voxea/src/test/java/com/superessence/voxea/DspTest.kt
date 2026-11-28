@@ -68,4 +68,17 @@ class DspTest {
         assertTrue(VoiceType.HOMME.defaultSettings().pitch < 0)
         assertTrue(VoiceType.ROBOT.defaultSettings().robot)
     }
+
+    private fun rms(x: FloatArray) = sqrt(x.sumOf { (it * it).toDouble() } / x.size)
+
+    @Test fun loudnessMatchesInput() {
+        // signal riche (impulsions) pour éviter un cas trop facile
+        val x = FloatArray(sr) { i -> (0.25 * sin(2 * PI * 140 * i / sr) + 0.1 * sin(2 * PI * 280 * i / sr) + if (i % 315 == 0) 0.6 else 0.0).toFloat() }
+        for (t in VoiceType.entries) {
+            val y = VoiceDsp.process(x, sr, t.defaultSettings())
+            val db = 20 * Math.log10(rms(y) / rms(x))
+            assertTrue("${t.name} écart ${db} dB", abs(db) < 2.0)
+            assertTrue(y.all { abs(it) <= 0.99f })
+        }
+    }
 }

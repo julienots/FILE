@@ -172,18 +172,22 @@ object VoiceDsp {
             if (frame % 64 == 0) onProgress(frame.toFloat() / frames)
         }
 
-        // Normalisation OLA (Hann² sur des sauts de N/8) puis même crête que l'entrée.
-        val olaGain = 3.0 * N / (8.0 * HOP)
+        // Même intensité (RMS) que l'entrée, puis limiteur doux pour éviter toute saturation.
         val result = FloatArray(len)
-        var peakOut = 0.0
-        for (i in 0 until len) { val v = out[i + N] / olaGain; if (abs(v) > peakOut) peakOut = abs(v) }
-        var peakIn = 0f
-        for (v in input) if (abs(v) > peakIn) peakIn = abs(v)
-        val target = min(max(peakIn.toDouble(), 0.05), 0.891)
-        val g = if (peakOut > 1e-9) target / peakOut else 0.0
-        for (i in 0 until len) result[i] = (out[i + N] / olaGain * g).toFloat().coerceIn(-1f, 1f)
+        var eOut = 0.0; var eIn = 0.0
+        for (i in 0 until len) { val v = out[i + N]; eOut += v * v; eIn += input[i].toDouble() * input[i] }
+        val g = if (eOut > 1e-12) sqrt(eIn / eOut) else 0.0
+        for (i in 0 until len) result[i] = softLimit(out[i + N] * g).toFloat()
         onProgress(1f)
         return result
+    }
+
+    /** Linéaire jusqu'à 0,8 puis compression douce vers 0,98. */
+    fun softLimit(v: Double): Double {
+        val a = abs(v)
+        if (a <= 0.8) return v
+        val c = 0.8 + 0.18 * kotlin.math.tanh((a - 0.8) / 0.18)
+        return if (v < 0) -c else c
     }
 
     /** FFT radix-2 en place. [inverse] = true applique aussi la division par N. */
