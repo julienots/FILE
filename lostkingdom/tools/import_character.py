@@ -110,6 +110,8 @@ def main():
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--preview", default="")
     ap.add_argument("--yaw", type=float, default=0.0, help="turn the source model about the vertical axis first (degrees), e.g. 90 for a model facing +X")
+    ap.add_argument("--anat", default="", help="3.10.6 JSON: joints given by hand for a model standing arms down (A-pose) "
+                    "{joints:{bone:[x,y,z]} in units of the height, wings:{behind_z, outside_x, above_y}, halo_y} -> no T-pose detection, no arm lowering")
     a = ap.parse_args()
 
     P, N, UV, I, tex = load_glb(a.glb)
@@ -129,8 +131,11 @@ def main():
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
     N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
 
+    anat = json.load(open(a.anat)) if a.anat else None
     # ---- landmarks --------------------------------------------------------------------------------
     maxX = np.abs(x).max()
+    if anat:   # 3.10.6 A-pose model: the arm "line" is the wrist height, maxX is where the fists end
+        maxX = max(abs(anat["joints"]["handL"][0]) + 0.04, 0.2) * H
     if maxX < 0.6 * H * 0.5:
         print("warning: arms do not look horizontal (T-pose expected); weights may be poor")
     armBand = np.abs(x) > 0.55 * maxX
@@ -167,6 +172,16 @@ def main():
         J[B["foot" + side]] = (s * legX, ankleY, legZ - 0.01 * H)
     J[B["propL"]] = J[B["handL"]] + (0.04 * H, 0, 0.01 * H)
     J[B["propR"]] = J[B["handR"]] + (-0.04 * H, 0, 0.01 * H)
+    if anat:
+        for n, v in anat["joints"].items():
+            J[B[n]] = np.array(v) * H
+        for n in list(anat["joints"].keys()):   # mirror the left side when the right is not given
+            if n.endswith("L") and (n[:-1] + "R") in B and (n[:-1] + "R") not in anat["joints"]:
+                v = np.array(anat["joints"][n]) * H; J[B[n[:-1] + "R"]] = (-v[0], v[1], v[2])
+        J[B["propL"]] = J[B["handL"]] + (0, -0.05 * H, 0.02 * H)   # arms hang: the grip is below the wrist
+        J[B["propR"]] = J[B["handR"]] + (0, -0.05 * H, 0.02 * H)
+        yArm = J[B["uarmL"]][1]; shoulderX = abs(J[B["uarmL"]][0])
+        hipY = J[B["thighL"]][1]; kneeY = J[B["shinL"]][1]; rootY = J[B["root"]][1]; bodyZ = J[B["spine"]][2]
     for n in NAMES:
         print(f"  {n:7s} {np.round(J[B[n]], 3)}")
 
@@ -189,12 +204,18 @@ def main():
     legL = ["thighL", "shinL", "footL"]; legR = ["thighR", "shinR", "footR"]
     for n in armL + legL: D[right, B[n]] = big
     for n in armR + legR: D[left, B[n]] = big
-    armHeight = y > yArm - 0.2 * H                       # T-pose arms are horizontal: only there
-    inArm = (np.abs(x) > shoulderX + 0.02 * H) & armHeight
+    if anat:   # arms hang beside the body: the hand bone ends below the wrist, the arm band runs down to the fists
+        tips[B["handL"]] = J[B["handL"]] + (0.005 * H, -0.07 * H, 0.01 * H); tips[B["handR"]] = J[B["handR"]] + (-0.005 * H, -0.07 * H, 0.01 * H)
+        for bi in (B["handL"], B["handR"]): D[:, bi] = seg_dist(P, J[bi], tips[bi])
+        armHeight = (y > J[B["handL"]][1] - 0.09 * H) & (y < yArm + 0.04 * H)
+        inArm = (np.abs(x) > anat.get("arm_inner_x", 0.11) * H) & armHeight
+    else:
+        armHeight = y > yArm - 0.2 * H                   # T-pose arms are horizontal: only there
+        inArm = (np.abs(x) > shoulderX + 0.02 * H) & armHeight
     for n in ["root", "spine", "neck", "head"] + legL + legR: D[inArm, B[n]] = big
-    notArm = (np.abs(x) < shoulderX - 0.03 * H) | ~armHeight
+    notArm = ((np.abs(x) < anat.get("arm_inner_x", 0.11) * H - 0.01 * H) | ~armHeight) if anat else ((np.abs(x) < shoulderX - 0.03 * H) | ~armHeight)
     for n in ["larmL", "handL", "larmR", "handR"]: D[notArm, B[n]] = big
-    for n in ["uarmL", "uarmR"]: D[np.abs(x) < shoulderX - 0.07 * H, B[n]] = big
+    for n in ["uarmL", "uarmR"]: D[np.abs(x) < (anat.get("arm_inner_x", 0.11) * H - 0.01 * H if anat else shoulderX - 0.07 * H), B[n]] = big
     belowHips = y < hipY - 0.04 * H
     for n in ["chest", "neck", "head"] + armL + armR: D[belowHips, B[n]] = big
     aboveHips = y > rootY + 0.06 * H
@@ -202,6 +223,21 @@ def main():
     # cape / long coat behind the body: follows the torso, never the legs
     cape = (z < bodyZ - 0.075 * H) & (y > kneeY - 0.05 * H) & ~inArm
     for n in legL + legR + armL[1:] + armR[1:]: D[cape, B[n]] = big
+    # 3.10.6 wings and halo (A-pose anatomy file): the wings ride the chest (never an arm or a leg), the halo the head
+    wingMask = np.zeros(len(P), bool)
+    if anat and "wings" in anat:
+        wg = anat["wings"]
+        wingMask = (y > wg.get("above_y", 0.3) * H) & ((z < wg["behind_z"] * H) | (np.abs(x) > wg["outside_x"] * H))
+        for bi in skinBones:
+            if bi != B["chest"]: D[wingMask, bi] = big
+        D[wingMask, B["chest"]] = seg_dist(P[wingMask], J[B["chest"]], J[B["neck"]])
+        print(f"  wings: {int(wingMask.sum())} vertices ride the chest")
+    if anat and "halo_y" in anat:
+        hm = (y > anat["halo_y"] * H) & (z < anat.get("halo_z", -0.03) * H) & ~wingMask
+        for bi in skinBones:
+            if bi != B["head"]: D[hm, bi] = big
+        D[hm, B["head"]] = seg_dist(P[hm], J[B["head"]], J[B["head"]] + np.array([0, 0.1 * H, 0]))
+        print(f"  halo: {int(hm.sum())} vertices ride the head")
     # safety net: a vertex excluded from every bone falls back to its nearest bone (no rule)
     allMasked = (D >= big / 2).all(1)
     if allMasked.any():
@@ -254,7 +290,7 @@ def main():
                   "D:", [round(float(D[v, B[n]]), 3) for n in ("footL", "footR", "shinL", "shinR", "root")], "unreached", bool(unreached[weld[v]]))
 
     # ---- T-pose -> rest pose (arms down) using the weights -------------------------------------------
-    angle = np.pi / 2 - 0.08
+    angle = 0.0 if anat else np.pi / 2 - 0.08   # 3.10.6 an A-pose model already hangs its arms
     R = {B[n]: rot_z(-angle) for n in ["uarmL", "larmL", "handL", "propL"]}
     R.update({B[n]: rot_z(angle) for n in ["uarmR", "larmR", "handR", "propR"]})
     pivot = {}

@@ -129,6 +129,7 @@ float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 
         dmg *= 1.f + std::min(comboHits, 30) * 0.01f;
         if (frozenTimeT > 0) dmg *= 1.25f;
         comboHits++; comboHitT = 2.5f; comboPop = 1.f;
+        if (ultT < 0) ultCharge = std::min(100.f, ultCharge + std::max(2.f, dmg * 0.3f));   // 3.10.6 the ultimate gauge
     }
     if (dst == player && dmg > 0 && comboHits > 0) { if (comboHits >= 5) floatText(t->pos + vec3(0, 2.4f, 0), "Combo perdu", vec3(0.8f, 0.75f, 0.7f), 18); comboHits = 0; }
     dmg = std::max(1.f, dmg);
@@ -649,7 +650,7 @@ void Game::updateCharacters(float dtAll) {
         bool near = d2 < 90.f * 90.f || c.bossDef >= 0 || dist2XZ(c.pos, partnerPos) < 90.f * 90.f || e == coop.partner || reg.get<NetPuppet>(e);
         if (!near && e != player) return;
         // 3.10.5 frozen time (perfect dodge): every creature but the hero, his mount and partner lives at a quarter speed
-        const float dt = (frozenTimeT > 0.f && e != player && e != mountEnt && c.team != Team::Player) ? dtAll * 0.25f : dtAll;
+        const float dt = ((frozenTimeT > 0.f || ultSlowT > 0.f) && e != player && e != mountEnt && c.team != Team::Player) ? dtAll * 0.25f : dtAll;
         if (amber && e != player && e != mountEnt && !reg.get<AmberEcho>(e)) return;   // 3.10.0 the living stay in their own world
         c.invuln = std::max(0.f, c.invuln - dt);
         c.hitStun = std::max(0.f, c.hitStun - dt);

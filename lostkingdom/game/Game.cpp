@@ -323,6 +323,7 @@ void Game::updatePlaying(float dt) {
     updateDialogScene(dt); // 3.8.0
     updateVfx(dt);       // 3.0.1
     updateAmber(dt);     // 3.10.0 the Amber (multiverse)
+    updateUltimate(dt);  // 3.10.6
     // 3.10.5 combo counter and frozen time
     frozenTimeT = std::max(0.f, frozenTimeT - dt);
     comboHitT -= dt; if (comboHitT <= 0.f) comboHits = 0;

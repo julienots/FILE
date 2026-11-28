@@ -1710,10 +1710,10 @@ const std::vector<HeroDef>& heroes() {
         h.push_back(k);
 
         HeroDef a;
-        a.id = "astra"; a.name = "Astra"; a.title = "L'Étoile tombée"; a.model = "hero_flyer";
+        a.id = "astra"; a.name = "Astra"; a.title = "L'Étoile tombée"; a.model = "hero_angel";   // 3.10.6 the angel warrior (the player's model)
         a.look.female = true; a.look.body = Body::Plate; a.look.hair = Hair::Long; a.look.hairCol = hexColor(0xf0d890);
         a.look.c1 = hexColor(0x2a4fd0); a.look.c2 = hexColor(0x1e2f80); a.look.c3 = hexColor(0xd8b040); a.look.metal = hexColor(0x3a62e8); a.look.trim = hexColor(0xf0c850);
-        a.look.cape = true; a.look.gauntlets = true; a.look.greaves = true; a.look.skin = hexColor(0xf0caa8); a.look.eyes = hexColor(0x60c0ff); a.look.seed = 77;
+        a.look.cape = false; a.look.gauntlets = true; a.look.greaves = true; a.look.skin = hexColor(0xf0caa8); a.look.eyes = hexColor(0x60c0ff); a.look.seed = 77;   // 3.10.6 wings, no cape
         a.weapon = WeaponType::None; a.fixedWeapon = true; a.hpMul = 1.1f; a.atkMul = 1.05f; a.canFly = true;
         a.powers[0] = {HeroPower::StarBeam, "Rayon stellaire", "i_sp_holylight", 4.f, 0, 12, 1.6f};
         a.powers[1] = {HeroPower::MeteorStrike, "Frappe météore", "i_sp_fireball", 9.f, 0, 20, 2.6f};

@@ -550,7 +550,7 @@ void Game::drawTitle(float dt) {
     }
     // footer: quiet, right-aligned version, the studio line on the left
     float fa = ease((t - 1.4f) * 1.5f);
-    u.text("Une goutte d'Essence, un monde.  ·  v3.10.5", W_ - 20, H_ - 30, 14, rgba(0xc8bca0, 0.7f * fa), F_SERIF, A_RIGHT, 0, true);
+    u.text("Une goutte d'Essence, un monde.  ·  v3.10.6", W_ - 20, H_ - 30, 14, rgba(0xc8bca0, 0.7f * fa), F_SERIF, A_RIGHT, 0, true);
     (void)dt;
 }
 

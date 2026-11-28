@@ -849,6 +849,14 @@ public:
     bool switchHero(int i);
     bool heroHasPowers() const;
     void castHeroPower(int slot);
+    // 3.10.6 ultimates: a gauge filled by the hero's blows; each hero has one huge power
+    float ultCharge = 0, ultT = -1, ultStepT = 0, ultSlowT = 0, ultBannerT = 0;
+    int ultKind = -1, ultStep = 0;
+    vec3 ultCenter;
+    std::vector<Entity> ultTargets;
+    std::string ultName;
+    bool castUltimate();
+    void updateUltimate(float dt);
     void updateHeroAbilities(float dt);
     // 3.0.1 shader effects of the powers and spells (Vfx.cpp): magic circles, shockwaves, beams, pillars,
     // vortices, explosion / shield / orb spheres, blade slashes, burning ground; each one lights its surroundings

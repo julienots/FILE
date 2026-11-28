@@ -119,6 +119,8 @@ void Game::updateTouchControls() {
     Rect bDig{u.W - 318, 14, 56, 56};
     bool digShown = !dungeon.active && driving < 0 && !riding && (countItem("tool_pickaxe") > 0 || countItem("tool_shovel") > 0);
     Rect bTorch{u.W - 380, 14, 56, 56};   // 3.10.3 the torch: always one tap away (top bar, left of the dig button)
+    Rect bUlt{u.W - 112, std::max(u.H - 455.f, 268.f), 100, 100};   // 3.10.6 the ultimate (right edge, under the minimap, above the potion)
+    bool ultShown = !riding && driving < 0;
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
         if (f.consumed || f.blocked) continue;
@@ -126,6 +128,7 @@ void Game::updateTouchControls() {
         if ((garageShown && bGarage.contains(f.sx, f.sy)) || (garageOpen && garagePanel.contains(f.sx, f.sy))) continue;
         if (digShown && bDig.contains(f.sx, f.sy)) continue;
         if (bTorch.contains(f.sx, f.sy)) continue;
+        if (ultShown && bUlt.contains(f.sx, f.sy)) continue;
         if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
         if (buildMode && Rect{ui.W * 0.5f - 330, 84, 660, 128}.contains(f.sx, f.sy)) continue;   // build panel (domain)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
@@ -203,6 +206,19 @@ void Game::updateTouchControls() {
     if (u.button(bMenu)) { menu = Menu::Pause; play("ui_open", 0.6f); }
     if (u.button(Rect{14, 14, 108, 108})) { menu = Menu::HeroWheel; play("ui_open", 0.6f); }   // portrait: hero wheel
     if (u.button(bMap) || u.button(mini)) { menu = Menu::Map; play("ui_open", 0.6f); mapPan = vec2(0, 0); }
+    if (ultShown) {   // 3.10.6 the ultimate: the gauge fills around the button; full, it pulses gold
+        vec2 cc{bUlt.x + bUlt.w / 2, bUlt.y + bUlt.h / 2};
+        bool full = ultCharge >= 100.f && ultT < 0;
+        float pulse = full ? 0.5f + 0.5f * std::sin(realTime * 6.f) : 0.f;
+        vec3 hc = hero().color;
+        if (full) u.sprite("glow", {cc.x - 90, cc.y - 90, 180, 180}, vec4(hc, 0.35f + 0.3f * pulse));
+        u.circle(cc, 46, vec4(0.05f, 0.04f, 0.06f, 0.75f), 40);
+        u.ring(cc, 44, 50, -PI / 2, -PI / 2 + TAU * saturate(ultCharge / 100.f), full ? vec4(1.f, 0.85f, 0.4f, 1) : vec4(hc, 0.85f), 48);
+        u.sprite("i_star", {cc.x - 24, cc.y - 26, 48, 48}, full ? vec4(1.f, 0.9f, 0.6f, 1) : vec4(0.7f, 0.65f, 0.6f, 0.6f));
+        u.text(full ? "ULTIME" : std::to_string((int)ultCharge) + " %", cc.x, cc.y + 22, 14, full ? rgba(0xffe08a) : rgba(0xc8bca0, 0.8f), F_BOLD, A_CENTER, 0, true);
+        u.tag(bUlt, "Ultime");
+        if (u.button(bUlt) && !castUltimate() && !full) floatText(pc().pos + vec3(0, 2.4f, 0), "Ultime pas prêt", vec3(0.8f, 0.75f, 0.7f), 18);
+    }
     {   // 3.10.3 torch
         u.nine("button_dark", bTorch, vec4(1, 1, 1, torchOn ? 1.f : 0.85f), 0.6f);
         float fl = torchOn ? 0.85f + 0.15f * std::sin(realTime * 13.f) * std::sin(realTime * 7.3f) : 0.55f;
@@ -615,6 +631,12 @@ void Game::drawHud(float dt) {
         }
     }
     drawAmberHud();   // 3.10.0
+    if (ultBannerT > 0.f) {   // 3.10.6 the ultimate's name, huge, for a second
+        float t = 1.6f - ultBannerT, a = std::min(1.f, ultBannerT * 2.5f);
+        float sc = easeOutBack(saturate(t / 0.3f));
+        u.text(ultName, W_ / 2 + 3, H_ * 0.26f + 4, 64 * sc, vec4(0, 0, 0, 0.5f * a), F_TITLE, A_CENTER);
+        u.text(ultName, W_ / 2, H_ * 0.26f, 64 * sc, vec4(hero().color * 0.4f + vec3(0.6f), a), F_TITLE, A_CENTER, 0, true);
+    }
     // 3.10.5 combo counter (right, above the action buttons) and the frozen-time gauge
     if (comboHits >= 3 || frozenTimeT > 0.f) {
         float cx = W_ - 285, cy = 96;   // left of the minimap, under the top bar

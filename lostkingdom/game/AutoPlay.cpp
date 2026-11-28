@@ -1579,6 +1579,32 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "ultimate") {
+        // 3.10.6 the three ultimates, each against four foes (look at the pictures) + the angel model of Astra
+        static int res[3]; static float hp0[3];
+        s.push_back({0.5f, [](Game& g) { for (int& r : res) r = 0; g.toastHint.clear(); gameTuning().allHeroes = true; g.ui.recordWidgets = true; }, idle, "setup"});
+        for (int h = 0; h < 3; h++) {
+            s.push_back({1.5f, [h](Game& g) {
+                g.activeHero = h; g.rebuildPlayerVisual(); g.recomputeStats();
+                const Poi* p = g.world.poiById("brindlemere"); vec2 b = p ? p->pos + vec2(60, 100) : vec2(1540, 1720);
+                teleport(g, b.x + h * 40.f, b.y, 0.8f); g.timeOfDay = 17.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+                g.reg.each<Character>([&](Entity e, Character& c) { if (c.team == Team::Enemy) g.reg.destroyLater(e); });
+                g.camPitch = 0.45f; g.camDist = g.camDistTarget = 13.f; }, [](Game& g, float) { g.camIdleT = 0; }, "hero"});
+            s.push_back({0.3f, [h](Game& g) { Character& p = g.pc(); hp0[h] = 0;
+                for (int i = 0; i < 4; i++) { float a = i * TAU / 4 + 0.4f; Entity e = g.spawnEnemy(enemyIndex("goblin"), p.pos + vec3(std::cos(a) * 5.f, 0, std::sin(a) * 5.f)); if (Character* c = g.reg.get<Character>(e)) { c->maxHp = c->hp = 2000; hp0[h] += 2000; } }
+                g.ultCharge = 100.f; }, idle, "foes"});
+            s.push_back({0.2f, [](Game& g) { const Rect* r = g.ui.findWidget("Ultime"); if (r) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 730, (r->x + r->w / 2) * k, (r->y + r->h / 2) * k}); } }, idle, "press"});
+            s.push_back({0.1f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 730) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 730, f.x * k, f.y * k}); } }, idle, "release"});
+            s.push_back({h == 2 ? 1.6f : 0.9f, none, [](Game& g, float) { g.camIdleT = 0; }, "mid"});
+            s.push_back({0.0001f, [h](Game& g) { char b[64]; snprintf(b, sizeof b, "build/shots/UL%d_mid.png", h); g.requestScreenshot(b); }, idle, "shot"});
+            s.push_back({h == 2 ? 4.5f : 1.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "end"});
+            s.push_back({0.1f, [h](Game& g) { float hp = 0; g.reg.each<Character>([&](Entity, Character& c) { if (c.team == Team::Enemy && !c.dead) hp += c.hp; });
+                res[h] = hp < hp0[h] - 200.f && g.ultT < 0;
+                AGR_LOG("ULT %s (%s): foes hp %.0f -> %.0f, done=%d", g.hero().name.c_str(), g.ultName.c_str(), hp0[h], hp, g.ultT < 0); }, idle, "check"});
+        }
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("ULT TEST: wanderer=%d kaede=%d astra=%d -> %s", res[0], res[1], res[2], res[0] && res[1] && res[2] ? "ULT TEST PASSED" : "ULT TEST FAILED"); }, idle, "report"});
+        return s;
+    }
     if (name == "dodge") {
         // 3.10.5 perfect dodge -> frozen time (enemies at a quarter speed), combo counter (+1 % per hit), lost on a blow
         static int res[6]; static Entity foe; static float animT0, posT0;

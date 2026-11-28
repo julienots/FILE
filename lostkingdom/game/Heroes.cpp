@@ -337,4 +337,132 @@ void Game::drawHeroWheel() {
     u.consumeAll();
 }
 
+// ------------------------------------------------------------------------------------------ 3.10.6 ultimates
+// One per hero, unlocked by the gauge (the hero's blows fill it). The world slows to a quarter around the hero
+// while it plays; the hero cannot be hurt.
+//   0 the Wanderer, "Couronne brisée": six golden shards of the crown circle up above him, then crash down together
+//   1 Kaede, "Mille lames": she blinks from foe to foe (up to eight) cutting each, then the smoke bursts
+//   2 Astra, "Jugement céleste": she rises, stars rain on every foe around, a pillar of light ends it
+bool Game::castUltimate() {
+    if (player == NullEntity || ultT >= 0 || ultCharge < 100.f) return false;
+    Character& c = pc();
+    if (c.dead || riding || c.swimming || driving >= 0) return false;
+    const std::string& id = hero().id;
+    ultKind = id == "kaede" ? 1 : (id == "astra" ? 2 : 0);
+    static const char* names[] = {"Couronne brisée", "Mille lames", "Jugement céleste"};
+    ultName = names[ultKind];
+    ultT = 0; ultStep = 0; ultStepT = 0; ultCharge = 0; ultCenter = c.pos; ultBannerT = 1.6f;
+    ultTargets.clear();
+    reg.each<Character>([&](Entity e, Character& o) {
+        if (o.dead || (o.team != Team::Enemy && o.team != Team::Animal) || e == player) return;
+        if (distXZ(o.pos, c.pos) < (ultKind == 2 ? 18.f : 14.f)) ultTargets.push_back(e);
+    });
+    std::sort(ultTargets.begin(), ultTargets.end(), [&](Entity a, Entity b) { return distXZ(reg.get<Character>(a)->pos, c.pos) < distXZ(reg.get<Character>(b)->pos, c.pos); });
+    if (ultTargets.size() > 8) ultTargets.resize(8);
+    ultSlowT = ultKind == 2 ? 3.6f : 2.2f;
+    c.invuln = std::max(c.invuln, ultSlowT + 0.4f);
+    c.vel = vec3(0, c.vel.y, 0);
+    const vec3 col = hero().color;
+    particles.shockwave(c.pos, col, 4.f);
+    particles.magicBurst(c.pos + vec3(0, 1.2f, 0), col, 2.f, 60);
+    play("boss_intro", 0.8f, 1.2f); play("magic_burst", 1.f, 0.7f);
+    addShake(0.35f); haptic(120, 255); hitStop = std::max(hitStop, 0.08f);
+    c.vis.anim.play(&clip(C_ROAR_H), 1.2f, false, 0.06f);
+    AGR_LOG("ultimate %s: %zu targets", ultName.c_str(), ultTargets.size());
+    return true;
+}
+
+void Game::updateUltimate(float dt) {
+    ultSlowT = std::max(0.f, ultSlowT - dt);
+    ultBannerT = std::max(0.f, ultBannerT - dt);
+    if (ultT < 0 || player == NullEntity) return;
+    Character& c = pc();
+    ultT += dt; ultStepT += dt;
+    const vec3 col = hero().color;
+    float power = c.atk * (1.f + level * 0.03f);
+    auto alive = [&](Entity e) { Character* o = reg.valid(e) ? reg.get<Character>(e) : nullptr; return o && !o->dead ? o : nullptr; };
+    if (ultKind == 0) {
+        // ---- Couronne brisée: 1.0 s rising crown, then the crash
+        vec3 top = ultCenter + vec3(0, 4.5f, 0);
+        if (ultT < 1.0f) {
+            float k = ultT / 1.0f;
+            for (int i = 0; i < 6; i++) {
+                float a = i * TAU / 6.f + ultT * 5.f;
+                vec3 p = ultCenter + vec3(std::cos(a) * (3.2f - k * 1.2f), 1.f + k * 3.5f, std::sin(a) * (3.2f - k * 1.2f));
+                if (particles.rng.f() < dt * 50.f) particles.magicTrail(p, vec3(1.f, 0.82f, 0.35f), 0.9f);
+                if (ultStepT > 0.08f) vfxSphere(p, vec3(1.f, 0.85f, 0.45f), vec3(1.f, 0.6f, 0.15f), 0.22f, 0.12f, 1);
+            }
+            if (ultStepT > 0.08f) ultStepT = 0;
+            c.vel = vec3(0, c.vel.y, 0);
+        } else if (ultStep == 0) {
+            ultStep = 1;
+            vfxPillar(ultCenter, vec3(1.f, 0.8f, 0.35f), 2.2f, 14.f, 0.9f);
+            for (int i = 0; i < 6; i++) { float a = i * TAU / 6.f; vec3 g = ultCenter + vec3(std::cos(a) * 5.f, 0, std::sin(a) * 5.f); g.y = groundAt(g.x, g.z);
+                vfxBeam(top, g, vec3(1.f, 0.78f, 0.3f), 0.7f, 0.5f, i == 0 ? 1.5f : 0.f); particles.explosion(g, 2.5f, vec3(1.f, 0.7f, 0.3f)); }
+            particles.shockwave(ultCenter, vec3(1.f, 0.8f, 0.4f), 11.f);
+            particles.shockwave(ultCenter, vec3(1.f, 0.95f, 0.8f), 6.f);
+            areaDamage(player, ultCenter, 10.f, power * 10.f, Element::Light, Team::Player, 120);
+            play("explosion", 1.f, 0.8f); play("thunder", 0.8f, 1.3f);
+            addShake(0.9f); hitStop = std::max(hitStop, 0.14f); haptic(200, 255);
+            lightningFlash = std::max(lightningFlash, 0.7f);
+        } else if (ultT > 1.6f) ultT = -1;
+    } else if (ultKind == 1) {
+        // ---- Mille lames: one blink every 0.14 s
+        if (ultStepT >= 0.14f) {
+            ultStepT = 0;
+            Character* o = nullptr;
+            while (ultStep < (int)ultTargets.size() && !(o = alive(ultTargets[ultStep]))) ultStep++;
+            if (o && ultStep < (int)ultTargets.size()) {
+                vec3 from = c.pos;
+                vec3 side = normalize(vec3(o->pos.x - c.pos.x + 0.01f, 0, o->pos.z - c.pos.z));
+                c.pos = o->pos - side * (o->radius + 0.9f); c.pos.y = groundAt(c.pos.x, c.pos.z);
+                c.yaw = std::atan2(side.x, side.z);
+                vfxBeam(from + vec3(0, 1.f, 0), c.pos + vec3(0, 1.f, 0), vec3(0.65f, 0.5f, 1.f), 0.35f, 0.35f, ultStep == 0 ? 1.f : 0.f);
+                particles.magicBurst(c.pos + vec3(0, 1.f, 0), vec3(0.45f, 0.35f, 0.9f), 1.2f, 20);
+                c.vis.anim.play(&clip(ultStep % 2 ? C_DG_A2 : C_DG_A1), 2.2f, false, 0.02f);
+                dealDamage(player, ultTargets[ultStep], power * 6.f, Element::Shadow, side, 60, true, false);
+                play("swing", 0.9f, 1.2f + 0.05f * ultStep); hitStop = std::max(hitStop, 0.05f); addShake(0.2f);
+                ultStep++;
+            } else if (ultStep >= (int)ultTargets.size()) {
+                // the end: the smoke bursts around her, everything near is cut once more
+                particles.explosion(c.pos, 3.f, vec3(0.35f, 0.3f, 0.5f)); particles.dust(c.pos, 5.f, vec3(0.3f, 0.28f, 0.35f));
+                particles.shockwave(c.pos, vec3(0.6f, 0.45f, 1.f), 7.f);
+                areaDamage(player, c.pos, 5.f, power * 5.f, Element::Shadow, Team::Player, 80);
+                play("explosion", 0.8f, 1.2f); addShake(0.5f);
+                ultT = -1;
+            }
+        }
+    } else {
+        // ---- Jugement céleste: rise, 2.8 s of falling stars, then the pillar
+        if (ultT < 0.5f) { c.vel.y = std::max(c.vel.y, 4.5f); c.grounded = false; }
+        else if (ultT < 3.3f) {
+            c.vel.y = std::max(c.vel.y, 0.f);   // hovers
+            if (ultStepT >= 0.13f) {
+                ultStepT = 0;
+                vec3 g;
+                std::vector<Entity> live;
+                for (Entity e : ultTargets) if (alive(e)) live.push_back(e);
+                bool onFoe = !live.empty() && particles.rng.f() < 0.75f;
+                Entity hit = onFoe ? live[particles.rng.irange(0, (int)live.size() - 1)] : NullEntity;
+                if (hit != NullEntity) g = reg.get<Character>(hit)->pos;
+                else { float a = particles.rng.range(0.f, TAU), r = particles.rng.range(3.f, 14.f); g = ultCenter + vec3(std::cos(a) * r, 0, std::sin(a) * r); g.y = groundAt(g.x, g.z); }
+                vec3 sky = g + vec3(particles.rng.range(-4.f, 4.f), 30.f, particles.rng.range(-4.f, 4.f));
+                vfxBeam(sky, g, vec3(1.f, 0.9f, 0.55f), 0.5f, 0.25f, 0.8f);
+                particles.explosion(g, 1.8f, vec3(1.f, 0.85f, 0.45f));
+                if (hit != NullEntity) dealDamage(player, hit, power * 3.f, Element::Light, normalize(g - c.pos + vec3(0.01f, 0, 0)), 40, true, true);
+                else areaDamage(player, g, 2.5f, power * 1.2f, Element::Light, Team::Player, 20);
+                play("lightning", 0.5f, 1.3f + particles.rng.f() * 0.3f); addShake(0.15f);
+            }
+        } else if (ultStep == 0) {
+            ultStep = 1;
+            vec3 p = c.pos; p.y = groundAt(p.x, p.z);
+            vfxPillar(p, vec3(1.f, 0.9f, 0.6f), 3.f, 25.f, 1.f);
+            particles.shockwave(p, vec3(1.f, 0.9f, 0.6f), 10.f);
+            areaDamage(player, p, 8.f, power * 8.f, Element::Light, Team::Player, 100);
+            play("holy", 1.f, 0.8f); play("explosion", 0.8f, 0.9f); addShake(0.8f); hitStop = std::max(hitStop, 0.12f);
+            lightningFlash = std::max(lightningFlash, 0.6f);
+        } else if (ultT > 3.8f) ultT = -1;
+    }
+}
+
 }  // namespace lk
