@@ -40,6 +40,7 @@ struct Visual {
     vec3 tint{1, 1, 1};
     float flash = 0, dissolve = 0, rim = 0.5f, emissiveBoost = 0;
     float breathT = 0, wetT = 0;
+    vec3 hitDir{0, 0, 0}; float hitT = 0;   // 3.10.4 directional flinch: where the last blow came from (world), 1 -> 0
     float tiltPitch = 0, tiltRoll = 0;
     // 3.4.0 smoothing of what is drawn (the simulation keeps its exact values): height over steps and bumps,
     // turning, and the body following the slope of the ground
@@ -199,6 +200,7 @@ enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, Dungeo
 // 3.10.0 the Amber (Envers.cpp): a rift in the ground (kind 0) or a memory caught in the amber (kind 1)
 struct AmberSpot { int kind = 0, idx = 0; vec3 pos; };
 struct AmberEcho {};   // a creature of the Amber (removed when the hero leaves it)
+struct AmberHerald {}; // 3.10.4 the Herald, the Amber's guardian (one per crossing, once three memories are free)
 // 1.11.0 vehicles (Vehicles.cpp)
 struct VehicleRef { int idx; };
 struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; bool fly = false; };   // 3.4.0 fly: the sky-ship (procedural, no model file)
@@ -587,6 +589,7 @@ public:
     std::vector<vec3> amberRifts, amberMemories;
     std::vector<Entity> amberSpots;
     bool amberRiftNear = false;
+    bool amberHeraldSpawned = false;   // this crossing
     void initAmber();
     void updateAmber(float dt);
     void enterAmber(int rift);

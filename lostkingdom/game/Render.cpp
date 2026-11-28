@@ -696,6 +696,39 @@ void Game::renderCharacter(Entity e, Character& c) {
             computeWorld(sk, fpose, v.pw);
         }
     }
+    // ---- 3.10.4 directional flinch: the blow pushes the upper body the way it travels (a hit in the back bends the
+    // body forward, from the left it twists to the right...), with a quick snap and a slower recovery, the head lagging
+    if (v.arch == Arch::Humanoid && v.hitT > 0.f && !c.dead) {
+        float tt = 1.f - v.hitT;                                   // 0 at the impact
+        float k = (tt < 0.12f ? tt / 0.12f : std::pow(v.hitT / 0.88f, 1.6f)) * 0.45f;
+        vec3 hd = model.inverse().transformDir(v.hitDir); hd.y = 0;
+        if (length2(hd) > 1e-4f) {
+            hd = normalize(hd);
+            vec3 axis = normalize(cross(vec3(0, 1, 0), hd));      // tilts the top of the body along the blow
+            const int bones[3] = {H_SPINE, H_CHEST, H_HEAD};
+            const float w[3] = {0.55f, 0.35f, 0.5f};
+            for (int i = 0; i < 3; i++) {
+                int b = bones[i], par = sk.bones[b].parent;
+                quat parentRot = par >= 0 ? v.pw.wrot[par] : quat();
+                float twist = (i == 2 ? -0.35f : 0.2f) * hd.x;    // a little twist away from a side blow; the head turns back to look
+                quat q = quat::axisAngle(axis, k * w[i]) * quat::axisAngle({0, 1, 0}, twist * k);
+                fpose.rot[b] = normalize(parentRot.conj() * (q * v.pw.wrot[b]));
+                computeWorld(sk, fpose, v.pw);
+            }
+        }
+    }
+    // ---- 3.10.4 the torch arm: the hero holds the torch up in front, a little to the side, the elbow bent (not
+    // while the left hand works: bow, two-handed weapons, an attack)
+    if (e == player && v.arch == Arch::Humanoid && torchK > 0.02f && !c.dead && !c.swimming && !c.attackClip && v.anim.state == BodyState::Locomotion) {
+        bool twoHands = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow || v.wt == WeaponType::Longsword || v.wt == WeaponType::Spear || v.wt == WeaponType::Staff || v.wt == WeaponType::Hammer;
+        if (!twoHands) {
+            vec3 sh = v.pw.wpos[H_UARML];
+            float sway = std::sin(realTime * 2.1f) * 0.012f + std::sin(v.anim.phase * TAU) * 0.02f * saturate(c.vel.x * c.vel.x + c.vel.z * c.vel.z);
+            vec3 target = sh + vec3(0.1f, -0.2f + sway, 0.26f);
+            twoBoneIK(sk, fpose, v.pw, H_UARML, H_LARML, H_HANDL, target, vec3(0.6f, -0.6f, -0.5f), torchK * 0.95f);
+            computeWorld(sk, fpose, v.pw);
+        }
+    }
     DrawItem d;
     d.mesh = v.mesh.get(); d.model = model; d.flags = LIT_SKINNED | (v.dissolve > 0 ? LIT_DISSOLVE : 0) | (v.albedo ? LIT_TEXTURED : 0);
     d.albedo = v.albedo;

@@ -55,6 +55,7 @@ void Game::hitFx(vec3 p, vec3 dir, Element e, float scale, bool metal) {
 }
 
 float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 dir, float poiseDmg, bool canCrit, bool isSpell) {
+    if (Character* hc = reg.get<Character>(dst)) { vec3 hd{dir.x, 0, dir.z}; if (length2(hd) > 1e-4f) { hc->vis.hitDir = normalize(hd); hc->vis.hitT = 1.f; } }   // 3.10.4
     Character* t = reg.get<Character>(dst);
     Character* s = reg.valid(src) ? reg.get<Character>(src) : nullptr;
     if (!t || t->dead || t->invuln > 0) return 0;
@@ -304,6 +305,16 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
             if (b.id == "abyss_lord") { questsDone.insert("m7"); queueChapter("ending_choice"); }   // 1.12.0 the player chooses the ending
         }
         if (reg.get<AmberEcho>(e)) { gold += 12 + c.level * 3; gainXp(25 + c.level * 4); floatText(c.pos + vec3(0, 2.2f, 0), "Ambre libéré", vec3(1.f, 0.72f, 0.28f), 22); }   // 3.10.0 a Figé
+        if (reg.get<AmberHerald>(e)) {   // 3.10.4 the Herald breaks: his blade, a chronicle, a reward
+            storyFlags.insert("amber_herald_dead");
+            spawnPickup("sword_amber", 1, Rarity::Mythic, c.pos + vec3(0, 0.5f, 0));
+            unlockLore("ambre_heraut", true);
+            gold += 250; gainXp(500);
+            particles.shockwave(c.pos, vec3(1.f, 0.72f, 0.28f), 10.f); particles.magicBurst(c.pos + vec3(0, 2.f, 0), vec3(1.f, 0.8f, 0.4f), 3.f, 90);
+            play("levelup", 0.9f); addShake(0.7f);
+            notify("Le Héraut figé est brisé. Dans les éclats d'ambre : la Lame d'Ambre.", vec3(1.f, 0.72f, 0.28f), "i_star");
+            amberEternity = std::max(0.f, amberEternity - 50.f);
+        }
     } else if (c.team == Team::Animal) {
         addItem("meat", c.animal == 9 ? 4 : 1); if (c.animal == 4) addItem("leather", 1);
         if (c.animal == 9) { addItem("leather", 3); gainXp(40); }   // 3.9.5 a mammoth
@@ -633,6 +644,7 @@ void Game::updateCharacters(float dt) {
         c.invuln = std::max(0.f, c.invuln - dt);
         c.hitStun = std::max(0.f, c.hitStun - dt);
         c.vis.flash = std::max(0.f, c.vis.flash - dt * 3.5f);
+        c.vis.hitT = std::max(0.f, c.vis.hitT - dt * 2.6f);   // 3.10.4 directional flinch recovers in ~0.4 s
         if (!c.dead && c.poise < c.maxPoise && realTime - c.lastHitBy > 3.f) c.poise = std::min(c.maxPoise, c.poise + dt * c.maxPoise * 0.3f);
         updateStatus(e, c, dt);
         if (e != player || !riding) {

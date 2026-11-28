@@ -90,7 +90,7 @@ void Game::enterAmber(int rift) {
         if (riding || driving >= 0) notify("Descendez de votre monture pour traverser la faille.", vec3(1, 0.85f, 0.6f), "i_lock");
         return;
     }
-    amber = true; amberEternity = 0; amberEchoT = 2.5f; amberShiftT = 0;
+    amber = true; amberEternity = 0; amberEchoT = 2.5f; amberShiftT = 0; amberHeraldSpawned = false;
     Character& c = pc();
     particles.shockwave(c.pos, AMBER_GOLD, 6.f);
     particles.magicBurst(c.pos + vec3(0, 1.f, 0), AMBER_GOLD, 2.f, 60);
@@ -197,6 +197,38 @@ void Game::updateAmber(float dt) {
         if (particles.rng.f() < dt * 1.5f) vfxPillar(m, vec3(1.f, 0.7f, 0.25f), 0.25f, 9.f, 0.7f);
         // the memory: a slowly turning heart of amber floating at chest height, beating
         if (particles.rng.f() < dt * 3.f) vfxSphere(m + vec3(0, 1.3f + 0.12f * std::sin(gameTime * 1.3f + i), 0), vec3(1.f, 0.8f, 0.4f), vec3(1.f, 0.55f, 0.15f), 0.32f + 0.06f * beat, 0.4f, 1);
+    }
+    // ---- 3.10.4 the Herald: once three memories are free, the guardian of the forge door wakes on the next crossing
+    {
+        int freed = 0; for (int i = 1; i <= 6; i++) if (loreFound.count("ambre_" + std::to_string(i))) freed++;
+        if (!amberHeraldSpawned && freed >= 3 && !storyFlags.count("amber_herald_dead") && amberEternity > 8.f && !cine.active) {
+            int gi = enemyIndex("stone_golem");
+            float a = particles.rng.range(0.f, TAU);
+            vec3 p = c.pos + vec3(std::cos(a) * 16.f, 0, std::sin(a) * 16.f);
+            p.y = groundAt(p.x, p.z);
+            if (gi >= 0) {
+                amberHeraldSpawned = true;
+                Entity e = spawnEnemy(gi, p, true, 0);
+                if (Character* o = reg.get<Character>(e)) {
+                    o->name = "Le Héraut figé";
+                    o->vis.tint = vec3(1.8f, 1.3f, 0.6f); o->vis.emissiveBoost = 0.85f; o->vis.rim = 1.4f; o->vis.dissolveColor = AMBER_GOLD;
+                    o->vis.scale *= 1.45f; o->radius *= 1.4f; o->height *= 1.45f;
+                    o->level = std::max(level + 2, 5);
+                    o->maxHp = o->hp = 260.f + level * 70.f;
+                    o->atk = 9.f + level * 2.6f;
+                    o->yaw = std::atan2(c.pos.x - p.x, c.pos.z - p.z);
+                }
+                reg.add<AmberEcho>(e, AmberEcho{});
+                reg.add<AmberHerald>(e, AmberHerald{});
+                lockTarget = e;
+                particles.shockwave(p, AMBER_GOLD, 8.f);
+                particles.magicBurst(p + vec3(0, 2.f, 0), AMBER_GOLD, 2.5f, 70);
+                play("golem", 1.f, 0.8f); play("boss_intro", 0.8f); addShake(0.6f); haptic(150, 230);
+                regionBanner = "Le Héraut figé"; regionBannerSub = "Gardien de la porte de la forge"; regionBannerT = 3.5f;
+                amberEternity = std::max(0.f, amberEternity - 40.f);   // the fight gets its time
+                AGR_LOG("amber: the Herald wakes (freed %d)", freed);
+            }
+        }
     }
     // the Figés: echoes of the creatures of this land, frozen in amber, stronger, worth more
     int echoes = 0;

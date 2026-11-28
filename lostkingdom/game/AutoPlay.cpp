@@ -1579,6 +1579,44 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "herald") {
+        // 3.10.4 the Herald of the Amber: wakes once three memories are free, drops the Amber Blade and a chronicle
+        static int res[4];
+        s.push_back({1.f, [](Game& g) { for (int& r : res) r = 0; g.toastHint.clear(); g.updateAmber(0.f);
+            for (int i = 1; i <= 3; i++) g.loreFound.insert("ambre_" + std::to_string(i));
+            vec3 r = g.amberRifts[0]; teleport(g, r.x + 3.f, r.z + 3.f, 0.8f); g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
+        s.push_back({0.2f, [](Game& g) { g.enterAmber(0); g.amberEternity = 7.9f; g.pc().invuln = 999.f; }, idle, "enter"});
+        s.push_back({2.5f, none, [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 999.f; g.camDist = g.camDistTarget = 10.f; g.camPitch = 0.25f; }, "wake"});
+        s.push_back({0.1f, [](Game& g) { Entity h = NullEntity; g.reg.each<AmberHerald>([&](Entity e, AmberHerald&) { h = e; }); res[0] = h != NullEntity;
+            if (h != NullEntity) { Character& p = g.pc(); Character* c = g.reg.get<Character>(h); c->pos = p.pos + vec3(std::sin(p.yaw) * 6.f, 0, std::cos(p.yaw) * 6.f); c->pos.y = g.groundAt(c->pos.x, c->pos.z); AGR_LOG("HERALD hp %.0f atk %.1f lvl %d scale %.2f", c->maxHp, c->atk, c->level, c->vis.scale); }
+            g.camYaw = g.pc().yaw + PI; }, idle, "find"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 999.f; g.camYaw = g.pc().yaw + PI; }, "face"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/HE0_herald.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { Entity h = NullEntity; g.reg.each<AmberHerald>([&](Entity e, AmberHerald&) { h = e; }); if (h != NullEntity) { Character* c = g.reg.get<Character>(h); g.dealDamage(g.player, h, c->hp + 100.f, Element::Physical, vec3(0, 0, 1), 0, false, false); } }, idle, "strike"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "break"});
+        s.push_back({0.1f, [](Game& g) { res[1] = g.storyFlags.count("amber_herald_dead") > 0; res[2] = g.loreFound.count("ambre_heraut") > 0;
+            int blades = 0; g.reg.each<Pickup>([&](Entity, Pickup& pk) { if (pk.item == "sword_amber") blades++; }); res[3] = blades > 0 || g.countItem("sword_amber") > 0;
+            g.requestScreenshot("build/shots/HE1_broken.png");
+            AGR_LOG("HERALD TEST: woke=%d flag=%d chronicle=%d blade=%d -> %s", res[0], res[1], res[2], res[3], res[0] && res[1] && res[2] && res[3] ? "HERALD TEST PASSED" : "HERALD TEST FAILED"); }, idle, "report"});
+        return s;
+    }
+    if (name == "moves") {
+        // 3.10.4 movement pass (look at the pictures): torch held up, a blow from the side and from behind
+        s.push_back({2.5f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); vec2 b = p ? p->pos + vec2(-12, -4) : vec2(1468, 1616);
+            teleport(g, b.x, b.y, 2.2f); g.timeOfDay = 21.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.regionBannerT = 0;
+            g.camPitch = 0.12f; g.camDist = g.camDistTarget = 3.6f; g.setTorch(true); }, [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI + 0.9f; g.regionBannerT = 0; }, "torch"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/MV0_torch_up.png"); }, idle, "shot"});
+        s.push_back({0.4f, [](Game& g) { g.setTorch(false); }, [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI + 0.9f; }, "off"});
+        auto blow = [](float side) { return [side](Game& g) { Character& p = g.pc(); vec3 f{std::sin(p.yaw), 0, std::cos(p.yaw)}, r{f.z, 0, -f.x};
+            p.vis.hitDir = normalize(r * side + f * (side == 0 ? 1.f : 0.f)); p.vis.hitT = 1.f; }; };
+        s.push_back({0.1f, blow(1.f), [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI + 0.9f; }, "blow side"});
+        s.push_back({0.0001f, [](Game& g) { g.requestScreenshot("build/shots/MV1_hit_side.png"); }, idle, "shot"});
+        s.push_back({0.8f, none, [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI + 0.9f; }, "recover"});
+        s.push_back({0.1f, blow(0.f), [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI + 0.9f; }, "blow back"});
+        s.push_back({0.0001f, [](Game& g) { g.requestScreenshot("build/shots/MV2_hit_back.png"); }, idle, "shot"});
+        s.push_back({0.6f, [](Game& g) { AGR_LOG("MOVES hitT %.2f (should have decayed)", g.pc().vis.hitT); }, idle, "end"});
+        return s;
+    }
     if (name == "torch") {
         // 3.10.3 the torch: night in Brindlemere, without and with it (a real tap on the button), then water puts it out
         static int res[3];
