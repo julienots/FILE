@@ -1579,6 +1579,25 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "torch") {
+        // 3.10.3 the torch: night in Brindlemere, without and with it (a real tap on the button), then water puts it out
+        static int res[3];
+        s.push_back({3.f, [](Game& g) { for (int& r : res) r = 0; g.ui.recordWidgets = true; const Poi* p = g.world.poiById("brindlemere"); vec2 b = p ? p->pos + vec2(-12, -4) : vec2(1468, 1616);
+            teleport(g, b.x, b.y, 2.2f); g.timeOfDay = 23.2f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.regionBannerT = 0;
+            g.camPitch = 0.25f; g.camDist = g.camDistTarget = 7.f; }, [](Game& g, float) { g.camIdleT = 0; g.camYaw = 2.2f; g.regionBannerT = 0; }, "night"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TO0_night.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { const Rect* r = g.ui.findWidget("Torche"); if (r) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 720, (r->x + r->w / 2) * k, (r->y + r->h / 2) * k}); } }, idle, "press"});
+        s.push_back({0.2f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 720) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 720, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; g.camYaw = 2.2f; }, "lit"});
+        s.push_back({0.1f, [](Game& g) { res[0] = g.torchOn && g.torchK > 0.9f; g.requestScreenshot("build/shots/TO1_torch.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.pc().vel = vec3(0); }, [](Game& g, float) { g.input.move = vec2(0.f, 1.f); g.camIdleT = 0; }, "walk"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.input.move = vec2(0.f, 1.f); g.camIdleT = 0; }, "walk"});
+        s.push_back({0.1f, [](Game& g) { g.input.move = vec2(0); g.requestScreenshot("build/shots/TO2_torch_walk.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { g.pc().swimming = true; }, idle, "water"});
+        s.push_back({0.2f, [](Game& g) { res[1] = !g.torchOn; g.pc().swimming = false; g.setTorch(true); res[2] = g.torchOn; g.setTorch(false);
+            AGR_LOG("TORCH TEST: lit=%d outInWater=%d relight=%d -> %s", res[0], res[1], res[2], res[0] && res[1] && res[2] ? "TORCH TEST PASSED" : "TORCH TEST FAILED"); }, idle, "report"});
+        return s;
+    }
     if (name == "village") {
         // 3.10.1 villages seen from the gameplay camera (dev aid: compare with the art reference)
         struct V { const char* poi; float dx, dz, yaw, pitch, dist; const char* f; };

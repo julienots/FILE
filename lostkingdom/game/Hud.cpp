@@ -118,12 +118,14 @@ void Game::updateTouchControls() {
     // 2.5.1 dig mode one tap away (top bar, left of the garage) when you carry a pickaxe or a shovel
     Rect bDig{u.W - 318, 14, 56, 56};
     bool digShown = !dungeon.active && driving < 0 && !riding && (countItem("tool_pickaxe") > 0 || countItem("tool_shovel") > 0);
+    Rect bTorch{u.W - 380, 14, 56, 56};   // 3.10.3 the torch: always one tap away (top bar, left of the dig button)
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
         if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
         if ((garageShown && bGarage.contains(f.sx, f.sy)) || (garageOpen && garagePanel.contains(f.sx, f.sy))) continue;
         if (digShown && bDig.contains(f.sx, f.sy)) continue;
+        if (bTorch.contains(f.sx, f.sy)) continue;
         if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
         if (buildMode && Rect{ui.W * 0.5f - 330, 84, 660, 128}.contains(f.sx, f.sy)) continue;   // build panel (domain)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
@@ -201,6 +203,14 @@ void Game::updateTouchControls() {
     if (u.button(bMenu)) { menu = Menu::Pause; play("ui_open", 0.6f); }
     if (u.button(Rect{14, 14, 108, 108})) { menu = Menu::HeroWheel; play("ui_open", 0.6f); }   // portrait: hero wheel
     if (u.button(bMap) || u.button(mini)) { menu = Menu::Map; play("ui_open", 0.6f); mapPan = vec2(0, 0); }
+    {   // 3.10.3 torch
+        u.nine("button_dark", bTorch, vec4(1, 1, 1, torchOn ? 1.f : 0.85f), 0.6f);
+        float fl = torchOn ? 0.85f + 0.15f * std::sin(realTime * 13.f) * std::sin(realTime * 7.3f) : 0.55f;
+        u.sprite("i_campfire", bTorch.inset(10), torchOn ? vec4(1.f, 0.8f * fl + 0.1f, 0.45f * fl, 1.f) : vec4(0.75f, 0.7f, 0.62f, 0.8f));
+        if (torchOn) u.ring({bTorch.x + bTorch.w / 2, bTorch.y + bTorch.h / 2}, 27, 30, 0, TAU, vec4(1.f, 0.72f, 0.3f, 0.8f), 32);
+        u.tag(bTorch, "Torche");
+        if (u.button(bTorch)) setTorch(!torchOn);
+    }
     if (garageShown) {
         u.nine("button_dark", bGarage, vec4(1, 1, 1, garageOpen ? 1.f : 0.85f), 0.6f);
         u.sprite("i_mount", bGarage.inset(10), vec4(0.55f, 0.85f, 1.f, 1.f));

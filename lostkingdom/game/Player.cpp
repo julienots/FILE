@@ -707,10 +707,21 @@ void Game::updateFishing(float dt) {
 }
 
 // ============================================================================================ update
+void Game::setTorch(bool on) {
+    if (on == torchOn) return;
+    if (on && player != NullEntity && pc().swimming) { notify("Impossible d'allumer une torche dans l'eau.", vec3(1, 0.8f, 0.6f), "i_campfire"); return; }
+    torchOn = on;
+    play(on ? "fireball" : "ui_close", on ? 0.35f : 0.5f, on ? 1.5f : 1.f);
+    if (player != NullEntity && on) particles.sparks(pc().pos + vec3(0, 1.4f, 0), vec3(0, 1, 0), 10, vec3(1.f, 0.7f, 0.3f));
+}
+
 void Game::updatePlayer(float dt) {
     if (player == NullEntity) return;
     Character& c = pc();
     Animator& a = c.vis.anim;
+    // 3.10.3 the torch: lit and put out smoothly; water puts it out
+    if (torchOn && c.swimming) { torchOn = false; play("splash", 0.4f); notify("La torche s'est éteinte dans l'eau.", vec3(1, 0.8f, 0.6f), "i_campfire"); }
+    torchK = damp(torchK, torchOn ? 1.f : 0.f, 6.f, dt);
     // ---- timers & regen
     potionCD = std::max(0.f, potionCD - dt); dodgeCD = std::max(0.f, dodgeCD - dt);
     for (float& cd : spellCD) cd = std::max(0.f, cd - dt);

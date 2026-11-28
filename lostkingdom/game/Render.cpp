@@ -494,6 +494,18 @@ void Game::renderWorld(float dt) {
     renderBuildGhost();   // 1.9.2 domain: preview of the building being placed
     renderVehicles();     // 1.11.0 car and motorbike
     if (state == GameState::Playing) raceFx(dt, lights);   // 1.11.1 race start zones and checkpoints
+    // 3.10.3 the torch: a warm light that breathes with the flame, and the flame itself at the tip
+    if (player != NullEntity && torchK > 0.02f) {
+        Character& p = pc();
+        vec3 tip = p.pos + vec3(0, 1.4f, 0);
+        if (p.vis.mesh) { mat4 m = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, p.yaw), vec3(p.vis.scale)); tip = m.transformPoint(p.vis.pw.world[H_PROPL].transformPoint({0, 0, 0}) + vec3(0, 0.906f, 0.423f) * 0.47f * torchK); }
+        float fl = 0.82f + 0.12f * std::sin(realTime * 17.f) + 0.08f * std::sin(realTime * 6.1f + 1.3f);
+        PointLight pl; pl.pos = tip + vec3(0, 0.15f, 0); pl.radius = 13.f * torchK; pl.flicker = 0.6f;
+        pl.color = srgb(0xff9a48) * (3.6f + 3.f * env.night) * fl * torchK;
+        lights.push_back({0.f, pl});
+        if (particles.rng.f() < dt * 40.f * torchK) particles.magicTrail(tip + vec3(particles.rng.range(-0.03f, 0.03f), 0.03f, particles.rng.range(-0.03f, 0.03f)), vec3(1.f, 0.6f + 0.25f * particles.rng.f(), 0.2f), 0.55f);
+        if (particles.rng.f() < dt * 6.f * torchK) particles.sparks(tip, vec3(0, 1, 0), 1, vec3(1.f, 0.7f, 0.3f));
+    }
     // Astra's aura lights her surroundings
     if (player != NullEntity && heroAura > 0.05f) {
         PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;
@@ -712,7 +724,23 @@ void Game::renderCharacter(Entity e, Character& c) {
     if (v.arch == Arch::Humanoid) {
         bool bow = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow;
         attach(v.weapon, bow ? H_PROPL : H_PROPR, false);
-        attach(v.offhand, H_PROPL, true);
+        // 3.10.3 the torch replaces whatever the left hand holds while it burns
+        bool torchHere = e == player && torchK > 0.02f && !bow;
+        if (!torchHere) attach(v.offhand, H_PROPL, true);
+        else {
+            if (!torchMesh) torchMesh = cachedMesh("torch_held", [](MeshBuilder& b) {
+                Mat wood(hexColor(0x5a3c22), 0.85f), wrap(hexColor(0x2e2418), 0.95f), band(hexColor(0x6a6a70), 0.35f, 1.f);
+                b.tube({0, 0, -0.16f}, {0, 0, 0.36f}, 0.02f, 0.024f, wood, 7, true);
+                b.tube({0, 0, 0.3f}, {0, 0, 0.44f}, 0.036f, 0.032f, wrap, 8, true);   // oiled rags
+                b.tube({0, 0, 0.29f}, {0, 0, 0.31f}, 0.03f, 0.03f, band, 8, true);    // iron band
+            });
+            // held upright and a little forward whatever the hand does (the flame always burns upwards)
+            vec3 hp = v.pw.world[H_PROPL].transformPoint({0, 0, 0});
+            DrawItem w; w.mesh = torchMesh.get();
+            w.model = model * mat4::translate(hp) * mat4::rotate(quat::axisAngle({1, 0, 0}, -65.f * DEG)) * mat4::scale(vec3(torchK));
+            w.fx = vec4(v.flash, v.dissolve, 0.2f, 0); w.outline = false;
+            renderer.submit(w);
+        }
     }
     // cape (verlet cloth pinned to the shoulders)
     if (v.cape && v.arch == Arch::Humanoid) {

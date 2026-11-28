@@ -729,6 +729,9 @@ public:
     void exitVehicle();
     // 2.2.1 call a vehicle to your side (garage button under the minimap), speedometer while driving
     bool garageOpen = false;
+    bool torchOn = false; float torchK = 0;   // 3.10.3 the torch held in the left hand (lights the area around the hero)
+    std::shared_ptr<Mesh> torchMesh;
+    void setTorch(bool on);
     void summonVehicle(int i);
     void summonHorse();
     void drawSpeedometer();
