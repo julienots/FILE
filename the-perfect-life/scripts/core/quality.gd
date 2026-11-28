@@ -22,7 +22,7 @@ static func apply(level: int, env: Environment, sun: DirectionalLight3D, vp: Vie
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_energy = 1.3 if ultra else 1.0
 	env.sdfgi_bounce_feedback = 0.85
-	env.ssao_enabled = mid
+	env.ssao_enabled = mid and fplus
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.2
 	env.ssao_detail = 0.6
