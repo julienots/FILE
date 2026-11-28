@@ -458,39 +458,100 @@ void Game::startPlaying() {
 }
 
 void Game::drawTitle(float dt) {
+    // 3.10.2 the title, art direction "chronique enluminée": an illuminated chronicle page laid over the living
+    // world. Asymmetric: the title and a list of entries on the left, the world and the golden breach on the right.
+    // Gold leaf hairlines, a serif voice, no wooden plaques, no black bands (a true soft shadow on the left only).
     UI& u = ui;
     float W_ = u.W, H_ = u.H, t = stateT;
     if (audio.currentMusic().empty()) audio.playMusic("title", 2.f);
-    float a = saturate(t * 0.8f);
-    u.rectGrad({0, 0, W_, H_ * 0.45f}, vec4(0, 0, 0, 0.55f * a), vec4(0, 0, 0, 0));
-    u.rectGrad({0, H_ * 0.6f, W_, H_ * 0.4f}, vec4(0, 0, 0, 0), vec4(0, 0, 0, 0.7f * a));
-    // logo
-    float ly = H_ * 0.13f + (1 - easeOut(saturate(t * 0.7f))) * 30;
-    u.sprite("glow", {W_ / 2 - 360, ly - 160, 720, 380}, rgba(0xf6dc9a, 0.12f * a));
-    u.text("LOST KINGDOM", W_ / 2 + 3, ly + 4, 104, rgba(0x000000, 0.5f * a), F_TITLE, A_CENTER);
-    u.text("LOST KINGDOM", W_ / 2, ly, 104, rgba(0xf6dc9a, a), F_TITLE, A_CENTER, 0, true);
-    u.sprite("divider", {W_ / 2 - 260, ly + 128, 520, 26}, vec4(1, 1, 1, a));
-    u.text("Trois siècles après la Chute, le ciel se fend.", W_ / 2, ly + 160, 26, rgba(0xe8dcc0, a), F_SERIF, A_CENTER, 0, true);   // 3.10.0
-    // menu
+    if (t < 0.05f && player == NullEntity) { timeOfDay = 18.55f; weather = weatherNext = W_CLEAR; weatherBlend = 1; }   // dusk: the breach glows
+    if (menu == Menu::Settings || menu == Menu::Saves || menu == Menu::Mods) { u.rectGradH({0, 0, W_, H_}, vec4(0.03f, 0.025f, 0.02f, 0.75f), vec4(0.03f, 0.025f, 0.02f, 0.45f)); drawMenus(dt); return; }
+    if (menu == Menu::NewGame) { u.rectGradH({0, 0, W_, H_}, vec4(0.03f, 0.025f, 0.02f, 0.75f), vec4(0.03f, 0.025f, 0.02f, 0.45f)); drawNewGameMenu(); return; }
+    const vec4 GOLD = rgba(0xe9c46a), INK = rgba(0x1a1410);
+    auto ease = [](float x) { x = saturate(x); return 1.f - std::pow(1.f - x, 3.f); };
+    float a = ease(t * 0.9f);
+    // the soft shadow that carries the page (left), and a breath of darkness at the very bottom for the credits line
+    u.rectGradH({0, 0, W_ * 0.62f, H_}, vec4(0.02f, 0.015f, 0.01f, 0.72f * a), vec4(0.02f, 0.015f, 0.01f, 0.f));
+    u.rectGrad({0, H_ * 0.82f, W_, H_ * 0.18f}, vec4(0, 0, 0, 0), vec4(0.02f, 0.015f, 0.01f, 0.45f * a));
+    float x0 = std::max(56.f, W_ * 0.075f);
+    // overline: the studio, letter-spaced
+    float oy = H_ * 0.12f;
+    float s1 = ease((t - 0.1f) * 1.4f);
+    u.text("S U P E R E S S E N C E   S T U D I O", x0 + (1.f - s1) * -20.f, oy, 15, rgba(0xe9c46a, 0.85f * s1), F_BOLD, A_LEFT);
+    // the title on two lines, left aligned, a hairline of gold leaf running from the K
+    float s2 = ease((t - 0.25f) * 1.1f);
+    float ty = oy + 30;
+    u.text("LOST", x0 + 3, ty + 4, 92, vec4(INK.x, INK.y, INK.z, 0.55f * s2), F_TITLE, A_LEFT);
+    u.text("LOST", x0 + (1.f - s2) * -30.f, ty, 92, rgba(0xf3dfa6, s2), F_TITLE, A_LEFT, 0, true);
+    float s3 = ease((t - 0.4f) * 1.1f);
+    float ky = ty + 92;
+    u.text("KINGDOM", x0 + 3, ky + 4, 92, vec4(INK.x, INK.y, INK.z, 0.55f * s3), F_TITLE, A_LEFT);
+    u.text("KINGDOM", x0 + (1.f - s3) * -30.f, ky, 92, rgba(0xf3dfa6, s3), F_TITLE, A_LEFT, 0, true);
+    float kw = u.textWidth("KINGDOM", 92, F_TITLE);
+    float ruleY = ky + 112;
+    float rw = (kw + 40.f) * ease((t - 0.6f) * 1.2f);
+    u.rectGradH({x0, ruleY, rw, 2}, vec4(GOLD.x, GOLD.y, GOLD.z, 0.9f), vec4(GOLD.x, GOLD.y, GOLD.z, 0.f));
+    // a small gold lozenge on the rule, like an illuminated initial's mark
+    u.circle({x0 + 4, ruleY + 1}, 4.f * ease((t - 0.6f) * 2.f), GOLD, 8);
+    float s4 = ease((t - 0.75f) * 1.2f);
+    u.text("Trois siècles après la Chute, le ciel se fend.", x0, ruleY + 14, 22, rgba(0xe8dcc0, 0.92f * s4), F_SERIF, A_LEFT, 0, true);
+    // ---- entries: a list in the chronicle's voice; the first (main) one is larger and underlined in gold
     int last = latestSlot();
     bool hasSave = last >= 0;
-    float bw = 380, bh = 52, by = H_ * 0.44f;   // 2.6.0: six plaques (Mods added) above the studio line
-    float ba = saturate((t - 0.8f) * 1.5f);
-    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 25) && ba > 0.5f; by += bh + 8; return r; };
-    if (menu == Menu::Settings || menu == Menu::Saves || menu == Menu::Mods) { drawMenus(dt); return; }
-    if (menu == Menu::NewGame) { drawNewGameMenu(); return; }
-    if (hasSave && btn("Continuer", true)) { if (loadGame(last)) { play("ui_open"); startPlaying(); } }   // the game played last
-    if (btn("Nouvelle partie", true)) {   // 2.6.0 the new-game screen: slot, difficulty, options
+    struct E { const char* label; bool en; int id; };
+    std::vector<E> es;
+    if (hasSave) es.push_back({"Continuer", true, 0});
+    es.push_back({"Nouvelle partie", true, 1});
+    es.push_back({"Parties", hasSave, 2});
+    es.push_back({"Mods", true, 3});
+    es.push_back({"Paramètres", true, 4});
+    es.push_back({"Crédits", true, 5});
+    float ey = ruleY + 62;
+    // the list always fits above the footer, whatever the screen's proportions
+    float need = 66.f + (es.size() - 1) * 48.f, room = H_ - 70.f - ey;
+    float rowK = clampf(room / need, 0.72f, 1.f);
+    int clicked = -1;
+    for (int i = 0; i < (int)es.size(); i++) {
+        const E& e = es[i];
+        bool main = i == 0;
+        float ts = (main ? 34.f : 25.f) * std::max(0.85f, rowK), rowH = (main ? 60.f : 48.f) * rowK;
+        float si = ease((t - 0.9f - i * 0.07f) * 2.f);
+        Rect hit{x0 - 18, ey, std::max(330.f, W_ * 0.3f), rowH};
+        u.tag(hit, e.label);
+        bool h = e.en && u.held(hit);
+        float slide = (1.f - si) * -24.f + (h ? 8.f : 0.f);
+        // the highlight: a wash of gold from the left, only under the finger or for the main entry
+        if (h || main) u.rectGradH({hit.x, hit.y + 6, hit.w, rowH - 12}, vec4(GOLD.x, GOLD.y, GOLD.z, (h ? 0.28f : 0.12f) * si), vec4(GOLD.x, GOLD.y, GOLD.z, 0.f));
+        // marker: a lozenge (four small triangles' worth of circle) for the main entry, a short hairline for the others
+        float cy = ey + rowH * 0.5f;
+        if (main) { u.circle({x0 + 2 + slide, cy}, 5.f, vec4(GOLD.x, GOLD.y, GOLD.z, si), 4); }
+        else u.rect({x0 + slide - 2, cy - 1, 10, 2}, vec4(GOLD.x, GOLD.y, GOLD.z, (e.en ? 0.7f : 0.25f) * si));
+        vec4 col = !e.en ? rgba(0x8a8070, 0.6f * si) : (main || h ? rgba(0xf6e7c1, si) : rgba(0xe2d6bb, 0.92f * si));
+        u.text(e.label, x0 + 24 + slide, cy - ts * 0.62f, ts, col, main ? F_TITLE : F_SERIF, A_LEFT, 0, true);
+        if (main && hasSave) {   // what "Continuer" will open
+            std::string sum = saveSummary(last);
+            if (!sum.empty()) u.text(sum, x0 + 26 + u.textWidth(e.label, ts, F_TITLE) + 18 + slide, cy - 8, 15, rgba(0xc8bca0, 0.8f * si), F_BODY, A_LEFT, 0, true);
+        }
+        if (e.en && si > 0.6f && u.button(hit)) clicked = e.id;
+        ey += rowH + (main ? 6.f * rowK : 0.f);
+    }
+    switch (clicked) {
+    case 0: if (loadGame(last)) { play("ui_open"); startPlaying(); } break;   // the game played last
+    case 1: {   // 2.6.0 the new-game screen: slot, difficulty, options
         newOpts = GameOpts(); newSlot = 0;
         for (int s = 0; s < GAME_SLOTS; s++) if (saveSummary(s).empty()) { newSlot = s; break; }
-        menu = Menu::NewGame; play("ui_open");
+        menu = Menu::NewGame; play("ui_open"); break;
     }
-    if (btn("Parties", hasSave)) { menu = Menu::Saves; play("ui_open"); }
-    if (btn("Mods", true)) { scanMods(); menu = Menu::Mods; play("ui_open"); }
-    if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
-    if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
-    u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v3.10.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    case 2: menu = Menu::Saves; play("ui_open"); break;
+    case 3: scanMods(); menu = Menu::Mods; play("ui_open"); break;
+    case 4: menu = Menu::Settings; play("ui_open"); break;
+    case 5: state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); break;
+    default: break;
+    }
+    // footer: quiet, right-aligned version, the studio line on the left
+    float fa = ease((t - 1.4f) * 1.5f);
+    u.text("Une goutte d'Essence, un monde.  ·  v3.10.2", W_ - 20, H_ - 30, 14, rgba(0xc8bca0, 0.7f * fa), F_SERIF, A_RIGHT, 0, true);
+    (void)dt;
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods

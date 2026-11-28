@@ -128,10 +128,18 @@ void UI::quad(float x0, float y0, float x1, float y1, float u0, float v0, float 
 
 void UI::rect(Rect r, vec4 c) { ensureBatch(0); quad(r.x, r.y, r.x + r.w, r.y + r.h, 0, 0, 0, 0, c, 0); }
 
+// 3.10.2 a real gradient: 32 thin slices (it used to be two flat halves, which drew hard grey bands across the title)
 void UI::rectGrad(Rect r, vec4 top, vec4 bot) {
     ensureBatch(0);
-    rect({r.x, r.y, r.w, r.h * 0.5f}, lerp(top, bot, 0.25f));
-    rect({r.x, r.y + r.h * 0.5f, r.w, r.h * 0.5f}, lerp(top, bot, 0.75f));
+    const int N = 32;
+    float h = r.h / N;
+    for (int i = 0; i < N; i++) { float u = (i + 0.5f) / N; u = u * u * (3.f - 2.f * u); rect({r.x, r.y + i * h, r.w, h}, lerp(top, bot, u)); }
+}
+void UI::rectGradH(Rect r, vec4 left, vec4 right) {
+    ensureBatch(0);
+    const int N = 32;
+    float w = r.w / N;
+    for (int i = 0; i < N; i++) { float u = (i + 0.5f) / N; u = u * u * (3.f - 2.f * u); rect({r.x + i * w, r.y, w, r.h}, lerp(left, right, u)); }
 }
 
 void UI::sprite(const std::string& name, Rect r, vec4 c) {

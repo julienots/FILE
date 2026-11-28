@@ -38,6 +38,20 @@ static std::vector<Step> scenario(const std::string& name) {
     auto shot = [](const char* f) { return [f](Game& g) { g.requestScreenshot(std::string("build/shots/") + f + ".png"); }; };
     auto none = [](Game&) {};
     auto idle = [](Game&, float) {};
+    if (name == "title") {
+        // 3.10.2 the title screen (look at the pictures): entrance, settled, a finger on an entry
+        s.push_back({0.6f, none, idle, "wait"});
+        s.push_back({0.0001f, [](Game& g) { g.requestScreenshot("build/shots/T0_title_enter.png"); }, idle, "shot"});
+        s.push_back({3.4f, none, idle, "wait"});
+        s.push_back({0.0001f, [](Game& g) { g.requestScreenshot("build/shots/T1_title.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.ui.recordWidgets = true; }, idle, "record"});
+        s.push_back({0.2f, [](Game& g) { const Rect* r = g.ui.findWidget("Mods"); AGR_LOG("TITLE widget Mods %s", r ? "found" : "missing"); if (r) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 710, (r->x + r->w / 2) * k, (r->y + r->h / 2) * k}); } }, idle, "press"});
+        s.push_back({0.25f, none, idle, "hold"});
+        s.push_back({0.0001f, [](Game& g) { g.requestScreenshot("build/shots/T2_title_press.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 710) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 710, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({0.4f, [](Game& g) { AGR_LOG("TITLE menu after tap: %d (Mods=%d) %s", (int)g.menu, (int)Menu::Mods, g.menu == Menu::Mods ? "TITLE TEST PASSED" : "TITLE TEST FAILED"); g.requestScreenshot("build/shots/T3_mods.png"); }, idle, "check"});
+        return s;
+    }
     if (name == "logo") {
         // 2.2.1 the SuperEssence studio logo animation, frame by frame (look at the pictures)
         static const float at[] = {0.26f, 0.54f, 0.83f, 1.0f, 1.26f, 1.65f, 2.6f, 3.1f};   // 3.10.0 the faster studio sequence (2.7 s)

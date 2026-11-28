@@ -42,6 +42,7 @@ public:
     // --- drawing ----------------------------------------------------------------------
     void rect(Rect r, vec4 c);
     void rectGrad(Rect r, vec4 top, vec4 bottom);
+    void rectGradH(Rect r, vec4 left, vec4 right);   // 3.10.2 horizontal gradient
     void sprite(const std::string& region, Rect r, vec4 c = vec4(1, 1, 1, 1));
     void spriteRot(const std::string& region, vec2 center, vec2 size, float angle, vec4 c = vec4(1, 1, 1, 1));
     void nine(const std::string& region, Rect r, vec4 c = vec4(1, 1, 1, 1), float borderScale = 1.f);

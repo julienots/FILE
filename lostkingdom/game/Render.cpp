@@ -57,12 +57,27 @@ void Game::updateCamera(float dt) {
     } else {
         // title / credits: slow cinematic fly-over above Greenhaven
         titleCamT += dt;
-        float a = titleCamT * 0.035f;
-        vec2 c{1480.f + std::cos(a) * 60.f, 1600.f + std::sin(a) * 60.f};
-        target = vec3(c.x, world.height(c.x, c.y) + 4.f, c.y);
-        camYaw = a + 2.2f;
-        camDistTarget = 36.f;
-        camPitch = CameraRig::PITCH_DEFAULT;
+        if (state == GameState::Title) {
+            // 3.10.2 the title: low over the meadow by Brindlemere at dusk, looking up at the golden breach; a slow
+            // sideways drift (the world is the background of the menu, on the right of the screen)
+            const vec2 Rh = normalize(vec2(0.596f, -0.745f));
+            const Poi* bp = world.poiById("brindlemere");
+            vec2 B = (bp ? bp->pos : vec2(1480, 1620)) + vec2(70, 90) + Rh * 12.f;   // the open meadow of the prologue's tear
+            vec2 side{-Rh.y, Rh.x};
+            float drift = std::sin(titleCamT * 0.03f) * 8.f;
+            vec2 c = B + side * drift;
+            target = vec3(c.x, world.height(c.x, c.y) + 3.f, c.y);
+            camYaw = std::atan2(-Rh.x, -Rh.y) + 0.32f;   // the breach a little right of the centre (the menu is on the left)
+            camDistTarget = 11.f;
+            camPitch = -0.2f;
+        } else {
+            float a = titleCamT * 0.035f;
+            vec2 c{1480.f + std::cos(a) * 60.f, 1600.f + std::sin(a) * 60.f};
+            target = vec3(c.x, world.height(c.x, c.y) + 4.f, c.y);
+            camYaw = a + 2.2f;
+            camDistTarget = 36.f;
+            camPitch = CameraRig::PITCH_DEFAULT;
+        }
         camLookAhead = vec3(0);
     }
     // 1.6.2: the camera follows the hero tightly by default (players found the floaty follow "bizarre")
